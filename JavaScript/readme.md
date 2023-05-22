@@ -1,0 +1,1 @@
+For starting the bot, run "nodemon"
