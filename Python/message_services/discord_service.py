@@ -81,7 +81,7 @@ async def insertTraining(ctx, prompt: str, answer1: str, answer2: str = None, an
                     trainer.train([conversation[i], conversation[i+1]])
         await ctx.send('Conversa treinada com sucesso!')
 
-def run_Services(chatBot):
+def run_discord_client(chatBot):
     if SOCIAL_MEDIAS.__contains__('Discord'):
         bot.chatBot = chatBot
         bot.run(DISCORD_TOKEN)

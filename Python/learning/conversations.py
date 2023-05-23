@@ -85,6 +85,7 @@ conversations = [
     [
         'de nada! :3',
         'por nada! :3',
+        'de nadinha! :3',
         'não foi nada! :3',
         'não precisa agradecer! :3',
         'não foi nada demais! :3',

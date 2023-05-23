@@ -2,7 +2,7 @@ from chatterbot import ChatBot
 from learning.learning import essentialLearning
 from learning.conversations import conversations_with_variables
 from settings import BOT_NAME, LOGIC_ADAPTERS, STORAGE_ADAPTER, initializeProject
-from message_service import run_Services
+from message_services.message_service import run_Services
 
 chatBot = ChatBot(
     name=BOT_NAME,
