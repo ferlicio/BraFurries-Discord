@@ -1,4 +1,4 @@
 ..iniciarRepositorio.bat 
 ..GitPushMain.bat 
-/node_modules 
-/__pycache__
+node_modules/ 
+__pycache__/
