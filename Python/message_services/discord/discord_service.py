@@ -1,11 +1,12 @@
-from settings import SOCIAL_MEDIAS, DISCORD_TOKEN, DISCORD_INTENTS, COMMUNITY_LEARNING, DISCORD_IS_TESTING, DISCORD_TEST_CHANNEL, DISCORD_ADMINS, DISCORD_INPUT, DISCORD_BOT_PREFIX,BOT_NAME,MODERATORS_ROLES
+from settings import SOCIAL_MEDIAS, DISCORD_TOKEN, DISCORD_INTENTS, COMMUNITY_LEARNING, DISCORD_IS_TESTING, DISCORD_TEST_CHANNEL, DISCORD_ADMINS, DISCORD_INPUT, DISCORD_BOT_PREFIX,BOT_NAME
+from message_services.discord.message_moderation.moderation_functions import moderate
 from learning.learning import discordDeepLearning, DMDiscordDeepLearning
 from commands.discordCommands import run_discord_commands
 from commands.default_commands import calcular_idade
 from chatterbot.conversation import Statement
 from chatterbot.trainers import ListTrainer
 from discord.ext import commands
-from datetime import date
+from datetime import date, datetime
 import discord
 
 
@@ -34,16 +35,20 @@ async def on_message(message):
         return
     await DMDiscordDeepLearning(bot, message)
     #proteções de teste
+    moderated = await moderate(bot, message)
+    if moderated: return
     if DISCORD_IS_TESTING and (message.channel.id != DISCORD_TEST_CHANNEL and not isinstance(message.channel, discord.channel.DMChannel)):
         return
     if isinstance(message.channel, discord.channel.DMChannel):
         async for msg in message.channel.history(limit=3):
             if msg.author.id == bot.user.id and msg.content.__contains__("Qual seria a resposta correta?"):
                 return
+    #checa se a mensagem é para ser moderada ou não
     #menciona o bot
     if not message.content.lower().__contains__(bot.chatBot.name.lower()) and not bot.user in message.mentions and not isinstance(message.channel, discord.channel.DMChannel):
         return
-    response = bot.chatBot.generate_response(Statement(text=inputChat))
+    #respondendo
+    response = bot.chatBot.generate_response(Statement(inputChat))
     print(response)
     await message.channel.send(response)
     await bot.process_commands(message)
@@ -57,6 +62,10 @@ async def on_reaction_add(reaction, user):
         if COMMUNITY_LEARNING:
             await discordDeepLearning(bot, reaction, user, DISCORD_INPUT)
             return
+
+
+
+
 
 
 @bot.tree.command(name=f'say_as_{BOT_NAME.lower()}', description=f'Faz {BOT_NAME} falar em um canal de texto')
@@ -78,7 +87,7 @@ async def insertTraining(ctx, prompt: str, answer1: str, answer2: str = None, an
                     trainer.train([conversation[i], conversation[i+1]])
         await ctx.response.send_message(content='Conversa treinada com sucesso!', ephemeral=True)
 
-@bot.tree.command(name='mod_calc_idade', description=f'Use esse recurso para calcular a idade de alguém de acordo com a data de nascimento')
+@bot.tree.command(name='mod-calc_idade', description=f'Use esse recurso para calcular a idade de alguém de acordo com a data de nascimento')
 async def calc_idade(ctx, message: str):
     try:
         idade = calcular_idade(message)
@@ -87,6 +96,14 @@ async def calc_idade(ctx, message: str):
         await ctx.response.send_message(content=f'{message}: {idade} anos', ephemeral=True)
     except Exception:
         await ctx.response.send_message(content='Data de nascimento inválida! você informou uma data no formato "dd/mm/aaaa"? <:catsip:851024825333186560>', ephemeral=True)
+
+@bot.tree.command(name='mod-check_new_member', description=f'Use esse recurso para checar se um novo membro é elegivel a usar a carteirinha de cargos ou não')
+async def check_new_member(ctx, member:discord.Member, age:int):
+        account_age = datetime.utcnow().date() - member.created_at.date()
+        if age<=13 or account_age.days <= 30:
+            conditions = 'idade menor do que 13 anos e conta com menos de 30 dias de idade' if (age<=13 and account_age.days <= 30) else 'conta criada a menos de 30 dias' if account_age.days <= 30 else 'idade menor do que 13 anos'
+            return await ctx.response.send_message(content=f'o membro {member.name} precisará usar carteirinha temporária, o membro possui {conditions}', ephemeral=True)
+        return await ctx.response.send_message(content='O membro não precisará usar carteirinha temporária', ephemeral=True)
 
 def run_discord_client(chatBot):
     if SOCIAL_MEDIAS.__contains__('Discord'):
