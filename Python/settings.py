@@ -9,6 +9,7 @@ ENVIRONMENT = 'development'
 BOT_NAME = 'Coddy'
 BOT_LANG = 'pt-br'
 CHATBOT = True
+INITIALIZED = True
 DEFAULT_RESPONSE = 'Desculpa, eu não entendi... nem sei o que te responder :c'
 LOGIC_ADAPTERS = [
     'chatterbot.logic.MathematicalEvaluation',
@@ -19,14 +20,15 @@ LOGIC_ADAPTERS = [
     }
 ]
 STORAGE_ADAPTER = 'chatterbot.storage.SQLStorageAdapter'
-INITIALIZED = True
 SOCIAL_MEDIAS=['Discord']
 COMMUNITY_LEARNING = False
+
 
 # Configurações Discord
 DISCORD_TOKEN = 'MTEwNjc1NjI4MTQyMDc1OTA1MQ.GXs7c3.k4fU3HxMKGiGSlD8JpuUX3vJJckEUDH7jQZKAc'
 DISCORD_INTENTS = ['guilds', 'members', 'messages', 'reactions', 'typing', 'presences','message_content']
 DISCORD_ADMINS = [167436511787220992]
+MODERATORS_ROLES = [961314680264081450]
 DISCORD_TEST_CHANNEL = 1106970650406555659
 DISCORD_IS_TESTING = True
 DISCORD_BOT_PREFIX = '>'

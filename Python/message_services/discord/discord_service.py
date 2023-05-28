@@ -1,9 +1,11 @@
-from settings import SOCIAL_MEDIAS, DISCORD_TOKEN, DISCORD_INTENTS, COMMUNITY_LEARNING, DISCORD_IS_TESTING, DISCORD_TEST_CHANNEL, DISCORD_ADMINS, DISCORD_INPUT, DISCORD_BOT_PREFIX,BOT_NAME
+from settings import SOCIAL_MEDIAS, DISCORD_TOKEN, DISCORD_INTENTS, COMMUNITY_LEARNING, DISCORD_IS_TESTING, DISCORD_TEST_CHANNEL, DISCORD_ADMINS, DISCORD_INPUT, DISCORD_BOT_PREFIX,BOT_NAME,MODERATORS_ROLES
 from learning.learning import discordDeepLearning, DMDiscordDeepLearning
 from commands.discordCommands import run_discord_commands
+from commands.default_commands import calcular_idade
 from chatterbot.conversation import Statement
 from chatterbot.trainers import ListTrainer
 from discord.ext import commands
+from datetime import date
 import discord
 
 
@@ -56,22 +58,17 @@ async def on_reaction_add(reaction, user):
             await discordDeepLearning(bot, reaction, user, DISCORD_INPUT)
             return
 
-def check_allowed_ids(ctx):
-    user_id = ctx.author.id  # ID de quem usou o comando
-    return user_id in DISCORD_ADMINS
 
 @bot.tree.command(name=f'say_as_{BOT_NAME.lower()}', description=f'Faz {BOT_NAME} falar em um canal de texto')
-@commands.check(check_allowed_ids)
 async def sayAsCoddy(ctx: discord.Interaction, channel: discord.TextChannel, message: str):
     channelId = discord.utils.get(ctx.guild.channels, name=channel.name)
     await channelId.send(message)
 
 @bot.tree.command(name='insert_training', description=f'Treina {BOT_NAME} para responder uma conversa')
-@commands.check(check_allowed_ids)
 async def insertTraining(ctx, prompt: str, answer1: str, answer2: str = None, answer3: str = None):
     trainer = ListTrainer(bot.chatBot)
     if not prompt or not answer1:
-        await ctx.send('Você precisa informar uma conversa valida!')
+        await ctx.response.send_message(content='Você precisa informar uma conversa valida!', ephemeral=True)
         return
     else:
         conversation = [prompt] + [answer1] + [answer2] + [answer3]
@@ -79,7 +76,17 @@ async def insertTraining(ctx, prompt: str, answer1: str, answer2: str = None, an
             if conversation[i] != '' and i+1 < len(conversation):
                 if conversation[i+1] != None:
                     trainer.train([conversation[i], conversation[i+1]])
-        await ctx.send('Conversa treinada com sucesso!')
+        await ctx.response.send_message(content='Conversa treinada com sucesso!', ephemeral=True)
+
+@bot.tree.command(name='mod_calc_idade', description=f'Use esse recurso para calcular a idade de alguém de acordo com a data de nascimento')
+async def calc_idade(ctx, message: str):
+    try:
+        idade = calcular_idade(message)
+        if idade == 'Entrada inválida':
+            raise Exception
+        await ctx.response.send_message(content=f'{message}: {idade} anos', ephemeral=True)
+    except Exception:
+        await ctx.response.send_message(content='Data de nascimento inválida! você informou uma data no formato "dd/mm/aaaa"? <:catsip:851024825333186560>', ephemeral=True)
 
 def run_discord_client(chatBot):
     if SOCIAL_MEDIAS.__contains__('Discord'):
