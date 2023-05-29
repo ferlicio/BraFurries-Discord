@@ -87,6 +87,16 @@ async def insertTraining(ctx, prompt: str, answer1: str, answer2: str = None, an
                     trainer.train([conversation[i], conversation[i+1]])
         await ctx.response.send_message(content='Conversa treinada com sucesso!', ephemeral=True)
 
+@bot.tree.command(name='insert_complex_training', description=f'Treina {BOT_NAME} para responder uma conversa com dados complexos')
+async def insertComplexTraining(ctx, conversation: str):
+    """ trainer = ListTrainer(bot.chatBot)
+    conversation
+    for i in range(len(conversation)):
+        if conversation[i] != '' and i+1 < len(conversation):
+            if conversation[i+1] != None:
+                trainer.train([conversation[i], conversation[i+1]]) """
+    await ctx.response.send_message(content='Conversa treinada com sucesso!', ephemeral=True)
+
 @bot.tree.command(name='mod-calc_idade', description=f'Use esse recurso para calcular a idade de alguém de acordo com a data de nascimento')
 async def calc_idade(ctx, message: str):
     try:
