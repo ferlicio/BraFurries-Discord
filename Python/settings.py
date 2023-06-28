@@ -1,5 +1,9 @@
-import fileinput
+from chatterbot.response_selection import get_random_response
 from learning.learning import initialKnowledge
+from adapters.logic_adapters import NoRepeatAdapter
+from chatterbot.logic import BestMatch
+import fileinput
+import random
 
 # Configurações de ambiente
 DEBUG = True
@@ -13,10 +17,13 @@ INITIALIZED = True
 DEFAULT_RESPONSE = 'Desculpa, eu não entendi... nem sei o que te responder :c'
 LOGIC_ADAPTERS = [
     'chatterbot.logic.MathematicalEvaluation',
+    #'adapters.logic_adapters.NoRepeatAdapter',
     {
         "import_path": "chatterbot.logic.BestMatch",
+        'statement_comparison_function': 'chatterbot.comparisons.levenshtein_distance',
         'default_response': DEFAULT_RESPONSE,
-        'maximum_similarity_threshold': 0.70
+        'maximum_similarity_threshold': 0.85,
+        'response_selection_method': get_random_response,
     }
 ]
 STORAGE_ADAPTER = 'chatterbot.storage.SQLStorageAdapter'
@@ -69,3 +76,4 @@ def initializeProject(chatBot):
                 print(linha, end='')
         
         print('initialized!')
+
