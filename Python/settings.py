@@ -20,7 +20,7 @@ LOGIC_ADAPTERS = [
     }
 ]
 STORAGE_ADAPTER = 'chatterbot.storage.SQLStorageAdapter'
-SOCIAL_MEDIAS=['Discord']
+SOCIAL_MEDIAS=['Discord','Telegram','Instagram']
 COMMUNITY_LEARNING = False
 
 
@@ -37,11 +37,12 @@ DISCORD_INPUT = {
 }
 
 # Configurações Instagram
-TOKEN = 'mytoken'
+INSTAGRAM_TOKEN = 'mytoken'
 
-# Configurações de API externa
-EXTERNAL_API_KEY = 'myapikey'
-EXTERNAL_API_URL = 'https://api.example.com'
+# Configurações do telegram
+TELEGRAM_TOKEN = '6227842110:AAGyCAiQ9hTlSCRjvIf4j3eBWPft3ltQpDg'
+TELEGRAM_BOT_USERNAME = '@Coddy_The_PetBot'
+TELEGRAM_ADMIN = '162630794'
 
 # Configurações de email
 EMAIL_HOST = 'smtp.example.com'

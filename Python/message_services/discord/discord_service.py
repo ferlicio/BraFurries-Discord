@@ -1,14 +1,21 @@
-from settings import SOCIAL_MEDIAS, DISCORD_TOKEN, DISCORD_INTENTS, COMMUNITY_LEARNING, DISCORD_IS_TESTING, DISCORD_TEST_CHANNEL, DISCORD_ADMINS, DISCORD_INPUT, DISCORD_BOT_PREFIX,BOT_NAME
+from settings import DISCORD_TOKEN, DISCORD_INTENTS, COMMUNITY_LEARNING, DISCORD_IS_TESTING, DISCORD_TEST_CHANNEL, DISCORD_ADMINS, DISCORD_INPUT, DISCORD_BOT_PREFIX,BOT_NAME
 from message_services.discord.message_moderation.moderation_functions import moderate
 from learning.learning import discordDeepLearning, DMDiscordDeepLearning
+from message_services.telegram.telegram_service import warn_admins
 from commands.discordCommands import run_discord_commands
 from commands.default_commands import calcular_idade
 from chatterbot.conversation import Statement
 from chatterbot.trainers import ListTrainer
 from discord.ext import commands
-from datetime import date, datetime
+from discord.ext import tasks
+from datetime import datetime
+from dateutil import tz
 import discord
+import sqlite3
 
+conn = sqlite3.connect('discord')
+c = conn.cursor()
+c.execute('CREATE TABLE IF NOT EXISTS bump (id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT)')
 
 intents = discord.Intents.default()
 for DISCORD_INTENT in DISCORD_INTENTS:
@@ -23,6 +30,7 @@ async def on_ready():
         print('Comandos sincronizados com sucesso!')
     except Exception as e:
         print(e)
+    send_message.start()
 
 @bot.event
 async def on_message(message):
@@ -67,11 +75,36 @@ async def on_reaction_add(reaction, user):
 
 
 
+@tasks.loop(hours=2) #0.16   10 minutos
+async def send_message():
+    now = datetime.now().strftime("%H:%M:%S")
+    if int(now[:2])>=9 and int(now[:2])<=23:
+        channel = bot.get_channel(853971735514316880)
+        async for msg in channel.history(limit=5):
+            if msg.author.id == 302050872383242240:
+                lastMessage = msg
+                break
+        lastBump = lastMessage.created_at.astimezone(tz.gettz('America/Sao_Paulo'))
+        timeSinceLastBump = datetime.now(tz.gettz('America/Sao_Paulo')) - lastBump
+        if timeSinceLastBump.days >= 1 or timeSinceLastBump.total_seconds() >= 7200:
+            from message_services.discord.routine_functions.messages import bump
+            import random
+            generalchannel = bot.get_channel(753348623844114452)
+            await generalchannel.send(f"{bump[int(random.random() * len(bump))]} {lastMessage.jump_url}")
+
+
+
+
+
 
 @bot.tree.command(name=f'say_as_{BOT_NAME.lower()}', description=f'Faz {BOT_NAME} falar em um canal de texto')
 async def sayAsCoddy(ctx: discord.Interaction, channel: discord.TextChannel, message: str):
     channelId = discord.utils.get(ctx.guild.channels, name=channel.name)
     await channelId.send(message)
+
+@bot.tree.command(name=f'call_titio', description=f'Faz {BOT_NAME} chamar o titio')
+async def sayAsCoddy(ctx: discord.Interaction, message: str):
+    await warn_admins(message)
 
 @bot.tree.command(name='insert_training', description=f'Treina {BOT_NAME} para responder uma conversa')
 async def insertTraining(ctx, prompt: str, answer1: str, answer2: str = None, answer3: str = None):
@@ -116,6 +149,5 @@ async def check_new_member(ctx, member:discord.Member, age:int):
         return await ctx.response.send_message(content='O membro não precisará usar carteirinha temporária', ephemeral=True)
 
 def run_discord_client(chatBot):
-    if SOCIAL_MEDIAS.__contains__('Discord'):
-        bot.chatBot = chatBot
-        bot.run(DISCORD_TOKEN)
+    bot.chatBot = chatBot
+    bot.run(DISCORD_TOKEN)

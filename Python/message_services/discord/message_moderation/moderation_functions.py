@@ -10,7 +10,7 @@ async def moderate(bot, message):
 
 async def portaria(bot, message):
     need_correction = False
-    if message.channel.id == 860472155782119464:  # ID do canal de portaria
+    if message.channel.id == 1106970650406555659:  # ID do canal de portaria
         need_correction = await check_age(bot, message)
         
         return need_correction
@@ -37,7 +37,9 @@ async def check_age(bot, message):
             await asyncio.sleep(3)
             await message.channel.send('Você não pode ter 0 anos, né?', reference=message)
             return True
-    if bool(re.search(r'\b(tenho)?\s?(\d{1,2})\s?(anos)\b',message.content,re.IGNORECASE)) != bool(re.search(r'\b(\d{2}/\d{2}/\d{4}|\d{2}\s+de\s+(\w*)+\s+de\s+\d{4})\b',message.content,re.IGNORECASE)):
+    if bool(re.search(r'\b(tenho)?\s?(\d{1,2})\s?(anos)\b',message.content,re.IGNORECASE)) != bool(re.search(r'\b(\d{2}/\d{2}/\d{4}|\d{2}\\\d{2}\\\d{4}|\d{2}\s+de\s+(\w*)+\s+de\s+\d{4})\b',message.content,re.IGNORECASE)):
+        print(bool(re.search(r'\b(tenho)?\s?(\d{1,2})\s?(anos)\b',message.content,re.IGNORECASE)))
+        print(bool(re.search(r'\b(\d{2}/\d{2}/\d{4}|\d{2}\s+de\s+(\w*)+\s+de\s+\d{4})\b',message.content,re.IGNORECASE)))
         #testar qual ta dando erro
         await asyncio.sleep(3)
         await message.channel.send('Você precisa informar a sua data de nascimento junto com a sua idade: "X anos", você pode corrigir isso pra gente, por favor?', reference=message)
