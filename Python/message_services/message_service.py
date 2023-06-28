@@ -4,7 +4,15 @@ from settings import SOCIAL_MEDIAS
 import threading
 
 def run_Services(chatBot):
-    """ if SOCIAL_MEDIAS.__contains__('Discord'):
-        run_discord_client(chatBot) """
+    threads = []
+    if SOCIAL_MEDIAS.__contains__('Discord'):
+        discordServer = threading.Thread(target=run_discord_client, args=(chatBot,))
+        threads.append(discordServer)
     if SOCIAL_MEDIAS.__contains__('Telegram'):
-        run_telegram_client(chatBot)
+        telegramServer = threading.Thread(target=run_telegram_client, args=(chatBot,))
+        threads.append(telegramServer)
+        
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()

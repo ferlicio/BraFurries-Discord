@@ -3,6 +3,7 @@ from settings import TELEGRAM_TOKEN, TELEGRAM_BOT_USERNAME, TELEGRAM_ADMIN
 from chatterbot.conversation import Statement
 from telegram import Update
 from typing import Final
+import asyncio
 
 activeChatBot = None
 
@@ -52,6 +53,9 @@ def run_telegram_client(chatBot):
     global activeChatBot
     activeChatBot = chatBot
     print('Running telegram client...')
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+
     app = Application.builder().token(TELEGRAM_TOKEN).build()
     #Commands
     app.add_handler(CommandHandler('start', start_command))
@@ -64,4 +68,4 @@ def run_telegram_client(chatBot):
     app.add_error_handler(error)
 
     print('Polling...')
-    app.run_polling(poll_interval=3, timeout=10)
+    loop.run_until_complete(app.run_polling(poll_interval=3, timeout=10))
