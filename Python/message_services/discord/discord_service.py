@@ -55,11 +55,7 @@ async def on_message(message: discord.Message):
     ##checagem se esta em fase de testes
     if DISCORD_IS_TESTING and (message.channel.id != DISCORD_TEST_CHANNEL and not isinstance(message.channel, discord.channel.DMChannel)):
         return
-    if isinstance(message.channel, discord.channel.DMChannel):
-        async for msg in message.channel.history(limit=3):
-            if msg.author.id == bot.user.id and msg.content.__contains__("Qual seria a resposta correta?"):
-                return
-    #checa se menciona o bot
+    #checa se menciona o bot ou se é uma DM
     if not message.content.lower().__contains__(bot.chatBot.name.lower()) and not bot.user in message.mentions and not isinstance(message.channel, discord.channel.DMChannel):
         return
     #respondendo
