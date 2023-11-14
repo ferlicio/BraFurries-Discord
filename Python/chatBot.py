@@ -1,9 +1,9 @@
 from chatterbot import ChatBot
-from learning.learning import essentialLearning
-from learning.conversations import conversations_with_variables
+from IA_Functions.propria.learning.learning import essentialLearning
+from IA_Functions.propria.learning.conversations import conversations_with_variables
 from settings import BOT_NAME, LOGIC_ADAPTERS, STORAGE_ADAPTER, initializeProject
 from message_services.message_service import run_Services
-import asyncio
+import asyncio, sys, codecs
 
 chatBot = ChatBot(
     name=BOT_NAME,
@@ -11,6 +11,8 @@ chatBot = ChatBot(
     storage_adapter=STORAGE_ADAPTER,
     logic_adapters=LOGIC_ADAPTERS
 )
+
+sys.stdout = codecs.getwriter("utf-8")(sys.stdout.detach())
 
 initializeProject(chatBot)
 essentialLearning(chatBot,conversations_with_variables())

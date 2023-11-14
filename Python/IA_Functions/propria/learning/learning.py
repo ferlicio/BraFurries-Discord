@@ -75,3 +75,8 @@ async def DMDiscordDeepLearning(self, message):
                 await message.add_reaction('🥰')
                 await message.channel.send("Obrigado por me ensinar!")
                 break
+
+async def simpleLearning(self, message, response):
+    trainer = ListTrainer(self.chatBot)
+    trainer.train([message, response])
+
