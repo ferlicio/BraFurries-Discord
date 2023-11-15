@@ -3,6 +3,7 @@ from settings import *
 import discord
 import asyncio
 from discord.ext import commands
+from datetime import datetime
 
 
 openai.api_key = OPENAI_TOKEN
@@ -43,6 +44,7 @@ async def retornaRespostaGPT(texto, usuario, bot:commands.Bot, channelID, app):
                         Você não pode usar emojis, apenas emotes que furries usam, como :3, UwU, OwO, etc, mas não use demais, pois isso pode confundir as pessoas.
                         Não seja fofo demais em suas respostas, pois isso pode incomodar as pessoas. :T
                         Quem falou com você agora foi {usuario}
+                        agora são {datetime.now().strftime("%H:%M:%S")}
                         Esse é o histórico de mensagens do canal:
                         {historico}
                         Não responda igual sua ultima resposta, que foi:
