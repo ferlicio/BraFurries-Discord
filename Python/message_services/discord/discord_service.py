@@ -8,6 +8,7 @@ from commands.default_commands import calcular_idade
 from chatterbot.conversation import Statement
 from chatterbot.trainers import ListTrainer
 from IA_Functions.terceiras.openAI import *
+from database.database import *
 from discord.ext import commands
 from discord.ext import tasks
 from datetime import datetime
@@ -35,6 +36,8 @@ async def on_ready():
         print('Comandos sincronizados com sucesso!')
     except Exception as e:
         print(e)
+    guild = bot.get_guild(DISCORD_GUILD_ID)
+    bot.config = getConfig(guild)
     if DISCORD_BUMP_WARN: bumpWarning.start()
     if DISCORD_HAS_BUMP_REWARD: bumpReward.start()
     configForVips.start()

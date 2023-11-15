@@ -1,10 +1,13 @@
 from chatterbot import ChatBot
 from IA_Functions.propria.learning.learning import essentialLearning
 from IA_Functions.propria.learning.conversations import conversations_with_variables
-from settings import BOT_NAME, LOGIC_ADAPTERS, STORAGE_ADAPTER, initializeProject
 from message_services.message_service import run_Services
+from database.database import *
+from settings import *
 import asyncio, sys, codecs
+import mysql.connector
 
+sys.stdout = codecs.getwriter("utf-8")(sys.stdout.detach())
 chatBot = ChatBot(
     name=BOT_NAME,
     read_only=True,
@@ -12,7 +15,6 @@ chatBot = ChatBot(
     logic_adapters=LOGIC_ADAPTERS
 )
 
-sys.stdout = codecs.getwriter("utf-8")(sys.stdout.detach())
 
 initializeProject(chatBot)
 essentialLearning(chatBot,conversations_with_variables())
