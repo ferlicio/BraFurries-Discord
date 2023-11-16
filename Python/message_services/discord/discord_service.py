@@ -37,7 +37,7 @@ async def on_ready():
     except Exception as e:
         print(e)
     guild = bot.get_guild(DISCORD_GUILD_ID)
-    bot.config = getConfig(guild)
+    bot.config = Config(getConfig(guild))
     if DISCORD_BUMP_WARN: bumpWarning.start()
     if DISCORD_HAS_BUMP_REWARD: bumpReward.start()
     configForVips.start()
@@ -63,7 +63,11 @@ async def on_message(message: discord.Message):
         return
     #respondendo
     #response = bot.chatBot.generate_response(Statement(inputChat))
-    response = await retornaRespostaGPT(inputChat, message.author.name, bot, message.channel.id, 'Discord')
+    if (bot.config.has_gpt_enabled):
+        response = await retornaRespostaGPT(inputChat, message.author.nick if message.author.nick
+                                            else message.author.name, bot, message.channel.id, 'Discord')
+    else:
+        response = '''ih rapaz... acho que algo deu errado :( \n não vou conseguir te responder agora, mas vou avisar o titio pra ele tentar resolver isso'''
     #await simpleLearning(bot, inputChat, response)
     print(response)
     await message.channel.send(response)
@@ -201,6 +205,89 @@ async def changeVipIcon(ctx: discord.Interaction, icon: str):
             except Exception as e:
                 await ctx.response.send_message(content='''Ícone inválido! você precisa informar um emoji válido. Se você quiser usar um emoji 
 customizado como os do servidor, você ira precisar pedir a algum staff''', ephemeral=True)
+
+
+
+
+@bot.tree.command(name=f'registrar_local', description=f'Registra o local do membro na lista de membros')
+async def registerLocal(ctx: discord.Interaction, local: str):
+    mydbAndCursor = startConnection()
+    availableLocals = getAllLocals(mydbAndCursor[0])
+    if local.upper() in [local_dict['locale_abbrev'] for local_dict in availableLocals]:
+        await ctx.response.defer()
+        result = includeLocale(mydbAndCursor[0],local.upper(), ctx.user, availableLocals)
+        endConnectionWithCommit(mydbAndCursor)
+        if result:
+            for locale in availableLocals:
+                if locale['locale_abbrev'] == local.upper():
+                    return await ctx.followup.send(content=f'você foi registrado em {locale["locale_name"]}!', ephemeral=False)
+        else:
+            return await ctx.followup.send(content=f'Não foi possível registrar você! você já está registrado em algum local?', ephemeral=True)
+    else:
+        endConnectionWithCommit(mydbAndCursor)
+        availableLocalsResponse = ',\n'.join(f'{local["locale_abbrev"]} = {local["locale_name"]}' for local in availableLocals)
+        return await ctx.response.send_message(content='''você precisa fornecer um local existente para se cadastrar!
+Você deve usar apenas a sigla do local, sem acentos ou espaços.\n
+Os locais disponiveis são:\n ```{availableLocalsResponse}```''', ephemeral=True)
+    
+    
+@bot.tree.command(name=f'listar_furros', description=f'Lista todos os furries registrados em um local')
+async def listFurries(ctx: discord.Interaction, local: str):
+    mydbAndCursor = startConnection()
+    availableLocals = getAllLocals(mydbAndCursor[0])
+    if local.upper() in [local_dict['locale_abbrev'] for local_dict in availableLocals]:
+        await ctx.response.defer()
+        result = getByLocale(mydbAndCursor[0],local.upper(), availableLocals)
+        endConnection(mydbAndCursor)
+        for locale in availableLocals:
+            if locale['locale_abbrev'] == local.upper():
+                if result:
+                    membersResponse = ',\n'.join(member for member in result)
+                    await ctx.followup.send(content=f'''Aqui estão os furros registrados em {locale["locale_name"]}:```{membersResponse}```''')
+                else:
+                    return await ctx.followup.send(content=f'{locale["locale_name"]}... \n Não há furros por aqui... quem sabe você possa ser o primeiro? owo',)
+    else:
+        endConnection(mydbAndCursor)
+        availableLocalsResponse = ''
+        availableLocalsResponse = ',\n'.join(f'{local["locale_abbrev"]} = {local["locale_name"]}' for local in availableLocals)
+        return await ctx.response.send_message(content=f'''você precisa fornecer um local existente!
+Você deve usar apenas a sigla do local, sem acentos ou espaços.\n
+Os locais disponiveis são:\n ```{availableLocalsResponse}```''', ephemeral=True)
+    
+
+@bot.tree.command(name=f'registrar_aniversario', description=f'Registra o aniversário do membro')
+async def registerBirthday(ctx: discord.Interaction, birthday: str):
+    try:
+        datetime.strptime(birthday, "%d/%m/%Y")
+    except ValueError:
+        return await ctx.response.send_message(content='''Data de nascimento inválida! você informou uma data no formato "dd/mm/aaaa"? <:catsip:851024825333186560>''', ephemeral=True)
+    birthdayAsDate = datetime.strptime(birthday, '%d/%m/%Y').date()
+    mydbAndCursor = startConnection()
+    await ctx.response.defer()
+    result = includeBirthday(mydbAndCursor[0],birthdayAsDate, ctx.user)
+    endConnectionWithCommit(mydbAndCursor)
+    if result:
+        return await ctx.followup.send(content=f'você foi registrado com o aniversário {birthday}!', ephemeral=False)
+    else:
+        return await ctx.followup.send(content=f'Não foi possível registrar você! você já está registrado?', ephemeral=True)
+    
+
+@bot.tree.command(name=f'listar_aniversarios', description=f'Lista todos os aniversários registrados')
+async def listBirthdays(ctx: discord.Interaction):
+    mydbAndCursor = startConnection()
+    await ctx.response.defer()
+    result = getAllBirthdays(mydbAndCursor[0])
+    endConnection(mydbAndCursor)
+    if result:
+        birthdaysResponse = ',\n'.join(f'{birthday["username"]} - {birthday["birth_date"].strftime("%d/%m/%Y")}' for birthday in result)
+        return await ctx.followup.send(content=f'Aqui estão os aniversários registrados:```{birthdaysResponse}```')
+    else:
+        return await ctx.followup.send(content=f'Não há aniversários registrados... quem sabe você possa ser o primeiro? owo')
+
+
+
+
+
 
 
 @bot.tree.command(name=f'say_as_{BOT_NAME.lower()}', description=f'Faz {BOT_NAME} falar em um canal de texto')
