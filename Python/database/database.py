@@ -356,6 +356,8 @@ WHERE event_name = '{event_name}';"""
     else:
         myresult = [{'id': i[0], 'event_name': i[1], 'starting_datetime': datetime.strptime(f'{i[2]}', '%Y-%m-%d %H:%M:%S'), 'ending_datetime': datetime.strptime(f'{i[3]}', '%Y-%m-%d %H:%M:%S'), 'host_user': i[4], 'price': i[5], 'max_price': i[6], 'group_chat_link': i[7], 'website': i[8], 'address': i[9]
                         } for i in myresult]
+        if myresult[0]['ending_datetime'] > datetime.now():
+            return "não encerrado"
         return updateDateEvent(mydb, myresult, new_starting_datetime, user, True)
 
 

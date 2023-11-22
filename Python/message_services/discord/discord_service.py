@@ -435,6 +435,8 @@ async def scheduleNextEvent(ctx: discord.Interaction, nome_do_evento: str, data:
         return await ctx.followup.send(content=f'O evento **{nome_do_evento}** foi agendado com sucesso!')
     elif result == "não encontrado":
         return await ctx.followup.send(content=f'Não foi possível encontrar um evento com esse nome! tem certeza que digitou o nome certo?')
+    elif result == "não encerrado":
+        return await ctx.followup.send(content=f'Não é possível agendar um evento que ainda não foi encerrado')
     elif result == "não é o dono":
         return await ctx.followup.send(content=f'Você não é o dono desse evento! apenas o dono pode agendar o evento')
     
