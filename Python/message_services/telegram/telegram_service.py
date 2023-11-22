@@ -4,10 +4,11 @@ from chatterbot.conversation import Statement
 from IA_Functions.terceiras.openAI import *
 from telegram import Update
 from typing import Final
+from database.database import *
 import requests
 import asyncio
 
-activeChatBot = None
+app = None
 
 #commands
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -15,6 +16,26 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text('olha, eu não vou poder te ajudar muito, mas se quiser, pode falar com o meu criador @Titioderg')
+
+async def registrar_local_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    local = " ".join(context.args)
+    mydbAndCursor = startConnection()
+    availableLocals = getAllLocals(mydbAndCursor[0])
+    if local.upper() in [local_dict['locale_abbrev'] for local_dict in availableLocals]:
+        result = includeLocale(mydbAndCursor[0],local.upper(), update.message.chat.username, availableLocals)
+        endConnectionWithCommit(mydbAndCursor)
+        if result:
+            for locale in availableLocals:
+                if locale['locale_abbrev'] == local.upper():
+                    return await update.message.reply_text(f'você foi registrado em {locale["locale_name"]}!')
+        else:
+            return await update.message.reply_text(f'Não foi possível registrar você! você já está registrado em algum local?')
+    else:
+        endConnectionWithCommit(mydbAndCursor)
+        availableLocalsResponse = ',\n'.join(f'{local["locale_abbrev"]} = {local["locale_name"]}' for local in availableLocals)
+        return await update.message.reply_text(f'''você precisa fornecer um local existente para se cadastrar!
+Você deve usar apenas a sigla do local, sem acentos ou espaços.\n
+Os locais disponiveis são:\n {availableLocalsResponse}''')
 
 def warn_admins(user:str, message: str):
     requests.post(f'https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage?chat_id={TELEGRAM_ADMIN}&text={user}: {message}')
@@ -51,16 +72,16 @@ async def error(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 def run_telegram_client(chatBot):
-    global activeChatBot
-    activeChatBot = chatBot
     print('Running telegram client...')
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
 
     app = Application.builder().token(TELEGRAM_TOKEN).build()
+    app.activeChatBot = chatBot
     #Commands
     app.add_handler(CommandHandler('start', start_command))
     app.add_handler(CommandHandler('help', help_command))
+    app.add_handler(CommandHandler('registrar_local', registrar_local_command))
 
     #Messages
     app.add_handler(MessageHandler(filters.TEXT, handle_message))

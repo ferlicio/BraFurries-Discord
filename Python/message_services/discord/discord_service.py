@@ -8,12 +8,14 @@ from commands.default_commands import calcular_idade
 from chatterbot.conversation import Statement
 from chatterbot.trainers import ListTrainer
 from IA_Functions.terceiras.openAI import *
+from typing import Optional, Union
 from database.database import *
 from discord.ext import commands
 from discord.ext import tasks
 from datetime import datetime
 from dateutil import tz
 from settings import *
+import time
 import discord
 import sqlite3
 import re
@@ -206,14 +208,18 @@ async def changeVipIcon(ctx: discord.Interaction, icon: str):
                 await ctx.response.send_message(content='''Ícone inválido! você precisa informar um emoji válido. Se você quiser usar um emoji 
 customizado como os do servidor, você ira precisar pedir a algum staff''', ephemeral=True)
 
+@bot.tree.command(name=f'testes', description=f'teste')
+async def test(ctx: discord.Interaction, message: str):
+    print(message)
+    await ctx.response.send_message(content=f'{message}', ephemeral=False)
 
 
 
-@bot.tree.command(name=f'registrar_local', description=f'Registra o local do membro na lista de membros')
+@bot.tree.command(name=f'registrar_local', description=f'Registra o local do membro')
 async def registerLocal(ctx: discord.Interaction, local: str):
     mydbAndCursor = startConnection()
     availableLocals = getAllLocals(mydbAndCursor[0])
-    if local.upper() in [local_dict['locale_abbrev'] for local_dict in availableLocals]:
+    if await localeIsAvailable(ctx, mydbAndCursor, local):
         await ctx.response.defer()
         result = includeLocale(mydbAndCursor[0],local.upper(), ctx.user, availableLocals)
         endConnectionWithCommit(mydbAndCursor)
@@ -223,36 +229,27 @@ async def registerLocal(ctx: discord.Interaction, local: str):
                     return await ctx.followup.send(content=f'você foi registrado em {locale["locale_name"]}!', ephemeral=False)
         else:
             return await ctx.followup.send(content=f'Não foi possível registrar você! você já está registrado em algum local?', ephemeral=True)
-    else:
-        endConnectionWithCommit(mydbAndCursor)
-        availableLocalsResponse = ',\n'.join(f'{local["locale_abbrev"]} = {local["locale_name"]}' for local in availableLocals)
-        return await ctx.response.send_message(content='''você precisa fornecer um local existente para se cadastrar!
-Você deve usar apenas a sigla do local, sem acentos ou espaços.\n
-Os locais disponiveis são:\n ```{availableLocalsResponse}```''', ephemeral=True)
+    return
     
     
-@bot.tree.command(name=f'listar_furros', description=f'Lista todos os furries registrados em um local')
+@bot.tree.command(name=f'furros_na_area', description=f'Lista todos os furries registrados em um local')
 async def listFurries(ctx: discord.Interaction, local: str):
     mydbAndCursor = startConnection()
     availableLocals = getAllLocals(mydbAndCursor[0])
-    if local.upper() in [local_dict['locale_abbrev'] for local_dict in availableLocals]:
+    if await localeIsAvailable(ctx, mydbAndCursor, local):
         await ctx.response.defer()
         result = getByLocale(mydbAndCursor[0],local.upper(), availableLocals)
         endConnection(mydbAndCursor)
-        for locale in availableLocals:
-            if locale['locale_abbrev'] == local.upper():
-                if result:
+        if result:
+            for locale in availableLocals:
+                if locale['locale_abbrev'] == local.upper():
                     membersResponse = ',\n'.join(member for member in result)
-                    await ctx.followup.send(content=f'''Aqui estão os furros registrados em {locale["locale_name"]}:```{membersResponse}```''')
-                else:
-                    return await ctx.followup.send(content=f'{locale["locale_name"]}... \n Não há furros por aqui... quem sabe você possa ser o primeiro? owo',)
-    else:
-        endConnection(mydbAndCursor)
-        availableLocalsResponse = ''
-        availableLocalsResponse = ',\n'.join(f'{local["locale_abbrev"]} = {local["locale_name"]}' for local in availableLocals)
-        return await ctx.response.send_message(content=f'''você precisa fornecer um local existente!
-Você deve usar apenas a sigla do local, sem acentos ou espaços.\n
-Os locais disponiveis são:\n ```{availableLocalsResponse}```''', ephemeral=True)
+                    return await ctx.followup.send(content=f'''Aqui estão os furros registrados em {locale["locale_name"]}:```{membersResponse}```''')
+        else:
+            for locale in availableLocals:
+                if locale['locale_abbrev'] == local.upper():
+                    return await ctx.followup.send(content=f'Não há furros registrados em {locale["locale_name"]}... que tal ser o primeiro? :3')
+    return
     
 
 @bot.tree.command(name=f'registrar_aniversario', description=f'Registra o aniversário do membro')
@@ -272,21 +269,175 @@ async def registerBirthday(ctx: discord.Interaction, birthday: str):
         return await ctx.followup.send(content=f'Não foi possível registrar você! você já está registrado?', ephemeral=True)
     
 
-@bot.tree.command(name=f'listar_aniversarios', description=f'Lista todos os aniversários registrados')
+@bot.tree.command(name=f'aniversarios', description=f'Lista todos os aniversários registrados')
 async def listBirthdays(ctx: discord.Interaction):
     mydbAndCursor = startConnection()
     await ctx.response.defer()
     result = getAllBirthdays(mydbAndCursor[0])
     endConnection(mydbAndCursor)
     if result:
-        birthdaysResponse = ',\n'.join(f'{birthday["username"]} - {birthday["birth_date"].strftime("%d/%m/%Y")}' for birthday in result)
+        birthdaysResponse = ',\n'.join(
+    f'{birthday["username"]} - {birthday["birth_date"].strftime("%d/%m")}'
+    for birthday in sorted(result, key=lambda birthday: birthday["birth_date"]))
         return await ctx.followup.send(content=f'Aqui estão os aniversários registrados:```{birthdaysResponse}```')
     else:
-        return await ctx.followup.send(content=f'Não há aniversários registrados... quem sabe você possa ser o primeiro? owo')
+        return await ctx.followup.send(content=f'Não há aniversários registrados... que tal ser o primeiro? :3')
 
 
 
 
+
+async def addEvent(ctx: discord.Interaction, user: any, state:str, city:str, event_name:str, address:str, price:float, starting_date: str, starting_time: str, ending_date: str, ending_time: str, description: str = None, group_link:str = None, site:str = None, max_price:float = None, event_logo_url:str = None):
+    try:
+        datetime.strptime(starting_date, "%d/%m/%Y")
+        datetime.strptime(ending_date, "%d/%m/%Y")
+    except ValueError:
+        return await ctx.response.send_message(content='''Data inválida! você informou uma data no formato "dd/mm/aaaa"? <:catsip:851024825333186560>''', ephemeral=True)
+    try:
+        datetime.strptime(starting_time, "%H:%M")
+        datetime.strptime(ending_time, "%H:%M")
+    except ValueError:
+        return await ctx.response.send_message(content='''Horário inválido! você informou um horário no formato "hh:mm"? <:catsip:851024825333186560>''', ephemeral=True)
+    starting_datetime = datetime.strptime(f'{starting_date} {starting_time}', '%d/%m/%Y %H:%M')
+    ending_datetime = datetime.strptime(f'{ending_date} {ending_time}', '%d/%m/%Y %H:%M')
+    if starting_datetime > ending_datetime:
+        #teste se a data e hora de inicio é maior que a data e hora de encerramento
+        return await ctx.response.send_message(content='''A data e hora de início do evento não pode ser maior que a data e hora de encerramento!''', ephemeral=True)
+    mydbAndCursor = startConnection()
+    locale_id = await localeIsAvailable(ctx, mydbAndCursor, state)
+    if locale_id:
+        await ctx.response.defer()
+        result = includeEvent(mydbAndCursor[0],user, locale_id, city, event_name, address, price, starting_datetime, ending_datetime, description, group_link, site, max_price, event_logo_url)
+        endConnectionWithCommit(mydbAndCursor)
+        if result:
+            return await ctx.followup.send(content=f'O evento **{event_name}** foi registrado com sucesso!', ephemeral=False)
+        
+@bot.tree.command(name=f'novo_evento', description=f'Adiciona um evento ao calendário')
+async def addEventWithDiscordUser(ctx: discord.Interaction, user: discord.Member, estado:str, cidade:str, event_name:str, address:str, price:float, starting_date: str, starting_time: str, ending_date: str, ending_time: str, description: str = None, group_link:str = None, site:str = None, max_price:float = None, event_logo_url:str = None):
+    await addEvent(ctx, user, estado, cidade, event_name, address, price, starting_date, starting_time, ending_date, ending_time, description, group_link, site, max_price, event_logo_url)
+    pass
+@bot.tree.command(name=f'novo_evento_por_usuario', description=f'Adiciona um evento ao calendário usando um usuário do telegram')
+async def addEventWithTelegramUser(ctx: discord.Interaction, telegram_username: str, estado:str, cidade:str, event_name:str, address:str, price:float, starting_date: str, starting_time: str, ending_date: str, ending_time: str, description: str = None, group_link:str = None, site:str = None, max_price:float = None, event_logo_url:str = None):
+    await addEvent(ctx, telegram_username, estado, cidade, event_name, address, price, starting_date, starting_time, ending_date, ending_time, description, group_link, site, max_price, event_logo_url)
+    pass
+
+@bot.tree.command(name=f'eventos', description=f'Lista todos os eventos registrados')
+async def listEvents(ctx: discord.Interaction):
+    mydbAndCursor = startConnection()
+    await ctx.response.defer()
+    result = getAllEvents(mydbAndCursor[0])
+    endConnection(mydbAndCursor)
+    if result:
+        eventsResponse = '\n\n'.join(
+    f'''> # {event["event_name"].title()}
+>    **Data**: {event["starting_datetime"].strftime("%d/%m/%Y") if event["starting_datetime"].strftime("%d/%m/%Y") == event["ending_datetime"].strftime("%d/%m/%Y") else f"{event['starting_datetime'].strftime('%d')} a {event['ending_datetime'].strftime('%d/%m/%Y')}"}{" - das "+event["starting_datetime"].strftime("%H:%M")+" às "+event["ending_datetime"].strftime("%H:%M") if event["starting_datetime"] == event["ending_datetime"] else ''}
+>    **Local**: {event["city"]}, {event["state_abbrev"]}
+>    **Endereço**: {event["address"]} ''' + '\n'+
+    '\n'.join(filter(None, [
+        f">    **Chat do evento**: <{event['group_chat_link']}>" if event['group_chat_link']!='None' else '',
+        f">    **Site**: <{event['website']}>" if event['website']!='None' else '',
+        f'''>    **Preço**: {"A partir de R$"+str(f"{event['price']:.2f}").replace('.',',') if event['price']!=0 else 'Gratuito'}'''
+    ]))
+
+    for event in sorted(result, key=lambda event: event["starting_datetime"]))
+        await ctx.followup.send(content=f'''Aqui estão os eventos registrados:\n{eventsResponse}\n
+```Se você quiser ver mais detalhes sobre um evento, use o comando "/evento <nome do evento>"```
+Adicione tambem a nossa agenda de eventos ao seu google agenda e tenha todos os eventos na palma da sua mão! https://tinyurl.com/4un99f6a''')
+    else:
+        return await ctx.followup.send(content=f'Não há eventos registrados... que tal ser o primeiro? :3')
+    
+    
+@bot.tree.command(name=f'eventos_por_estado', description=f'Lista todos os eventos registrados em um estado')
+async def listEventsByState(ctx: discord.Interaction, state: str):
+    mydbAndCursor = startConnection()
+    await ctx.response.defer()
+    result = getEventsByState(mydbAndCursor[0], state)
+    endConnection(mydbAndCursor)
+    if result:
+        eventsResponse = '\n\n'.join(
+    f'''> # {event["event_name"].title()}
+>    **Data**: {event["starting_datetime"].strftime("%d/%m/%Y") if event["starting_datetime"].strftime("%d/%m/%Y") == event["ending_datetime"].strftime("%d/%m/%Y") else f"{event['starting_datetime'].strftime('%d')} a {event['ending_datetime'].strftime('%d/%m/%Y')}"}{" - das "+event["starting_datetime"].strftime("%H:%M")+" às "+event["ending_datetime"].strftime("%H:%M") if event["starting_datetime"] == event["ending_datetime"] else ''}
+>    **Local**: {event["city"]}, {event["state_abbrev"]}
+>    **Endereço**: {event["address"]}
+{f">    **Chat do evento**: <{event['group_chat_link']}>" if event['group_chat_link']!='None' else ''}
+{f">    **Site**: <{event['website']}>" if event['website']!='None' else ''}
+>    **Preço**: {"A partir de R$"+str(f"{event['price']:.2f}").replace('.',',') if event['price']!=0 else 'Gratuito'}
+'''
+    for event in sorted(result, key=lambda event: event["starting_datetime"]))
+        await ctx.followup.send(content=f'''Aqui estão os eventos registrados em {state}:\n{eventsResponse}
+```Se você quiser ver mais detalhes sobre um evento, use o comando "/evento <nome do evento>"```
+Adicione tambem a nossa agenda de eventos ao seu google agenda e tenha todos os eventos na palma da sua mão! https://tinyurl.com/4un99f6a''')
+    else:
+        return await ctx.followup.send(content=f'Não há eventos registrados em {state}... que tal ser o primeiro? :3')
+    
+    
+@bot.tree.command(name=f'evento', description=f'Mostra os detalhes de um evento')
+async def showEvent(ctx: discord.Interaction, event_name: str):
+    mydbAndCursor = startConnection()
+    await ctx.response.defer()
+    result = getEventByName(mydbAndCursor[0], event_name)
+    endConnection(mydbAndCursor)
+    if result:
+        event = result[0]
+        eventEmbeded = discord.Embed(
+            color=discord.Color.blue(),
+            title=event["event_name"].title() if not event["logo_url"].__contains__('http') else '',
+            description=f'''**Data**: {event["starting_datetime"].strftime("%d/%m/%Y") if event["starting_datetime"].strftime("%d/%m/%Y") == event["ending_datetime"].strftime("%d/%m/%Y") else f"{event['starting_datetime'].strftime('%d')} a {event['ending_datetime'].strftime('%d/%m/%Y')}"}{" - das "+event["starting_datetime"].strftime("%H:%M")+" às "+event["ending_datetime"].strftime("%H:%M") if event["starting_datetime"] == event["ending_datetime"] else ''}
+**Local**: {event["city"]}, {event["state_abbrev"]}
+**Endereço**: {event["address"]}
+{f"**Chat do evento**: <{event['group_chat_link']}>" if event['group_chat_link']!='None' else ''}
+{f"**Site**: <{event['website']}>" if event['website']!='None' else ''}
+**Preço**: {"A partir de R$"+str(f"{event['price']:.2f}").replace('.',',') if event['price']!=0 else 'Gratuito'}
+
+{event['description'] if event['description']!=None else ''}
+'''    
+        )
+        if event["logo_url"].__contains__('http'):
+            eventEmbeded.set_author(name=event["event_name"].title(),icon_url=event["logo_url"])
+        else: eventEmbeded.set_author(name='')
+        return await ctx.followup.send(embed=eventEmbeded)
+    else:
+        return await ctx.followup.send(content=f'Não há eventos registrados com esse nome. Tem certeza que digitou o nome certo?')
+    
+
+@bot.tree.command(name=f'reagendar_evento', description=f'Reagenda um evento pendente')
+async def rescheduleEvent(ctx: discord.Interaction, event_name: str, new_date: str):
+    try: new_date = datetime.strptime(new_date, "%d/%m/%Y")
+    except ValueError:
+        return await ctx.response.send_message(content='''Data inválida! você informou uma data no formato "dd/mm/aaaa"? <:catsip:851024825333186560>''', ephemeral=True)
+    mydbAndCursor = startConnection()
+    await ctx.response.defer()
+    result = rescheduleEventDate(mydbAndCursor[0], event_name, new_date, ctx.user.name)
+    endConnectionWithCommit(mydbAndCursor)
+    if result == True:
+        return await ctx.followup.send(content=f'O evento **{event_name}** foi reagendado com sucesso!')
+    elif result == "não encontrado":
+        return await ctx.followup.send(content=f'Não foi possível encontrar um evento com esse nome! tem certeza que digitou o nome certo?')
+    elif result == "não é o dono":
+        return await ctx.followup.send(content=f'Você não é o dono desse evento! apenas o dono pode reagendar o evento')
+    elif result == "em andamento":
+        return await ctx.followup.send(content=f'Não é possível reagendar um evento que já está em andamento')
+    elif result == "encerrado":
+        return await ctx.followup.send(content=f'Não é possível reagendar um evento que já foi realizado')
+
+
+
+@bot.tree.command(name=f'agendar_prox_evento', description=f'Agenda no calendario a próxima data do evento')
+async def scheduleNextEvent(ctx: discord.Interaction, nome_do_evento: str, data: str):
+    try: data = datetime.strptime(data, "%d/%m/%Y")
+    except ValueError:
+        return await ctx.response.send_message(content='''Data inválida! você informou uma data no formato "dd/mm/aaaa"? <:catsip:851024825333186560>''', ephemeral=True)
+    mydbAndCursor = startConnection()
+    await ctx.response.defer()
+    result = scheduleNextEventDate(mydbAndCursor[0], nome_do_evento, data, ctx.user.name)
+    endConnectionWithCommit(mydbAndCursor)
+    if result == True:
+        return await ctx.followup.send(content=f'O evento **{nome_do_evento}** foi agendado com sucesso!')
+    elif result == "não encontrado":
+        return await ctx.followup.send(content=f'Não foi possível encontrar um evento com esse nome! tem certeza que digitou o nome certo?')
+    elif result == "não é o dono":
+        return await ctx.followup.send(content=f'Você não é o dono desse evento! apenas o dono pode agendar o evento')
+    
 
 
 

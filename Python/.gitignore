@@ -2,3 +2,6 @@ settings.py
 .env
 *.sqlite3
 discord
+credentials.json
+token.json
+```
