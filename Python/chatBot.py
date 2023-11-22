@@ -17,7 +17,7 @@ chatBot = ChatBot(
 
 
 initializeProject(chatBot)
-essentialLearning(chatBot,conversations_with_variables())
+""" essentialLearning(chatBot,conversations_with_variables()) """
 startDatabase()
 run_Services(chatBot)
 
