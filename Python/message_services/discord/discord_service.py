@@ -14,7 +14,6 @@ from discord.ext import commands
 from discord.ext import tasks
 from datetime import datetime
 from dateutil import tz
-from settings import *
 import time
 import discord
 import sqlite3
@@ -64,26 +63,18 @@ async def on_message(message: discord.Message):
     if not message.content.lower().__contains__(bot.chatBot.name.lower()) and not bot.user in message.mentions and not isinstance(message.channel, discord.channel.DMChannel):
         return
     #respondendo
-    #response = bot.chatBot.generate_response(Statement(inputChat))
     if (bot.config.has_gpt_enabled):
         response = await retornaRespostaGPT(inputChat, message.author.nick if message.author.nick
                                             else message.author.name, bot, message.channel.id, 'Discord')
     else:
         response = '''ih rapaz... acho que algo deu errado :( \n não vou conseguir te responder agora, mas vou avisar o titio pra ele tentar resolver isso'''
-    #await simpleLearning(bot, inputChat, response)
     print(response)
     await message.channel.send(response)
     await bot.process_commands(message)
 
 @bot.event
 async def on_reaction_add(reaction, user):
-    if reaction.message.author.id == bot.user.id: #se a mensagem for do bot
-        if not COMMUNITY_LEARNING and DISCORD_ADMINS.__contains__(user.id): 
-            await discordDeepLearning(bot, reaction, user, DISCORD_INPUT)
-            return
-        if COMMUNITY_LEARNING:
-            await discordDeepLearning(bot, reaction, user, DISCORD_INPUT)
-            return
+    pass
 
 @bot.event
 async def on_member_update(before:discord.member.Member, after:discord.member.Member):
@@ -139,8 +130,14 @@ async def configForVips(color=discord.Color.default()):
             if DISCORD_HAS_VIP_CUSTOM_ROLES:
                 customRole = discord.utils.get(guild.roles, name=f"{DISCORD_VIP_CUSTOM_ROLE_PREFIX} {member.name}")
                 if customRole == None:
-                    print(f'Não foi possível encontrar um cargo VIP para {member.name}')
-                    customRole = await guild.create_role(name=f"{DISCORD_VIP_CUSTOM_ROLE_PREFIX} {member.name}", color=color, mentionable=False, reason="Cargo criado para membros VIPs")
+                    for role in member.roles:
+                        if role.name.__contains__(DISCORD_VIP_CUSTOM_ROLE_PREFIX):
+                            await role.edit(name=f"{DISCORD_VIP_CUSTOM_ROLE_PREFIX} {member.name}")
+                            customRole = role
+                            break
+                    if customRole == None:
+                        print(f'Não foi possível encontrar um cargo VIP para {member.name}')
+                        customRole = await guild.create_role(name=f"{DISCORD_VIP_CUSTOM_ROLE_PREFIX} {member.name}", color=color, mentionable=False, reason="Cargo criado para membros VIPs")
                 if DISCORD_HAS_ROLE_DIVISION:
                     divisionStart = guild.get_role(DISCORD_VIP_ROLE_DIVISION_START_ID)
                     divisionEnd = guild.get_role(DISCORD_VIP_ROLE_DIVISION_END_ID)
@@ -169,10 +166,11 @@ async def changeVipColor(ctx: discord.Interaction, cor: str):
     for role in ctx.user.roles: #percorre os cargos do membro
         if DISCORD_VIP_ROLES_ID.__contains__(role.id): #se o membro tiver um cargo VIP
             if not re.match(r'^#(?:[a-fA-F0-9]{3}){1,2}$', cor):
-                await ctx.response.send_message(content='''# Cor invalida!\n 
+                return await ctx.response.send_message(content='''# Cor invalida!\n 
 Você precisa informar uma cor no formato Hex (#000000).
 Você pode procurar por uma cor em https://htmlcolorcodes.com/color-picker/ e testa-la usando o comando "?color #000000"''', ephemeral=False)
-                return
+            if not colorIsAvailable(cor):
+                return await ctx.response.send_message(content='''Cor inválida! você precisa informar uma cor que não seja muito parecida com a cor de algum cargo da staff''', ephemeral=True)
             corFormatada = int(cor.replace('#','0x'),16)
             customRole = discord.utils.get(ctx.guild.roles, name=f"{DISCORD_VIP_CUSTOM_ROLE_PREFIX} {ctx.user.name}")
             if customRole == None:
@@ -334,15 +332,14 @@ async def listEvents(ctx: discord.Interaction):
 >    **Local**: {event["city"]}, {event["state_abbrev"]}
 >    **Endereço**: {event["address"]} ''' + '\n'+
     '\n'.join(filter(None, [
-        f">    **Chat do evento**: <{event['group_chat_link']}>" if event['group_chat_link']!='None' else '',
-        f">    **Site**: <{event['website']}>" if event['website']!='None' else '',
+        f">    **Chat do evento**: <{event['group_chat_link']}>" if event['group_chat_link']!=None else '',
+        f">    **Site**: <{event['website']}>" if event['website']!=None else '',
         f'''>    **Preço**: {"A partir de R$"+str(f"{event['price']:.2f}").replace('.',',') if event['price']!=0 else 'Gratuito'}'''
-    ]))
-
-    for event in sorted(result, key=lambda event: event["starting_datetime"]))
-        await ctx.followup.send(content=f'''Aqui estão os eventos registrados:\n{eventsResponse}\n
+        ]))
+        for event in sorted(result, key=lambda event: event["starting_datetime"]))
+        await ctx.followup.send(content=f'''Aqui estão os próximos eventos registrados:\n{eventsResponse}\n
 ```Se você quiser ver mais detalhes sobre um evento, use o comando "/evento <nome do evento>"```
-Adicione tambem a nossa agenda de eventos ao seu google agenda e tenha todos os eventos na palma da sua mão! https://tinyurl.com/4un99f6a''')
+Adicione tambem a nossa agenda de eventos ao seu google agenda e tenha todos os eventos na palma da sua mão! {os.getenv('GOOGLE_CALENDAR_LINK')}''')
     else:
         return await ctx.followup.send(content=f'Não há eventos registrados... que tal ser o primeiro? :3')
     
@@ -351,22 +348,24 @@ Adicione tambem a nossa agenda de eventos ao seu google agenda e tenha todos os 
 async def listEventsByState(ctx: discord.Interaction, state: str):
     mydbAndCursor = startConnection()
     await ctx.response.defer()
-    result = getEventsByState(mydbAndCursor[0], state)
+    locale_id = await localeIsAvailable(ctx, mydbAndCursor, state)
+    result = getEventsByState(mydbAndCursor[0], locale_id)
     endConnection(mydbAndCursor)
     if result:
         eventsResponse = '\n\n'.join(
     f'''> # {event["event_name"].title()}
 >    **Data**: {event["starting_datetime"].strftime("%d/%m/%Y") if event["starting_datetime"].strftime("%d/%m/%Y") == event["ending_datetime"].strftime("%d/%m/%Y") else f"{event['starting_datetime'].strftime('%d')} a {event['ending_datetime'].strftime('%d/%m/%Y')}"}{" - das "+event["starting_datetime"].strftime("%H:%M")+" às "+event["ending_datetime"].strftime("%H:%M") if event["starting_datetime"] == event["ending_datetime"] else ''}
 >    **Local**: {event["city"]}, {event["state_abbrev"]}
->    **Endereço**: {event["address"]}
-{f">    **Chat do evento**: <{event['group_chat_link']}>" if event['group_chat_link']!='None' else ''}
-{f">    **Site**: <{event['website']}>" if event['website']!='None' else ''}
->    **Preço**: {"A partir de R$"+str(f"{event['price']:.2f}").replace('.',',') if event['price']!=0 else 'Gratuito'}
-'''
-    for event in sorted(result, key=lambda event: event["starting_datetime"]))
-        await ctx.followup.send(content=f'''Aqui estão os eventos registrados em {state}:\n{eventsResponse}
+>    **Endereço**: {event["address"]} ''' + '\n'+
+    '\n'.join(filter(None, [
+        f">    **Chat do evento**: <{event['group_chat_link']}>" if event['group_chat_link']!=None else '',
+        f">    **Site**: <{event['website']}>" if event['website']!=None else '',
+        f'''>    **Preço**: {"A partir de R$"+str(f"{event['price']:.2f}").replace('.',',') if event['price']!=0 else 'Gratuito'}'''
+        ]))
+        for event in sorted(result, key=lambda event: event["starting_datetime"]))
+        await ctx.followup.send(content=f'''Aqui estão os próximos eventos registrados em {state}:\n{eventsResponse}\n
 ```Se você quiser ver mais detalhes sobre um evento, use o comando "/evento <nome do evento>"```
-Adicione tambem a nossa agenda de eventos ao seu google agenda e tenha todos os eventos na palma da sua mão! https://tinyurl.com/4un99f6a''')
+Adicione tambem a nossa agenda de eventos ao seu google agenda e tenha todos os eventos na palma da sua mão! {os.getenv('GOOGLE_CALENDAR_LINK')}''')
     else:
         return await ctx.followup.send(content=f'Não há eventos registrados em {state}... que tal ser o primeiro? :3')
     
@@ -374,26 +373,34 @@ Adicione tambem a nossa agenda de eventos ao seu google agenda e tenha todos os 
 @bot.tree.command(name=f'evento', description=f'Mostra os detalhes de um evento')
 async def showEvent(ctx: discord.Interaction, event_name: str):
     mydbAndCursor = startConnection()
+    if event_name.__len__() < 4:
+        return await ctx.response.send_message(content='''Nome do evento inválido! você informou um nome com menos de 4 caracteres? <:catsip:851024825333186560>''', ephemeral=True)
     await ctx.response.defer()
-    result = getEventByName(mydbAndCursor[0], event_name)
+    event = getEventByName(mydbAndCursor[0], event_name)
     endConnection(mydbAndCursor)
-    if result:
-        event = result[0]
+    if event:
+        embeded_description = f'''**Data**: {event["starting_datetime"].strftime("%d/%m/%Y") if event["starting_datetime"].strftime("%d/%m/%Y") == event["ending_datetime"].strftime("%d/%m/%Y") 
+                                            else f"{event['starting_datetime'].strftime('%d')} a {event['ending_datetime'].strftime('%d/%m/%Y')}"}{" - das "+event["starting_datetime"].strftime("%H:%M")+" às "+event["ending_datetime"].strftime("%H:%M") if event["starting_datetime"].strftime("%d/%m/%Y") == event["ending_datetime"].strftime("%d/%m/%Y") else ''}
+**Local**: {event["city"]}, {event["state_abbrev"]}
+**Endereço**: {event["address"]}'''
+        if event['group_chat_link']!=None: embeded_description += f"""
+**Chat do evento**: <{event['group_chat_link']}>"""
+        if event['website']!=None: embeded_description += f"""
+**Site**: <{event['website']}>""" 
+        embeded_description += f"""
+**Preço**: {"De R$"+str(f"{event['price']:.2f}").replace('.',',')+" a "+"R${:,.2f}".format(event['max_price']).replace(",", "x").replace(".", ",").replace("x", ".") if (event['price']!=0 and event['max_price']!=0) 
+            else f'R$'+str(f"{event['price']:.2f}").replace('.',',') if event['max_price']==0 and event['price']!=0 else 'Gratuito'}"""
+        if event['description']!=None: embeded_description += f"""
+
+{event['description']}
+"""
         eventEmbeded = discord.Embed(
             color=discord.Color.blue(),
-            title=event["event_name"].title() if not event["logo_url"].__contains__('http') else '',
-            description=f'''**Data**: {event["starting_datetime"].strftime("%d/%m/%Y") if event["starting_datetime"].strftime("%d/%m/%Y") == event["ending_datetime"].strftime("%d/%m/%Y") else f"{event['starting_datetime'].strftime('%d')} a {event['ending_datetime'].strftime('%d/%m/%Y')}"}{" - das "+event["starting_datetime"].strftime("%H:%M")+" às "+event["ending_datetime"].strftime("%H:%M") if event["starting_datetime"] == event["ending_datetime"] else ''}
-**Local**: {event["city"]}, {event["state_abbrev"]}
-**Endereço**: {event["address"]}
-{f"**Chat do evento**: <{event['group_chat_link']}>" if event['group_chat_link']!='None' else ''}
-{f"**Site**: <{event['website']}>" if event['website']!='None' else ''}
-**Preço**: {"A partir de R$"+str(f"{event['price']:.2f}").replace('.',',') if event['price']!=0 else 'Gratuito'}
-
-{event['description'] if event['description']!=None else ''}
-'''    
+            title=event["event_name"].title(),
+            description=embeded_description
         )
-        if event["logo_url"].__contains__('http'):
-            eventEmbeded.set_author(name=event["event_name"].title(),icon_url=event["logo_url"])
+        if event["logo_url"]!=None:
+            eventEmbeded.set_thumbnail(url=event["logo_url"])
         else: eventEmbeded.set_author(name='')
         return await ctx.followup.send(embed=eventEmbeded)
     else:
@@ -426,7 +433,7 @@ async def rescheduleEvent(ctx: discord.Interaction, event_name: str, new_date: s
 async def scheduleNextEvent(ctx: discord.Interaction, nome_do_evento: str, data: str):
     try: data = datetime.strptime(data, "%d/%m/%Y")
     except ValueError:
-        return await ctx.response.send_message(content='''Data inválida! você informou uma data no formato "dd/mm/aaaa"? <:catsip:851024825333186560>''', ephemeral=True)
+        return await ctx.response.send_message(content='''Data inválida! Você informou uma data no formato "dd/mm/aaaa"? <:catsip:851024825333186560>''', ephemeral=True)
     mydbAndCursor = startConnection()
     await ctx.response.defer()
     result = scheduleNextEventDate(mydbAndCursor[0], nome_do_evento, data, ctx.user.name)
@@ -440,6 +447,19 @@ async def scheduleNextEvent(ctx: discord.Interaction, nome_do_evento: str, data:
     elif result == "não é o dono":
         return await ctx.followup.send(content=f'Você não é o dono desse evento! apenas o dono pode agendar o evento')
     
+
+
+@bot.tree.command(name=f'adm-conectar_conta', description=f'Conecta sua conta do discord com a do telegram')
+async def connectAccount(ctx: discord.Interaction,user: discord.Member, telegram_username: str):
+    mydbAndCursor = startConnection()
+    await ctx.response.defer()
+    result = admConnectTelegramAccount(mydbAndCursor[0], user, telegram_username)
+    endConnectionWithCommit(mydbAndCursor)
+    if result:
+        return await ctx.followup.send(content=f'Sua conta foi conectada com sucesso! agora você pode usar os comandos do bot no discord e no telegram', ephemeral=False)
+    else:
+        return await ctx.followup.send(content=f'Não foi possível conectar sua conta! você já está conectado?', ephemeral=True)
+
 
 
 
@@ -460,31 +480,9 @@ async def callAdmin(ctx: discord.Interaction, message: str):
             await channel.send(content='O titio foi avisado! agora é só esperar :3')
         pass
 
-@bot.tree.command(name='insert_training', description=f'Treina {BOT_NAME} para responder uma conversa')
-async def insertTraining(ctx, prompt: str, answer1: str, answer2: str = None, answer3: str = None):
-    trainer = ListTrainer(bot.chatBot)
-    if not prompt or not answer1:
-        await ctx.response.send_message(content='Você precisa informar uma conversa valida!', ephemeral=True)
-        return
-    else:
-        conversation = [prompt] + [answer1] + [answer2] + [answer3]
-        for i in range(len(conversation)):
-            if conversation[i] != '' and i+1 < len(conversation):
-                if conversation[i+1] != None:
-                    trainer.train([conversation[i], conversation[i+1]])
-        await ctx.response.send_message(content='Conversa treinada com sucesso!', ephemeral=True)
 
-@bot.tree.command(name='insert_complex_training', description=f'Treina {BOT_NAME} para responder uma conversa com dados complexos')
-async def insertComplexTraining(ctx, conversation: str):
-    """ trainer = ListTrainer(bot.chatBot)
-    conversation
-    for i in range(len(conversation)):
-        if conversation[i] != '' and i+1 < len(conversation):
-            if conversation[i+1] != None:
-                trainer.train([conversation[i], conversation[i+1]]) """
-    await ctx.response.send_message(content='Conversa treinada com sucesso!', ephemeral=True)
 
-@bot.tree.command(name='mod-calc_idade', description=f'Use esse recurso para calcular a idade de alguém de acordo com a data de nascimento')
+#@bot.tree.command(name='mod-calc_idade', description=f'Use esse recurso para calcular a idade de alguém de acordo com a data de nascimento')
 async def calc_idade(ctx, message: str):
     try:
         idade = calcular_idade(message)
@@ -494,7 +492,7 @@ async def calc_idade(ctx, message: str):
     except Exception:
         await ctx.response.send_message(content='Data de nascimento inválida! você informou uma data no formato "dd/mm/aaaa"? <:catsip:851024825333186560>', ephemeral=True)
 
-@bot.tree.command(name='mod-check_new_member', description=f'Use esse recurso para checar se um novo membro é elegivel a usar a carteirinha de cargos ou não')
+#@bot.tree.command(name='mod-check_new_member', description=f'Use esse recurso para checar se um novo membro é elegivel a usar a carteirinha de cargos ou não')
 async def check_new_member(ctx, member:discord.Member, age:int):
         account_age = datetime.utcnow().date() - member.created_at.date()
         if age<=13 or account_age.days <= 30:
@@ -504,4 +502,4 @@ async def check_new_member(ctx, member:discord.Member, age:int):
 
 def run_discord_client(chatBot):
     bot.chatBot = chatBot
-    bot.run(DISCORD_TOKEN)
+    bot.run(os.getenv('DISCORD_TOKEN'))

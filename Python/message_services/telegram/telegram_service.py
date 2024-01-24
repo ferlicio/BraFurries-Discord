@@ -1,8 +1,8 @@
-from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
-from settings import TELEGRAM_TOKEN, TELEGRAM_BOT_USERNAME, TELEGRAM_ADMIN
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, CallbackQueryHandler
+from settings import TELEGRAM_BOT_USERNAME, TELEGRAM_ADMIN
 from chatterbot.conversation import Statement
 from IA_Functions.terceiras.openAI import *
-from telegram import Update
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from typing import Final
 from database.database import *
 import requests
@@ -36,15 +36,38 @@ async def registrar_local_command(update: Update, context: ContextTypes.DEFAULT_
         return await update.message.reply_text(f'''você precisa fornecer um local existente para se cadastrar!
 Você deve usar apenas a sigla do local, sem acentos ou espaços.\n
 Os locais disponiveis são:\n {availableLocalsResponse}''')
+    
+async def agendar_prox_evento_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    message_type:str = update.message.chat.type
+    if (message_type == 'group'):
+        return await update.message.reply_text(f'esse comando só pode ser usado em chats privados')
+    else:
+        eventos = getEventsByOwner()
+        if len(eventos) == 0:
+            return await update.message.reply_text(f'Você não tem nenhum evento cadastrado!')
+        else:
+            buttons = [InlineKeyboardButton(text=e["nome"], callback_data=e["id"]) for e in eventos]
+            keyboard_inline = InlineKeyboardMarkup(inline_keyboard=[buttons])
+            await update.message.reply_text('Por favor escolha o evento para reagendar:', reply_markup=keyboard_inline)
+    
+async def eventUpdate(update:Update, context:ContextTypes.DEFAULT_TYPE):
+    pass
+
+async def reagendar(update:Update, context:ContextTypes.DEFAULT_TYPE):
+    pass
+
+
 
 def warn_admins(user:str, message: str):
-    requests.post(f'https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage?chat_id={TELEGRAM_ADMIN}&text={user}: {message}')
+    requests.post(f'https://api.telegram.org/bot{os.getenv("TELEGRAM_TOKEN")}/sendMessage?chat_id={TELEGRAM_ADMIN}&text={user}: {message}')
+
+
 
 #responses
 async def handle_response(text: str) -> str:
     processed_text:str = text.lower()
     ##response:str = str(activeChatBot.generate_response(Statement(processed_text)))
-    response:str = await retornaRespostaGPT(processed_text, 'titio', None, None, 'Telegram') 
+    response:str = "oi" ##await retornaRespostaGPT(processed_text, 'titio', None, None, 'Telegram') 
     return response
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -76,12 +99,16 @@ def run_telegram_client(chatBot):
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
 
-    app = Application.builder().token(TELEGRAM_TOKEN).build()
+    app = Application.builder().token(os.getenv('TELEGRAM_TOKEN')).build()
     app.activeChatBot = chatBot
     #Commands
     app.add_handler(CommandHandler('start', start_command))
     app.add_handler(CommandHandler('help', help_command))
     app.add_handler(CommandHandler('registrar_local', registrar_local_command))
+
+    app.add_handler(CommandHandler('agendar_prox_evento', registrar_local_command))
+    app.add_handler(CallbackQueryHandler(eventUpdate))
+    app.add_handler(MessageHandler(filters.Text(), reagendar))
 
     #Messages
     app.add_handler(MessageHandler(filters.TEXT, handle_message))

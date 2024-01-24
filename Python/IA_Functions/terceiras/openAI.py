@@ -4,9 +4,10 @@ import discord
 import asyncio
 from discord.ext import commands
 from datetime import datetime
+import os
 
 
-openai.api_key = OPENAI_TOKEN
+openai.api_key = os.getenv('OPENAI_TOKEN')
 
 async def retornaRespostaGPT(texto, usuario, bot:commands.Bot, channelID, app):
     try:

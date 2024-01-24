@@ -1,26 +1,39 @@
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, Update, KeyboardButton, Message
-from telegram.ext import CommandHandler, CallbackQueryHandler, MessageHandler, filters, Application, ContextTypes
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, ReplyKeyboardRemove, Update, KeyboardButton, Message
+from telegram.ext import CommandHandler, CallbackQueryHandler, MessageHandler, filters, Application, ContextTypes, ConversationHandler
 from database.database import endConnection, endConnectionWithCommit, getEventsByOwner, rescheduleEventDate, scheduleNextEventDate, startConnection
 from datetime import datetime
 import re
 
+INITIAL, VIEW, UPDATE, EVENTDATECHANGE = range(4)
 
-async def agendarEvento(update:Update, context:ContextTypes.DEFAULT_TYPE):
+async def gerenciarEventos(update:Update, context:ContextTypes.DEFAULT_TYPE):
     user = update.message.chat.username
-    if update.message.chat.username == 'Titioderg' and len(context.args) > 0:
+    if user == 'Titioderg' and len(context.args) > 0:
         user = context.args[0]
     mydbAndCursor = startConnection()
     events = getEventsByOwner(mydbAndCursor[0],user)
     endConnection(mydbAndCursor)
     if len(events) == 0:
-        return await update.message.reply_text(f'Você não tem nenhum evento cadastrado!')
+        await update.message.reply_text(f'Você não tem nenhum evento cadastrado!')
+        return ConversationHandler.END
     buttons = [[InlineKeyboardButton(text=e["event_name"], callback_data=e["id"])] for e in events]
     keyboard_inline = InlineKeyboardMarkup(inline_keyboard=buttons)
-    context.user_data["events"] = events
     await update.message.reply_text('Por favor escolha o evento para reagendar:', reply_markup=keyboard_inline)
 
+    context.user_data["events"] = events
+    return VIEW
 
-async def eventUpdate(update:Update, context:ContextTypes.DEFAULT_TYPE):
+async def returnToInitial(update:Update, context:ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer(query.id)
+    events = context.user_data.get("events")
+    buttons = [[InlineKeyboardButton(text=e["event_name"], callback_data=e["id"])] for e in events]
+    keyboard_inline = InlineKeyboardMarkup(inline_keyboard=buttons)
+    await query.edit_message_text(text=f'Por favor escolha o evento para reagendar:', parse_mode='Markdown', reply_markup=keyboard_inline)
+    return VIEW
+
+
+async def eventView(update:Update, context:ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer(query.id)
     evento_id = int(query.data)
@@ -35,23 +48,39 @@ async def eventUpdate(update:Update, context:ContextTypes.DEFAULT_TYPE):
 *Chat do evento*: {event['group_chat_link']}"""
     if event['website']!=None: event_description += f"""
 *Site*: {event['website']}""" 
-    event_description += f"""*Preço*: {"De R$"+str(f"{event['price']:.2f}").replace('.',',')+" a "+"R${:,.2f}".format(event['max_price']).replace(",", "x").replace(".", ",").replace("x", ".") if (event['price']!=0 and event['max_price']!=0) 
+    event_description += f"""
+*Preço*: {"De R$"+str(f"{event['price']:.2f}").replace('.',',')+" a "+"R${:,.2f}".format(event['max_price']).replace(",", "x").replace(".", ",").replace("x", ".") if (event['price']!=0 and event['max_price']!=0) 
         else f'R$'+str(f"{event['price']:.2f}").replace('.',',') if event['max_price']==0 and event['price']!=0 else 'Gratuito'}"""
     if event['description']!=None: event_description += f"""\n\n_{event['description']}_ """
-    await query.edit_message_text(text=f'''{event_description}''', parse_mode='Markdown')
-    if event['ending_datetime'] > datetime.now():
-        buttons = [[KeyboardButton("Reagendar"),KeyboardButton("Cancelar")],[]]
-        reply_markup = ReplyKeyboardMarkup(buttons, resize_keyboard=True, one_time_keyboard=True)
-        return await context.bot.send_message(chat_id=query.message.chat_id, text=f'Este evento ainda não foi finalizado. O que você deseja fazer?', reply_markup=reply_markup)
-    else: 
-        return await context.bot.send_message(chat_id=query.message.chat_id, text=f'Digite a nova data no formato _DD/MM/YYYY_:', reply_markup=reply_markup)
+    if event['starting_datetime'] > datetime.now(): # Se o evento ainda não começou
+        dateChangeButton = InlineKeyboardButton(text="Reagendar", callback_data="Reagendar")
+    else: dateChangeButton = InlineKeyboardButton(text="Agendar", callback_data="Agendar")
+    buttons = [[dateChangeButton, InlineKeyboardButton(text="Voltar", callback_data="Voltar")]]
+    keyboard_inline = InlineKeyboardMarkup(inline_keyboard=buttons)
+    await query.edit_message_text(text=f'''{event_description}''', parse_mode='Markdown', reply_markup=keyboard_inline)
+    return UPDATE
+
+async def eventAction(update:Update, context:ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer(query.id)
+    changesType = query.data
+    if changesType == 'Agendar': 
+        await context.bot.send_message(chat_id=query.from_user.id, text=f'Digite a data no formato _DD/MM/YYYY_:', parse_mode='Markdown', reply_markup=ReplyKeyboardRemove())
+        return EVENTDATECHANGE
+    elif changesType == 'Reagendar':
+        await context.bot.send_message(chat_id=query.from_user.id, text=f'Digite a nova data no formato _DD/MM/YYYY_:', parse_mode='Markdown', reply_markup=ReplyKeyboardRemove())
+        context.user_data['reagendandoEvento'] = True
+        return EVENTDATECHANGE
+    elif changesType == 'Voltar':
+        context.user_data.pop("event")
+        return returnToInitial(update, context)
 
 
 async def handleEventDateChange(update:Update, context:ContextTypes.DEFAULT_TYPE):
-    if 'event' not in context.user_data or not context.user_data['event']: return
     try: data = datetime.strptime(update.message.text, "%d/%m/%Y")
     except ValueError:
-        return await context.bot.send_message(chat_id=update.message.chat_id, text='Data inválida! Você informou uma data no formato "DD/MM/AAAA"?')
+        await context.bot.send_message(chat_id=update.message.chat_id, text='Data inválida! Você informou uma data no formato "DD/MM/AAAA"?')
+        return EVENTDATECHANGE
     # Atualizar a data do evento no banco de dados
     mydbAndCursor = startConnection()
     event = context.user_data["event"]
@@ -63,26 +92,32 @@ async def handleEventDateChange(update:Update, context:ContextTypes.DEFAULT_TYPE
     context.user_data.pop("event")
     context.user_data.pop("events")
     if result == True:
-        return await context.bot.send_message(chat_id=update.message.chat_id, text=f'O evento *{event["event_name"]}* foi agendado para {data} com sucesso!', parse_mode='Markdown')
-
-async def reagendarEvento(update:Update, context:ContextTypes.DEFAULT_TYPE):
-    if 'event' not in context.user_data or not context.user_data['event']: return
-    if update.message.text == 'Cancelar': 
-        context.user_data.pop("event")
-        context.user_data.pop("events") 
-        return await context.bot.send_message(chat_id=update.message.chat_id, text=f'Operação cancelada!')
+        await context.bot.send_message(chat_id=update.message.chat_id, text=f'O evento *{event["event_name"]}* foi agendado para {data.strptime("%d/%m/%Y")} com sucesso!', parse_mode='Markdown')
     else:
-        context.user_data['reagendandoEvento'] = True
-        return await context.bot.send_message(chat_id=update.message.chat_id, text=f'Digite a nova data no formato _DD/MM/YYYY_:', parse_mode='Markdown')
+        await context.bot.send_message(chat_id=update.message.chat_id, text=f'Não foi possível agendar o evento *{event["event_name"]}*!', parse_mode='Markdown')
+    return ConversationHandler.END
+
+async def cancel(update:Update, context:ContextTypes.DEFAULT_TYPE):
+    context.user_data.pop("event")
+    context.user_data.pop("events")
+    await context.bot.send_message(chat_id=update.message.chat_id, text=f'Operação cancelada!', reply_markup=ReplyKeyboardRemove())
+    return ConversationHandler.END
 
 
 def main() -> None:
     app = Application.builder().token('6227842110:AAGIY9SeyEcnhu80ftA5dJk70ieCyt2Y_s8').build()
 
-    app.add_handler(CommandHandler("agendar_evento", agendarEvento))
-    app.add_handler(CallbackQueryHandler(eventUpdate))
-    app.add_handler(MessageHandler(filters.Regex('^\d{2}/\d{2}/\d{4}$'), handleEventDateChange))
-    app.add_handler(MessageHandler(filters.Regex('^(Reagendar|Cancelar)$'), reagendarEvento))
+    conv_handler = ConversationHandler(
+        entry_points=[CommandHandler("agendar_evento", gerenciarEventos)],
+        states={
+            INITIAL: [CallbackQueryHandler(returnToInitial)],
+            VIEW: [CallbackQueryHandler(eventView)],
+            UPDATE: [CallbackQueryHandler(eventAction)],
+            EVENTDATECHANGE: [MessageHandler(filters.TEXT, handleEventDateChange)],
+        },
+        fallbacks=[CommandHandler("cancel", cancel)]
+    )
+    app.add_handler(conv_handler)
 
     app.run_polling()
 

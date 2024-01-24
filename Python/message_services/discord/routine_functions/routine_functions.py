@@ -1,6 +1,9 @@
 from database.database import *
 from settings import *
 import discord
+from colormath.color_objects import sRGBColor, LabColor
+from colormath.color_conversions import convert_color
+from colormath.color_diff import delta_e_cie2000
 
 def getVIPConfigurations(guild):
     VIPStatus = {'VIPRoles': [], 'hasVIPCustomization': DISCORD_HAS_VIP_CUSTOM_ROLES, 'hasRoleDivision': DISCORD_HAS_ROLE_DIVISION,
@@ -45,3 +48,21 @@ async def localeIsAvailable(ctx, mydbAndCursor, locale):
 Você deve usar apenas a sigla do local, sem acentos ou espaços.\n
 Os locais disponiveis são:\n ```{availableLocalsResponse}```''', ephemeral=True)
         return False
+    
+def hex_to_rgb(hex_color):
+    return sRGBColor.new_from_rgb_hex(hex_color)
+    
+async def colorIsAvailable(color:str):
+    for staff_color in DISCORD_STAFF_COLORS:
+        color1_rgb = hex_to_rgb(color)
+        color2_rgb = hex_to_rgb(staff_color)
+
+        color1_lab = convert_color(color1_rgb, LabColor)
+        color2_lab = convert_color(color2_rgb, LabColor)
+
+        color_distance = delta_e_cie2000(color1_lab, color2_lab)  # Aqui está a mudança
+
+        if color_distance < 11.0:
+            return False
+    return True
+    
