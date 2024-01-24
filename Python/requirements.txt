@@ -81,7 +81,6 @@ openai==0.28.1
 orjson==3.9.1
 outcome==1.2.0
 packaging==23.1
-pandas==2.0.2
 pathtools==0.1.2
 pbr==5.11.1
 pdm==2.7.4
