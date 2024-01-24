@@ -9,7 +9,10 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 import os.path
-import json
+import dotenv
+
+dotenv_file = dotenv.find_dotenv()
+dotenv.load_dotenv(dotenv_file)
 
 SCOPES = ['https://www.googleapis.com/auth/calendar']
 
@@ -38,9 +41,9 @@ class Config:
 
 def connectToDatabase():
     mydb = mysql.connector.connect(
-        host=BOT_DATABASE['HOST'],
-        user=BOT_DATABASE['USER'],
-        password=BOT_DATABASE['PASSWORD'],
+        host=os.getenv('BOT_DATABASE_HOST'),
+        user=os.getenv('BOT_DATABASE_USER'),
+        password=os.getenv('BOT_DATABASE_PASSWORD'),
         database='coddy'
     )
     return mydb
@@ -66,10 +69,16 @@ def startDatabase():
     mydb = connectToDatabase()
     cursor = mydb.cursor()
 
-    for abbrev, city in cities.items():
-        query = f"""INSERT IGNORE INTO locale (locale_abbrev, locale_name) VALUES ('{abbrev}','{city}');"""
-        cursor.execute(query)
-    mydb.commit()
+    if os.environ['DATABASE_STARTED']:
+        return
+    else:
+        for abbrev, city in cities.items():
+            query = f"""INSERT IGNORE INTO locale (locale_abbrev, locale_name) VALUES ('{abbrev}','{city}');"""
+            cursor.execute(query)
+        mydb.commit()
+        os.environ['DATABASE_STARTED'] = 'True'
+        dotenv.set_key(dotenv_file, "DATABASE_STARTED", os.environ["DATABASE_STARTED"])
+        return
 
 def getConfig(guild:discord.Guild):
     mydb = connectToDatabase()
@@ -146,26 +155,29 @@ WHERE discord_servers.guild_id = '{guild.id}'"""
 
 def CreateGCalendarDescription(price:float, max_price:float, group_link:str, website:str):
     CalendarDescription = None
+    formatted_price = "{:,.2f}".format(price).replace(",", "x").replace(".", ",").replace("x", ".")
+    if max_price != None and max_price != 'None' and max_price != 0:
+        formatted_max_price = "{:,.2f}".format(max_price).replace(",", "x").replace(".", ",").replace("x", ".")
     if price > 0:
         CalendarDescription = f"""<strong>>> Evento Pago <<</strong>"""
     else:
         CalendarDescription = f"""<strong>>> Evento Gratuito <<</strong>"""
-    if max_price != None:
+    if max_price != None and max_price != 'None' and max_price != 0:
         CalendarDescription += f"""
 
 <strong>Preço:</strong>
-R${price:.0f} a R${str(f"{max_price:.2f}").replace('.',',')}"""
+R${formatted_price} a R${formatted_max_price}"""
     elif price > 0:
         CalendarDescription += f"""
 
 <strong>Preço:</strong>
-R${str(f"{price:.2f}").replace('.',',')}"""
-    if group_link != None:
+R${formatted_price}"""+(" a R$"+formatted_max_price if max_price != None else '')
+    if group_link != None and group_link != 'None':
         CalendarDescription += f"""
 
 <strong>Chat do Evento:</strong>
 <a href="{group_link}">{group_link}</a>"""
-    if website != None:
+    if website != None and website != 'None':
         CalendarDescription += f"""
 
 <strong>Site:</strong>
@@ -189,36 +201,57 @@ def includeUser(mydb, user: discord.User or str):
         username = user.name
     else:
         username = user
-
+    
+    foundUser = False
+    if type(user) != str:
+        query = f"""SELECT * FROM discord_user WHERE discord_user_id = '{user.id}';"""
+        cursor.execute(query)
+        result = cursor.fetchone()
+        if result != None:
+            foundUser = True
+    else:
+        query = f"""SELECT * FROM telegram_user WHERE username = '{user}';"""
+        cursor.execute(query)
+        result = cursor.fetchone()
+        if result != None:
+            foundUser = True
+    
+    if foundUser:
+        return result[1]
     # Verificar se o usuário já existe na tabela `users`
-    query = f"""INSERT IGNORE INTO users (username)
-VALUES ('{username}');"""
-    cursor.execute(query)
-    result = cursor.fetchone()
+    try: 
+        query = f"""INSERT INTO users (username)
+    VALUES ('{username}');"""
+        cursor.execute(query)
+    finally:
+        # Obter o id do usuário na tabela `users`
+        query = f"""SELECT id FROM users WHERE username = '{username}';"""
+        cursor.execute(query)
+        result = cursor.fetchone()
+        user_id = result[0]
 
-    # Obter o id do usuário na tabela `users`
-    query = f"""SELECT id FROM users WHERE username = '{username}';"""
-    cursor.execute(query)
-    result = cursor.fetchone()
-    user_id = result[0]
-
-    # Inserir o usuário na tabela `discord_user`
-    query = f"""INSERT IGNORE INTO discord_user (user_id, discord_user_id, username, display_name, banned)
-        VALUES ({user_id}, {user.id}, '{username}', '{user.nick}', {False});""" if type(user) != str else f"""
-        INSERT IGNORE INTO telegram_user (user_id, username, display_name, banned)
-        VALUES ({user_id}, '{user}', '{username}', {False});"""
-    cursor.execute(query)
-    return user_id
+        # Inserir o usuário na tabela `discord_user`
+        try:
+            query = f"""INSERT INTO discord_user (user_id, discord_user_id, username, display_name, banned)
+                VALUES ({user_id}, {user.id}, '{username}', '{user.nick}', {False});""" if type(user) != str else f"""
+                INSERT IGNORE INTO telegram_user (user_id, username, display_name, banned)
+                VALUES ({user_id}, '{user}', '{username}', {False});"""
+            cursor.execute(query)
+        except:
+            pass
+        return user_id
 
 def includeLocale(mydb, abbrev:str, user:discord.User or str, availableLocals:list):
     user_id = includeUser(mydb, user)
     cursor = mydb.cursor()
     for local in availableLocals:
         if local['locale_abbrev'] == abbrev:
-            query = f"""INSERT IGNORE INTO user_locale (user_id, locale_id) VALUES ('{user_id}','{local['id']}');"""
-            cursor.execute(query)
-            return True
-    return False
+            try:
+                query = f"""INSERT INTO user_locale (user_id, locale_id) VALUES ('{user_id}','{local['id']}');"""
+                cursor.execute(query)
+                return True
+            except:
+                return False
 
 def getByLocale(mydb, abbrev:str, availableLocals:list):
     cursor = mydb.cursor()
@@ -238,9 +271,12 @@ WHERE locale.locale_abbrev = '{abbrev}';"""
 def includeBirthday(mydb, date:date, user:discord.User):
     user_id = includeUser(mydb, user)
     cursor = mydb.cursor()
-    query = f"""INSERT IGNORE INTO user_birthday (user_id, birth_date) VALUES ('{user_id}','{date}');"""
-    cursor.execute(query)
-    return True
+    try:
+        query = f"""INSERT INTO user_birthday (user_id, birth_date) VALUES ('{user_id}','{date}');"""
+        cursor.execute(query)
+        return True
+    except:
+        return False
 
 def getAllBirthdays(mydb):
     cursor = mydb.cursor()
@@ -277,10 +313,10 @@ def includeEvent(mydb, user: discord.Member or str, locale_id:int, city:str, eve
             },
         }
         service = build('calendar', 'v3', credentials=creds)
-        response = service.events().insert(calendarId='780618419dbea46e70f7a562ccf01e63e51242cc046e218bb2571007ec852418@group.calendar.google.com', body=eventToGCalendar).execute()
-        query = f"""INSERT IGNORE INTO events (host_user_id, locale_id, city, event_name, address, price, max_price, starting_datetime, ending_datetime, description, group_chat_link, website, event_logo_url, gc_event_id, iCalUID)
-    VALUES ({user_id}, {locale_id}, '{city}', '{event_name}', '{address}', '{price}', '{max_price}', '{starting_datetime}', '{ending_datetime}', '{description}', '{group_link}', '{website}', '{event_logo_url}', '{response['id']}', '{response['iCalUID']}');"""
-        print(query)
+        response = service.events().insert(calendarId=os.getenv('GOOGLE_CALENDAR_EVENTS_ID'), body=eventToGCalendar).execute()
+        query = f"""INSERT IGNORE INTO events (host_user_id, locale_id, city, event_name, address, price, max_price, starting_datetime, ending_datetime, description, group_chat_link, website, event_logo_url, gc_event_id)
+    VALUES ({user_id}, {locale_id}, '{city}', '{event_name}', '{address}', '{price}', '{max_price if max_price!=None else 0}', '{starting_datetime}', '{ending_datetime}', '{description}', '{group_link}', '{website}', '{event_logo_url}', '{response['id']}');"""
+        query = query.replace("'None'", 'NULL')
         cursor.execute(query)
         return True
     except HttpError as error:
@@ -298,9 +334,9 @@ JOIN locale ON events.locale_id = locale.id;"""
     myresult = [{'event_name': i[0], 'address': i[1], 'price': i[2], 'starting_datetime': datetime.strptime(f'{i[3]}', '%Y-%m-%d %H:%M:%S'), 'ending_datetime': datetime.strptime(f'{i[4]}', '%Y-%m-%d %H:%M:%S'), 'description': i[5], 'group_chat_link': i[6], 'host_user': i[7], 'state': i[8], 'state_abbrev':i[9], 'city':i[10], 'website':i[11]} for i in myresult]
     myresult = [i for i in myresult if i['ending_datetime'] >= datetime.now()]
     for event in myresult:
-        if not event['website'].__contains__('http') and event['website'] != 'None':
+        if event['website'] != None and not event['website'].__contains__('http'):
             event['website'] = f'https://{event["website"]}'
-        if not event['group_chat_link'].__contains__('http') and event['group_chat_link'] != 'None':
+        if event['group_chat_link'] != None and not event['group_chat_link'].__contains__('http'):
             event['group_chat_link'] = f'https://{event["group_chat_link"]}'
     return myresult
 
@@ -317,35 +353,60 @@ WHERE events.locale_id = '{locale_id}';"""
     myresult = [{'event_name': i[0], 'address': i[1], 'price': i[2], 'starting_datetime': datetime.strptime(f'{i[3]}', '%Y-%m-%d %H:%M:%S'), 'ending_datetime': datetime.strptime(f'{i[4]}', '%Y-%m-%d %H:%M:%S'), 'description': i[5], 'group_chat_link': i[6], 'host_user': i[7], 'state': i[8], 'state_abbrev':i[9], 'city':i[10], 'website':i[11]} for i in myresult]
     myresult = [i for i in myresult if i['ending_datetime'] >= datetime.now()]
     for event in myresult:
-        if not event['website'].__contains__('http') and event['website'] != 'None':
+        if event['website'] != None and not event['website'].__contains__('http'):
             event['website'] = f'https://{event["website"]}'
-        if not event['group_chat_link'].__contains__('http') and event['group_chat_link'] != 'None':
+        if event['group_chat_link'] != None and not event['group_chat_link'].__contains__('http'):
             event['group_chat_link'] = f'https://{event["group_chat_link"]}'
     return myresult
 
 def getEventByName(mydb, event_name:str):
     cursor = mydb.cursor()
-    query = f"""SELECT events.event_name, events.address, events.price, events.starting_datetime, events.ending_datetime, events.description, events.group_chat_link, users.username, locale.locale_name, locale.locale_abbrev, events.city, events.website, events.event_logo_url
+    query = f"""SELECT events.event_name, events.address, events.price, events.starting_datetime, events.ending_datetime, events.description, events.group_chat_link, users.username, locale.locale_name, locale.locale_abbrev, events.city, events.website, events.event_logo_url, events.max_price
 FROM events
 JOIN users ON events.host_user_id = users.id
 JOIN locale ON events.locale_id = locale.id
 WHERE events.event_name = '{event_name}';"""
     cursor.execute(query)
     myresult = cursor.fetchall()
+    if myresult == []:
+        query = f"""SELECT events.event_name, events.address, events.price, events.starting_datetime, events.ending_datetime, events.description, events.group_chat_link, users.username, locale.locale_name, locale.locale_abbrev, events.city, events.website, events.event_logo_url, events.max_price
+FROM events
+JOIN users ON events.host_user_id = users.id
+JOIN locale ON events.locale_id = locale.id
+WHERE events.event_name LIKE '%{event_name}%';"""
+        cursor.execute(query)
+        myresult = cursor.fetchall()
     #convertendo para uma lista de dicionários
-    myresult = [{'event_name': i[0], 'address': i[1], 'price': i[2], 'starting_datetime': datetime.strptime(f'{i[3]}', '%Y-%m-%d %H:%M:%S'), 'ending_datetime': datetime.strptime(f'{i[4]}', '%Y-%m-%d %H:%M:%S'), 'description': i[5], 'group_chat_link': i[6], 'host_user': i[7], 'state': i[8], 'state_abbrev':i[9], 'city':i[10], 'website':i[11], 'logo_url':i[12]} for i in myresult]
-    myresult = [i for i in myresult if i['ending_datetime'] >= datetime.now()]
+    myresult = [{'event_name': i[0], 'address': i[1], 'price': i[2], 'starting_datetime': datetime.strptime(f'{i[3]}', '%Y-%m-%d %H:%M:%S'), 'ending_datetime': datetime.strptime(f'{i[4]}', '%Y-%m-%d %H:%M:%S'), 'description': i[5], 'group_chat_link': i[6], 'host_user': i[7], 'state': i[8], 'state_abbrev':i[9], 'city':i[10], 'website':i[11], 'logo_url':i[12], 'max_price':i[13]} for i in myresult] 
     for event in myresult:
-        if not event['website'].__contains__('http') and event['website'] != 'None':
+        if event['website'] != None and not event['website'].__contains__('http'):
             event['website'] = f'https://{event["website"]}'
-        if not event['group_chat_link'].__contains__('http') and event['group_chat_link'] != 'None':
+        if event['group_chat_link'] != None and not event['group_chat_link'].__contains__('http'):
+            event['group_chat_link'] = f'https://{event["group_chat_link"]}'
+    return myresult[0] if myresult != [] else None 
+    
+def getEventsByOwner(mydb, owner_name:str):
+    cursor = mydb.cursor()
+    query = f"""SELECT events.id, events.event_name, events.address, events.price, events.max_price , events.starting_datetime, events.ending_datetime, events.description, events.group_chat_link, users.username, locale.locale_name, locale.locale_abbrev, events.city, events.website
+FROM events
+JOIN users ON events.host_user_id = users.id
+JOIN locale ON events.locale_id = locale.id
+WHERE users.username = '{owner_name}';"""
+    cursor.execute(query)
+    myresult = cursor.fetchall()
+    #convertendo para uma lista de dicionários
+    myresult = [{'id': i[0], 'event_name': i[1], 'address': i[2], 'price': i[3], 'max_price': i[4], 'starting_datetime': datetime.strptime(f'{i[5]}', '%Y-%m-%d %H:%M:%S'), 'ending_datetime': datetime.strptime(f'{i[6]}', '%Y-%m-%d %H:%M:%S'), 'description': i[7], 'group_chat_link': i[8], 'host_user': i[9], 'state': i[10], 'state_abbrev':i[11], 'city':i[12], 'website':i[13]} for i in myresult]
+    for event in myresult:
+        if event['website'] != None and not event['website'].__contains__('http'):
+            event['website'] = f'https://{event["website"]}'
+        if event['group_chat_link'] != None and not event['group_chat_link'].__contains__('http'):
             event['group_chat_link'] = f'https://{event["group_chat_link"]}'
     return myresult
 
 def scheduleNextEventDate(mydb, event_name:str, new_starting_datetime:datetime, user):
     cursor = mydb.cursor()
     #verifica se o evento já está agendado
-    query = f"""SELECT events.id, events.event_name, events.starting_datetime, events.ending_datetime, users.username, events.price, events.max_price, events.group_chat_link, events.website, events.address
+    query = f"""SELECT events.id, events.event_name, events.starting_datetime, events.ending_datetime, users.username, events.price, events.max_price, events.group_chat_link, events.website, events.address, events.gc_event_id
 FROM events
 JOIN users ON events.host_user_id = users.id
 WHERE event_name = '{event_name}';"""
@@ -354,10 +415,10 @@ WHERE event_name = '{event_name}';"""
     if myresult == []:
         return "não encontrado"
     else:
-        myresult = [{'id': i[0], 'event_name': i[1], 'starting_datetime': datetime.strptime(f'{i[2]}', '%Y-%m-%d %H:%M:%S'), 'ending_datetime': datetime.strptime(f'{i[3]}', '%Y-%m-%d %H:%M:%S'), 'host_user': i[4], 'price': i[5], 'max_price': i[6], 'group_chat_link': i[7], 'website': i[8], 'address': i[9]
+        myresult = [{'id': i[0], 'event_name': i[1], 'starting_datetime': datetime.strptime(f'{i[2]}', '%Y-%m-%d %H:%M:%S'), 'ending_datetime': datetime.strptime(f'{i[3]}', '%Y-%m-%d %H:%M:%S'), 'host_user': i[4], 'price': i[5], 'max_price': i[6], 'group_chat_link': i[7], 'website': i[8], 'address': i[9], 'gc_event_id':i[10]
                         } for i in myresult]
-        if myresult[0]['ending_datetime'] > datetime.now():
-            return "não encerrado"
+        """ if myresult[0]['ending_datetime'] > datetime.now():
+            return "não encerrado" """
         return updateDateEvent(mydb, myresult, new_starting_datetime, user, True)
 
 
@@ -382,9 +443,9 @@ WHERE event_name = '{event_name}';"""
         return updateDateEvent(mydb, myresult, new_starting_datetime, user, False)
 
 
-def updateDateEvent(mydb, myresult, new_starting_datetime:datetime, user, isNextEvent:bool):
+def updateDateEvent(mydb, myresult, new_starting_datetime:datetime, user:str, isNextEvent:bool):
     cursor = mydb.cursor()
-    if myresult[0]['host_user'] != user and user != 'titioderg':
+    if myresult[0]['host_user'].lower() != user.lower() and user.lower() != 'titioderg':
         return "não é o dono"
     #calculando a diferença entre a data inicial e a data final do evento
     event_duration = myresult[0]['ending_datetime'] - myresult[0]['starting_datetime']
@@ -394,7 +455,6 @@ def updateDateEvent(mydb, myresult, new_starting_datetime:datetime, user, isNext
     new_ending_datetime = new_starting_datetime + event_duration
     creds = getCredentials()
     try:
-        response = None
         CalendarDescription = CreateGCalendarDescription(myresult[0]['price'], myresult[0]['max_price'], myresult[0]['group_chat_link'], myresult[0]['website'])
         eventToGCalendar = {
             "summary": myresult[0]['event_name'],
@@ -404,29 +464,47 @@ def updateDateEvent(mydb, myresult, new_starting_datetime:datetime, user, isNext
             #7: azul    
             #3: roxo
             "start": {
-                "dateTime": new_starting_datetime.isoformat(),
+                "dateTime": myresult[0]['starting_datetime'].isoformat(),
                 "timeZone": "America/Sao_Paulo",
             },
             "end": {
-                "dateTime": new_ending_datetime.isoformat(),
+                "dateTime": myresult[0]['ending_datetime'].isoformat(),
                 "timeZone": "America/Sao_Paulo",
             },
         }
         if isNextEvent: #
             service = build('calendar', 'v3', credentials=creds)
-            response = service.events().insert(calendarId='780618419dbea46e70f7a562ccf01e63e51242cc046e218bb2571007ec852418@group.calendar.google.com', body=eventToGCalendar).execute()
-        else: 
-            service = build('calendar', 'v3', credentials=creds)
-            service.events().update(
-                calendarId='780618419dbea46e70f7a562ccf01e63e51242cc046e218bb2571007ec852418@group.calendar.google.com',
-                eventId=myresult[0]['gc_event_id'],
-                body=eventToGCalendar).execute()
+            service.events().insert(calendarId=os.getenv('GOOGLE_CALENDAR_EVENTS_ID'), body=eventToGCalendar).execute()
+        service = build('calendar', 'v3', credentials=creds)
+        eventToGCalendar['start']['dateTime'] = new_starting_datetime.isoformat()
+        eventToGCalendar['end']['dateTime'] = new_ending_datetime.isoformat()
+        service.events().update(
+            calendarId=os.getenv('GOOGLE_CALENDAR_EVENTS_ID'),
+            eventId=myresult[0]['gc_event_id'],
+            body=eventToGCalendar).execute()
         #altera a data do evento
-        query = f"""UPDATE events SET starting_datetime = '{new_starting_datetime}', ending_datetime = '{new_ending_datetime}'{", gc_event_id = '"+response['id']+"'" if response else ''} WHERE id = {myresult[0]['id']};"""
+        query = f"""UPDATE events SET starting_datetime = '{new_starting_datetime}', ending_datetime = '{new_ending_datetime}' WHERE id = {myresult[0]['id']};"""
         cursor.execute(query)
         return True
     except HttpError as error:
         print('An error occurred: %s' % error)
 
-        
+def admConnectTelegramAccount(mydb, discord_user:discord.User, telegram_user:str):
+    cursor = mydb.cursor()
+    #checa se o usuário já está cadastrado no banco de dados
+    user_id = includeUser(mydb, discord_user)
+    #checa se o telegram_user já está cadastrado no banco de dados
+    query = f"""SELECT * FROM telegram_user WHERE user_id = '{user_id}';"""
+    cursor.execute(query)
+    myresult = cursor.fetchall()
+    if myresult == []:
+        try:
+            query = f"""INSERT INTO telegram_user (user_id, username, display_name, banned)
+        VALUES ('{user_id}', '{telegram_user}', '{discord_user.nick}', {False});"""
+            cursor.execute(query)
+            return True
+        except:
+            return False
+    else:
+        return True
         
