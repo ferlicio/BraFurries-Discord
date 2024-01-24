@@ -1,4 +1,3 @@
-settings.py
 .env
 *.sqlite3
 discord
