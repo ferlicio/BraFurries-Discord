@@ -1,12 +1,9 @@
-from IA_Functions.propria.learning.learning import discordDeepLearning, DMDiscordDeepLearning, simpleLearning
 from message_services.discord.message_moderation.moderation_functions import moderate
 from message_services.discord.routine_functions.routine_functions import *
 from message_services.telegram.telegram_service import warn_admins
 from commands.discordCommands import run_discord_commands
 from message_services.discord.discord_events import *
 from commands.default_commands import calcular_idade
-from chatterbot.conversation import Statement
-from chatterbot.trainers import ListTrainer
 from IA_Functions.terceiras.openAI import *
 from typing import Optional, Union
 from database.database import *

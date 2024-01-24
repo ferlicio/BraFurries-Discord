@@ -1,6 +1,5 @@
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, CallbackQueryHandler
 from settings import TELEGRAM_BOT_USERNAME, TELEGRAM_ADMIN
-from chatterbot.conversation import Statement
 from IA_Functions.terceiras.openAI import *
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from typing import Final
