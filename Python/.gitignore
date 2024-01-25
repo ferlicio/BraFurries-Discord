@@ -4,4 +4,5 @@ discord
 credentials.json
 token.json
 estrutura do banco.jpg
+.venv
 ```
