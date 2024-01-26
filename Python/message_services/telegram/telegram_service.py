@@ -1,11 +1,11 @@
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, CallbackQueryHandler
-from settings import TELEGRAM_BOT_USERNAME, TELEGRAM_ADMIN
 from IA_Functions.terceiras.openAI import *
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from typing import Final
 from database.database import *
 import requests
 import asyncio
+import os
 
 app = None
 
@@ -58,7 +58,7 @@ async def reagendar(update:Update, context:ContextTypes.DEFAULT_TYPE):
 
 
 def warn_admins(user:str, message: str):
-    requests.post(f'https://api.telegram.org/bot{os.getenv("TELEGRAM_TOKEN")}/sendMessage?chat_id={TELEGRAM_ADMIN}&text={user}: {message}')
+    requests.post(f'https://api.telegram.org/bot{os.getenv("TELEGRAM_TOKEN")}/sendMessage?chat_id={os.getenv("TELEGRAM_ADMIN")}&text={user}: {message}')
 
 
 
@@ -74,8 +74,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text:str = update.message.text
     print(f'{update.message.chat.id} - {update.message.chat.username}: "{text}"')
     if (message_type == 'group'):
-        if TELEGRAM_BOT_USERNAME in text:
-            new_text:str = text.replace(TELEGRAM_BOT_USERNAME, '').strip()
+        if os.getenv('TELEGRAM_BOT_USERNAME') in text:
+            new_text:str = text.replace(os.getenv('TELEGRAM_BOT_USERNAME'), '').strip()
             response:str = await handle_response(new_text) 
         else:
             return

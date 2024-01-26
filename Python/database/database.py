@@ -1,4 +1,3 @@
-from settings import *
 import mysql.connector
 import discord
 from models.cities import cities

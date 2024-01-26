@@ -1,5 +1,4 @@
 import openai
-from settings import *
 import discord
 import asyncio
 from discord.ext import commands
@@ -16,7 +15,7 @@ async def retornaRespostaGPT(texto, usuario, bot:commands.Bot, channelID, app):
         botLastMessage = None
         print(f'Usuário: {usuario}')
         if app == 'Discord':
-            creator = discord.utils.get(bot.get_all_members(), id=DISCORD_ADMINS[0])
+            creator = discord.utils.get(bot.get_all_members(), id=os.getenv('DISCORD_ADMINS').split(',')[0])
             creator = creator.nick
             ## vamos pegar o histórico do canal e passar para uma variavel com o nome e a mensagem de cada usuario
             channel = bot.get_channel(channelID)

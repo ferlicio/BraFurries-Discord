@@ -1,6 +1,5 @@
 from message_services.message_service import run_Services
 from database.database import *
-from settings import *
 import asyncio, sys, codecs
 import os
 
