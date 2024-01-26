@@ -5,7 +5,6 @@ from commands.discordCommands import run_discord_commands
 from message_services.discord.discord_events import *
 from commands.default_commands import calcular_idade
 from IA_Functions.terceiras.openAI import *
-from typing import Optional, Union
 from database.database import *
 from discord.ext import commands
 from discord.ext import tasks
@@ -57,7 +56,7 @@ async def on_message(message: discord.Message):
     if DISCORD_IS_TESTING and (message.channel.id != DISCORD_TEST_CHANNEL and not isinstance(message.channel, discord.channel.DMChannel)):
         return
     #checa se menciona o bot ou se é uma DM
-    if not message.content.lower().__contains__(bot.chatBot.name.lower()) and not bot.user in message.mentions and not isinstance(message.channel, discord.channel.DMChannel):
+    if not message.content.lower().__contains__(bot.chatBot['name'].lower()) and not bot.user in message.mentions and not isinstance(message.channel, discord.channel.DMChannel):
         return
     #respondendo
     if (bot.config.has_gpt_enabled):
