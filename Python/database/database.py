@@ -152,6 +152,18 @@ WHERE discord_servers.guild_id = '{guild.id}'"""
 
     return config
 
+def hasGPTEnabled(guild:discord.Guild):
+    mydb = connectToDatabase()
+    cursor = mydb.cursor(buffered=True)
+    query = f"""SELECT has_gpt_enabled FROM server_settings
+WHERE server_guild_id = '{guild.id}';"""
+    cursor.execute(query)
+    myresult = cursor.fetchone()
+    cursor.close()
+    mydb.close()
+    has_gpt_enabled = myresult[0]==1
+    return has_gpt_enabled
+
 def CreateGCalendarDescription(price:float, max_price:float, group_link:str, website:str):
     CalendarDescription = None
     formatted_price = "{:,.2f}".format(price).replace(",", "x").replace(".", ",").replace("x", ".")
