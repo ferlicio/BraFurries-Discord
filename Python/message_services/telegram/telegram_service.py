@@ -116,4 +116,4 @@ def run_telegram_client(chatBot):
     app.add_error_handler(error)
 
     print('Polling...')
-    loop.run_until_complete(app.run_polling(poll_interval=3, timeout=10))
+    asyncio.run_coroutine_threadsafe(app.run_polling(poll_interval=3, timeout=10), loop)

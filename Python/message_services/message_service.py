@@ -14,6 +14,7 @@ def run_Services(chatBot):
         threads.append(telegramServer)
         
     for thread in threads:
+        thread.daemon = True
         thread.start()
     for thread in threads:
         thread.join()
