@@ -5,10 +5,10 @@ from commands.discordCommands import run_discord_commands
 from message_services.discord.discord_events import *
 from commands.default_commands import calcular_idade
 from IA_Functions.terceiras.openAI import *
+from discord.ext import commands, tasks
 from database.database import *
-from discord.ext import commands
-from discord.ext import tasks
 from datetime import datetime
+from typing import Literal
 from dateutil import tz
 import time
 import discord
@@ -44,11 +44,6 @@ async def on_message(message: discord.Message):
     inputChat = message.content
     if message.author.bot == True:
         return
-    #testes de lógica e aprendizado
-    if message.content.startswith(DISCORD_BOT_PREFIX):
-        await run_discord_commands(bot, message)
-        return
-    #proteções de teste
     ##função de moderação
     moderated = await moderate(bot, message)
     if moderated: return
@@ -59,12 +54,11 @@ async def on_message(message: discord.Message):
     if not message.content.lower().__contains__(bot.chatBot['name'].lower()) and not bot.user in message.mentions and not isinstance(message.channel, discord.channel.DMChannel):
         return
     #respondendo
-    if (bot.config.has_gpt_enabled):
+    if (hasGPTEnabled(message.guild)):
         response = await retornaRespostaGPT(inputChat, message.author.nick if message.author.nick
                                             else message.author.name, bot, message.channel.id, 'Discord')
     else:
-        response = '''ih rapaz... acho que algo deu errado :( \n não vou conseguir te responder agora, mas vou avisar o titio pra ele tentar resolver isso'''
-    print(response)
+        response = '''Eu to desativado por enquanto, mas logo logo eu volto! \nFale com o titio derg se você quiser saber mais sobre como ajudar a me manter ativo ;3'''
     await message.channel.send(response)
     await bot.process_commands(message)
 
@@ -96,25 +90,32 @@ async def bumpWarning():
             generalChannel = bot.get_channel(753348623844114452)
             await generalChannel.send(f"{bump[int(random.random() * len(bump))]} {lastMessage.jump_url}")
 
-@tasks.loop(hours=24) #0.16   10 minutos
+@tasks.loop(hours=48) #0.16   10 minutos
 async def bumpReward():
     # se for dia de recompensa(entre 1 e 5 do mês), dará o cargo para os tres primeiro que deram mais bump no mês(exceto os que já tem o cargo VIP)
-    if datetime.now().day >= 1 and datetime.now().day <= 25:
+    if datetime.now().day >= 1 and datetime.now().day <= 3:
         #pegas as mensagens do ultimo mês no canal de bump
         channel = bot.get_channel(853971735514316880)
         bumpers = {}
         async for msg in channel.history(limit=300):
             # se a mensagem for do bot e for do mês passado, conta como bump
-            if msg.author.id == 302050872383242240 and msg.created_at.month == datetime.now().month - 1:
+            if msg.author.id == 302050872383242240 and (msg.created_at.month == datetime.now().month - 1 or (msg.created_at.month == 12 and datetime.now().month == 1)):
                 # agora vamos criar uma key para cada membro que deu bump
                 if not bumpers.__contains__(msg.interaction.user.name):
                     bumpers[msg.interaction.user.name] = 0
                 bumpers[msg.interaction.user.name] += 1
-        # agora vamos pegar os 3 primeiros
         bumpers = dict(sorted(bumpers.items(), key=lambda item: item[1], reverse=True))
-        print("Os membros que deram bump no mês passado foram: ")
+        # agora vamos mandar uma mensagem privada para o titio derg com os membros que deram mais bump
+        guild = bot.get_guild(DISCORD_GUILD_ID)
+        titio = guild.get_member(167436511787220992)
+        message = f"Os membros que deram bump no mês passado foram: \n"
         for member in bumpers:
-            print(f"{member}: {bumpers[member]}")
+            # se for o ultimo membro adiciona \n no final
+            message += f"{member}: {bumpers[member]}"+ ("" if list(bumpers.keys())[-1] == member else "\n")
+        await titio.send(message)
+        
+
+
 
 @tasks.loop(hours=24) #0.16   10 minutos
 async def configForVips(color=discord.Color.default()):
@@ -463,6 +464,17 @@ async def connectAccount(ctx: discord.Interaction,user: discord.Member, telegram
 async def sayAsCoddy(ctx: discord.Interaction, channel: discord.TextChannel, message: str):
     channelId = discord.utils.get(ctx.guild.channels, name=channel.name)
     await channelId.send(message)
+    resp = await ctx.response.send_message(content='mensagem enviada!', ephemeral=True)
+    return resp
+
+@bot.tree.command(name=f'coddy_status', description=f'Muda o status do {BOT_NAME}')
+async def changeMood(ctx: discord.Interaction, mood: Literal['jogando', 'ouvindo','assistindo'], message: str):
+    moodDiscord = 'playing' if mood == 'jogando' else 'listening' if mood == 'ouvindo' else 'watching'
+    await bot.change_presence(activity=discord.Activity(type=getattr(discord.ActivityType, moodDiscord), name=message))
+    resp = await ctx.response.send_message(content=f'{BOT_NAME} está {mood} {message}!', ephemeral=True)
+    return resp
+
+
 
 @bot.tree.command(name=f'call_titio', description=f'Faz {BOT_NAME} chamar o titio')
 async def callAdmin(ctx: discord.Interaction, message: str):
