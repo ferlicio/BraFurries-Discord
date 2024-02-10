@@ -11,7 +11,7 @@ class DiscordCommands:
         self.message = message
 
     async def say_as_bot(self):
-        if self.message.content.startswith(f'>sayAs{self.chatBot.name}') and os.getenv('DISCORD_ADMINS').__contains__(self.message.author.id):
+        if self.message.content.startswith(f'>sayAs{self.chatBot["name"]}') and os.getenv('DISCORD_ADMINS').__contains__(self.message.author.id):
             await self.message.delete()
             if self.message.content.__contains__('<#'):
                 channel_id = self.message.content.split('<#')[1].split('>')[0]
