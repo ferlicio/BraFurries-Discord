@@ -335,52 +335,89 @@ def includeEvent(mydb, user: discord.Member or str, locale_id:int, city:str, eve
 
 def getAllEvents(mydb):
     cursor = mydb.cursor()
-    query = f"""SELECT events.event_name, events.address, events.price, events.starting_datetime, events.ending_datetime, events.description, events.group_chat_link, users.username, locale.locale_name, locale.locale_abbrev, events.city, events.website
+    query = f"""SELECT events.id, events.event_name, events.address, events.price, events.starting_datetime, events.ending_datetime, events.description, events.group_chat_link, users.username, locale.locale_name, locale.locale_abbrev, events.city, events.website
 FROM events
 JOIN users ON events.host_user_id = users.id
-JOIN locale ON events.locale_id = locale.id;"""
+JOIN locale ON events.locale_id = locale.id
+WHERE events.approved = 1"""
     cursor.execute(query)
     myresult = cursor.fetchall()
     #convertendo para uma lista de dicionários
-    myresult = [{'event_name': i[0], 'address': i[1], 'price': i[2], 'starting_datetime': datetime.strptime(f'{i[3]}', '%Y-%m-%d %H:%M:%S'), 'ending_datetime': datetime.strptime(f'{i[4]}', '%Y-%m-%d %H:%M:%S'), 'description': i[5], 'group_chat_link': i[6], 'host_user': i[7], 'state': i[8], 'state_abbrev':i[9], 'city':i[10], 'website':i[11]} for i in myresult]
-    myresult = [i for i in myresult if i['ending_datetime'] >= datetime.now()]
-    for event in myresult:
-        if event['website'] != None and not event['website'].__contains__('http'):
-            event['website'] = f'https://{event["website"]}'
-        if event['group_chat_link'] != None and not event['group_chat_link'].__contains__('http'):
-            event['group_chat_link'] = f'https://{event["group_chat_link"]}'
+    propriedades = ['id','event_name', 'address', 'price', 'starting_datetime', 'ending_datetime', 'description', 'group_chat_link', 'host_user', 'state', 'state_abbrev', 'city', 'website']
+    resultados_finais = []
+    for i in myresult:
+        evento_dict = dict(zip(propriedades, i))
+        evento_dict['starting_datetime'] = datetime.strptime(f"{evento_dict['starting_datetime']}", '%Y-%m-%d %H:%M:%S')
+        evento_dict['ending_datetime'] = datetime.strptime(f"{evento_dict['ending_datetime']}", '%Y-%m-%d %H:%M:%S')
+        if evento_dict['website'] != None and not evento_dict['website'].__contains__('http'):
+            evento_dict['website'] = f'https://{evento_dict["website"]}'
+        if evento_dict['group_chat_link'] != None and not evento_dict['group_chat_link'].__contains__('http'):
+            evento_dict['group_chat_link'] = f'https://{evento_dict["group_chat_link"]}'
+        resultados_finais.append(evento_dict)
+    myresult = [i for i in resultados_finais if i['ending_datetime'] >= datetime.now()]
+    return myresult
+
+def getAllPendingApprovalEvents(mydb):
+    cursor = mydb.cursor()
+    query = f"""SELECT events.id, events.event_name, events.address, events.price, events.starting_datetime, events.ending_datetime, events.description, events.group_chat_link, users.username, locale.locale_name, locale.locale_abbrev, events.city, events.website
+FROM events
+JOIN users ON events.host_user_id = users.id
+JOIN locale ON events.locale_id = locale.id
+WHERE events.approved = 0"""
+    cursor.execute(query)
+    myresult = cursor.fetchall()
+    #convertendo para uma lista de dicionários
+    propriedades = ['id','event_name', 'address', 'price', 'starting_datetime', 'ending_datetime', 'description', 'group_chat_link', 'host_user', 'state', 'state_abbrev', 'city', 'website']
+    resultados_finais = []
+    for i in myresult:
+        evento_dict = dict(zip(propriedades, i))
+        evento_dict['starting_datetime'] = datetime.strptime(f"{evento_dict['starting_datetime']}", '%Y-%m-%d %H:%M:%S')
+        evento_dict['ending_datetime'] = datetime.strptime(f"{evento_dict['ending_datetime']}", '%Y-%m-%d %H:%M:%S')
+        if evento_dict['website'] != None and not evento_dict['website'].__contains__('http'):
+            evento_dict['website'] = f'https://{evento_dict["website"]}'
+        if evento_dict['group_chat_link'] != None and not evento_dict['group_chat_link'].__contains__('http'):
+            evento_dict['group_chat_link'] = f'https://{evento_dict["group_chat_link"]}'
+        resultados_finais.append(evento_dict)
+    myresult = resultados_finais
     return myresult
 
 def getEventsByState(mydb, locale_id:int):
     cursor = mydb.cursor()
-    query = f"""SELECT events.event_name, events.address, events.price, events.starting_datetime, events.ending_datetime, events.description, events.group_chat_link, users.username, locale.locale_name, locale.locale_abbrev, events.city, events.website
+    query = f"""SELECT events.id, events.event_name, events.address, events.price, events.starting_datetime, events.ending_datetime, events.description, events.group_chat_link, users.username, locale.locale_name, locale.locale_abbrev, events.city, events.website
 FROM events
 JOIN users ON events.host_user_id = users.id
 JOIN locale ON events.locale_id = locale.id
-WHERE events.locale_id = '{locale_id}';"""
+WHERE events.locale_id = '{locale_id}'
+WHERE events.approved = 1;"""
     cursor.execute(query)
     myresult = cursor.fetchall()
     #convertendo para uma lista de dicionários
-    myresult = [{'event_name': i[0], 'address': i[1], 'price': i[2], 'starting_datetime': datetime.strptime(f'{i[3]}', '%Y-%m-%d %H:%M:%S'), 'ending_datetime': datetime.strptime(f'{i[4]}', '%Y-%m-%d %H:%M:%S'), 'description': i[5], 'group_chat_link': i[6], 'host_user': i[7], 'state': i[8], 'state_abbrev':i[9], 'city':i[10], 'website':i[11]} for i in myresult]
-    myresult = [i for i in myresult if i['ending_datetime'] >= datetime.now()]
-    for event in myresult:
-        if event['website'] != None and not event['website'].__contains__('http'):
-            event['website'] = f'https://{event["website"]}'
-        if event['group_chat_link'] != None and not event['group_chat_link'].__contains__('http'):
-            event['group_chat_link'] = f'https://{event["group_chat_link"]}'
+    propriedades = ['id','event_name', 'address', 'price', 'starting_datetime', 'ending_datetime', 'description', 'group_chat_link', 'host_user', 'state', 'state_abbrev', 'city', 'website']
+    resultados_finais = []
+    for i in myresult:
+        evento_dict = dict(zip(propriedades, i))
+        evento_dict['starting_datetime'] = datetime.strptime(f"{evento_dict['starting_datetime']}", '%Y-%m-%d %H:%M:%S')
+        evento_dict['ending_datetime'] = datetime.strptime(f"{evento_dict['ending_datetime']}", '%Y-%m-%d %H:%M:%S')
+        if evento_dict['website'] != None and not evento_dict['website'].__contains__('http'):
+            evento_dict['website'] = f'https://{evento_dict["website"]}'
+        if evento_dict['group_chat_link'] != None and not evento_dict['group_chat_link'].__contains__('http'):
+            evento_dict['group_chat_link'] = f'https://{evento_dict["group_chat_link"]}'
+        resultados_finais.append(evento_dict)
+    myresult = [i for i in resultados_finais if i['ending_datetime'] >= datetime.now()]
     return myresult
 
 def getEventByName(mydb, event_name:str):
     cursor = mydb.cursor()
-    query = f"""SELECT events.event_name, events.address, events.price, events.starting_datetime, events.ending_datetime, events.description, events.group_chat_link, users.username, locale.locale_name, locale.locale_abbrev, events.city, events.website, events.event_logo_url, events.max_price
+    query = f"""SELECT events.id, events.event_name, events.address, events.price, events.starting_datetime, events.ending_datetime, events.description, events.group_chat_link, users.username, locale.locale_name, locale.locale_abbrev, events.city, events.website, events.event_logo_url, events.max_price
 FROM events
 JOIN users ON events.host_user_id = users.id
 JOIN locale ON events.locale_id = locale.id
-WHERE events.event_name = '{event_name}';"""
+WHERE events.event_name = '{event_name}'
+WHERE events.approved = 1;"""
     cursor.execute(query)
     myresult = cursor.fetchall()
     if myresult == []:
-        query = f"""SELECT events.event_name, events.address, events.price, events.starting_datetime, events.ending_datetime, events.description, events.group_chat_link, users.username, locale.locale_name, locale.locale_abbrev, events.city, events.website, events.event_logo_url, events.max_price
+        query = f"""SELECT events.id, events.event_name, events.address, events.price, events.starting_datetime, events.ending_datetime, events.description, events.group_chat_link, users.username, locale.locale_name, locale.locale_abbrev, events.city, events.website, events.event_logo_url, events.max_price
 FROM events
 JOIN users ON events.host_user_id = users.id
 JOIN locale ON events.locale_id = locale.id
@@ -388,12 +425,17 @@ WHERE events.event_name LIKE '%{event_name}%';"""
         cursor.execute(query)
         myresult = cursor.fetchall()
     #convertendo para uma lista de dicionários
-    myresult = [{'event_name': i[0], 'address': i[1], 'price': i[2], 'starting_datetime': datetime.strptime(f'{i[3]}', '%Y-%m-%d %H:%M:%S'), 'ending_datetime': datetime.strptime(f'{i[4]}', '%Y-%m-%d %H:%M:%S'), 'description': i[5], 'group_chat_link': i[6], 'host_user': i[7], 'state': i[8], 'state_abbrev':i[9], 'city':i[10], 'website':i[11], 'logo_url':i[12], 'max_price':i[13]} for i in myresult] 
-    for event in myresult:
-        if event['website'] != None and not event['website'].__contains__('http'):
-            event['website'] = f'https://{event["website"]}'
-        if event['group_chat_link'] != None and not event['group_chat_link'].__contains__('http'):
-            event['group_chat_link'] = f'https://{event["group_chat_link"]}'
+    propriedades = ['id','event_name', 'address', 'price', 'starting_datetime', 'ending_datetime', 'description', 'group_chat_link', 'host_user', 'state', 'state_abbrev', 'city', 'website']
+    resultados_finais = []
+    for i in myresult:
+        evento_dict = dict(zip(propriedades, i))
+        evento_dict['starting_datetime'] = datetime.strptime(f"{evento_dict['starting_datetime']}", '%Y-%m-%d %H:%M:%S')
+        evento_dict['ending_datetime'] = datetime.strptime(f"{evento_dict['ending_datetime']}", '%Y-%m-%d %H:%M:%S')
+        if evento_dict['website'] != None and not evento_dict['website'].__contains__('http'):
+            evento_dict['website'] = f'https://{evento_dict["website"]}'
+        if evento_dict['group_chat_link'] != None and not evento_dict['group_chat_link'].__contains__('http'):
+            evento_dict['group_chat_link'] = f'https://{evento_dict["group_chat_link"]}'
+        resultados_finais.append(evento_dict)
     return myresult[0] if myresult != [] else None 
     
 def getEventsByOwner(mydb, owner_name:str):
@@ -406,13 +448,36 @@ WHERE users.username = '{owner_name}';"""
     cursor.execute(query)
     myresult = cursor.fetchall()
     #convertendo para uma lista de dicionários
-    myresult = [{'id': i[0], 'event_name': i[1], 'address': i[2], 'price': i[3], 'max_price': i[4], 'starting_datetime': datetime.strptime(f'{i[5]}', '%Y-%m-%d %H:%M:%S'), 'ending_datetime': datetime.strptime(f'{i[6]}', '%Y-%m-%d %H:%M:%S'), 'description': i[7], 'group_chat_link': i[8], 'host_user': i[9], 'state': i[10], 'state_abbrev':i[11], 'city':i[12], 'website':i[13]} for i in myresult]
-    for event in myresult:
-        if event['website'] != None and not event['website'].__contains__('http'):
-            event['website'] = f'https://{event["website"]}'
-        if event['group_chat_link'] != None and not event['group_chat_link'].__contains__('http'):
-            event['group_chat_link'] = f'https://{event["group_chat_link"]}'
+    propriedades = ['id','event_name', 'address', 'price', 'starting_datetime', 'ending_datetime', 'description', 'group_chat_link', 'host_user', 'state', 'state_abbrev', 'city', 'website']
+    resultados_finais = []
+    for i in myresult:
+        evento_dict = dict(zip(propriedades, i))
+        evento_dict['starting_datetime'] = datetime.strptime(f"{evento_dict['starting_datetime']}", '%Y-%m-%d %H:%M:%S')
+        evento_dict['ending_datetime'] = datetime.strptime(f"{evento_dict['ending_datetime']}", '%Y-%m-%d %H:%M:%S')
+        if evento_dict['website'] != None and not evento_dict['website'].__contains__('http'):
+            evento_dict['website'] = f'https://{evento_dict["website"]}'
+        if evento_dict['group_chat_link'] != None and not evento_dict['group_chat_link'].__contains__('http'):
+            evento_dict['group_chat_link'] = f'https://{evento_dict["group_chat_link"]}'
+        resultados_finais.append(evento_dict)
     return myresult
+
+def approveEventById(mydb, event_id:int):
+    cursor = mydb.cursor()
+    query = f"""SELECT id FROM events WHERE id = {event_id} AND approved = 0;"""
+    cursor.execute(query)
+    myresult = cursor.fetchall()
+    if myresult == []:
+        return "não encontrado"
+    try:
+        query = f"""UPDATE events
+    SET approved = 1
+    WHERE id = {event_id};"""
+        cursor.execute(query)
+        mydb.commit()
+        return True
+    except:
+        return False
+
 
 def scheduleNextEventDate(mydb, event_name:str, new_starting_datetime:datetime, user):
     cursor = mydb.cursor()

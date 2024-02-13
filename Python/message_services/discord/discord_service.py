@@ -156,6 +156,9 @@ async def configForVips(color=discord.Color.default()):
 
 
 
+####################################################################################################################
+# COMANDOS VIP
+####################################################################################################################
 
 
 @bot.tree.command(name=f'vip-mudar_cor', description=f'Muda a cor do cargo VIP do membro')
@@ -208,6 +211,10 @@ async def test(ctx: discord.Interaction, message: str):
     print(message)
     await ctx.response.send_message(content=f'{message}', ephemeral=False)
 
+
+####################################################################################################################
+# COMANDOS DE INFORMAÇÕES DE MEMBROS
+####################################################################################################################
 
 
 @bot.tree.command(name=f'registrar_local', description=f'Registra o local do membro')
@@ -279,7 +286,9 @@ async def listBirthdays(ctx: discord.Interaction):
         return await ctx.followup.send(content=f'Não há aniversários registrados... que tal ser o primeiro? :3')
 
 
-
+####################################################################################################################
+# COMANDOS DE EVENTOS
+####################################################################################################################
 
 
 async def addEvent(ctx: discord.Interaction, user: any, state:str, city:str, event_name:str, address:str, price:float, starting_date: str, starting_time: str, ending_date: str, ending_time: str, description: str = None, group_link:str = None, site:str = None, max_price:float = None, event_logo_url:str = None):
@@ -315,6 +324,7 @@ async def addEventWithDiscordUser(ctx: discord.Interaction, user: discord.Member
 async def addEventWithTelegramUser(ctx: discord.Interaction, telegram_username: str, estado:str, cidade:str, event_name:str, address:str, price:float, starting_date: str, starting_time: str, ending_date: str, ending_time: str, description: str = None, group_link:str = None, site:str = None, max_price:float = None, event_logo_url:str = None):
     await addEvent(ctx, telegram_username, estado, cidade, event_name, address, price, starting_date, starting_time, ending_date, ending_time, description, group_link, site, max_price, event_logo_url)
     pass
+
 
 @bot.tree.command(name=f'eventos', description=f'Lista todos os eventos registrados')
 async def listEvents(ctx: discord.Interaction):
@@ -404,7 +414,7 @@ async def showEvent(ctx: discord.Interaction, event_name: str):
         return await ctx.followup.send(content=f'Não há eventos registrados com esse nome. Tem certeza que digitou o nome certo?')
     
 
-@bot.tree.command(name=f'reagendar_evento', description=f'Reagenda um evento pendente')
+@bot.tree.command(name=f'evento_reagendar', description=f'Reagenda um evento pendente')
 async def rescheduleEvent(ctx: discord.Interaction, event_name: str, new_date: str):
     try: new_date = datetime.strptime(new_date, "%d/%m/%Y")
     except ValueError:
@@ -425,8 +435,7 @@ async def rescheduleEvent(ctx: discord.Interaction, event_name: str, new_date: s
         return await ctx.followup.send(content=f'Não é possível reagendar um evento que já foi realizado')
 
 
-
-@bot.tree.command(name=f'agendar_prox_evento', description=f'Agenda no calendario a próxima data do evento')
+@bot.tree.command(name=f'evento_agendar_prox', description=f'Agenda no calendario a próxima data do evento')
 async def scheduleNextEvent(ctx: discord.Interaction, nome_do_evento: str, data: str):
     try: data = datetime.strptime(data, "%d/%m/%Y")
     except ValueError:
@@ -445,6 +454,50 @@ async def scheduleNextEvent(ctx: discord.Interaction, nome_do_evento: str, data:
         return await ctx.followup.send(content=f'Você não é o dono desse evento! apenas o dono pode agendar o evento')
     
 
+@bot.tree.command(name=f'eventos_pendentes', description=f'Mostra os eventos esperando aprovação')
+async def showPendingEvents(ctx: discord.Interaction):
+    mydbAndCursor = startConnection()
+    await ctx.response.defer()
+    result = getAllPendingApprovalEvents(mydbAndCursor[0])
+    endConnection(mydbAndCursor)
+    if result:
+        eventsResponse = '\n\n'.join(
+    f'''> # {event["event_name"].title()} (id - {event["id"]})
+>    **Data**: {event["starting_datetime"].strftime("%d/%m/%Y") if event["starting_datetime"].strftime("%d/%m/%Y") == event["ending_datetime"].strftime("%d/%m/%Y") else f"{event['starting_datetime'].strftime('%d')} a {event['ending_datetime'].strftime('%d/%m/%Y')}"}{" - das "+event["starting_datetime"].strftime("%H:%M")+" às "+event["ending_datetime"].strftime("%H:%M") if event["starting_datetime"] == event["ending_datetime"] else ''}
+>    **Local**: {event["city"]}, {event["state_abbrev"]}
+>    **Endereço**: {event["address"]} ''' + '\n'+
+    '\n'.join(filter(None, [
+        f">    **Chat do evento**: <{event['group_chat_link']}>" if event['group_chat_link']!=None else '',
+        f">    **Site**: <{event['website']}>" if event['website']!=None else '',
+        f'''>    **Preço**: {"A partir de R$"+str(f"{event['price']:.2f}").replace('.',',') if event['price']!=0 else 'Gratuito'}'''
+        ]))
+        for event in sorted(result, key=lambda event: event["starting_datetime"]))
+        await ctx.followup.send(content=f'''Aqui estão os eventos registrados esperando aprovação:\n{eventsResponse}\n
+```Se você quiser aprovar um evento, use o comando "/evento_aprovar <id do evento>"```''')
+    else:
+        return await ctx.followup.send(content=f'Não há eventos a serem aprovados... talvez seja a hora de buscar novos eventos!')
+
+
+@bot.tree.command(name=f'evento_aprovar', description=f'Aprova um evento pendente')
+async def approveEvent(ctx: discord.Interaction, event_id: int):
+    if ctx.user.id != 167436511787220992:
+        return await ctx.response.send_message(content='Você não tem permissão para fazer isso', ephemeral=True)
+    mydbAndCursor = startConnection()
+    await ctx.response.defer()
+    result = approveEventById(mydbAndCursor[0], event_id)
+    endConnectionWithCommit(mydbAndCursor)
+    if result == True:
+        return await ctx.followup.send(content=f'O evento foi aprovado com sucesso!')
+    elif result == "não encontrado":
+        return await ctx.followup.send(content=f'Não foi possível encontrar um evento pendente com esse id! tem certeza que digitou o id certo?')
+    elif result == False:
+        return await ctx.followup.send(content=f'Não foi possível aprovar o evento')
+
+
+####################################################################################################################
+# COMANDO DE CONEXÃO DE CONTAS
+####################################################################################################################
+
 
 @bot.tree.command(name=f'adm-conectar_conta', description=f'Conecta sua conta do discord com a do telegram')
 async def connectAccount(ctx: discord.Interaction,user: discord.Member, telegram_username: str):
@@ -458,6 +511,9 @@ async def connectAccount(ctx: discord.Interaction,user: discord.Member, telegram
         return await ctx.followup.send(content=f'Não foi possível conectar sua conta! você já está conectado?', ephemeral=True)
 
 
+####################################################################################################################
+# COMANDOS DE INTERAÇÕES DO CODDY
+####################################################################################################################
 
 
 @bot.tree.command(name=f'say_as_{BOT_NAME.lower()}', description=f'Faz {BOT_NAME} falar em um canal de texto')
