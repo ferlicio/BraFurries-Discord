@@ -1,7 +1,5 @@
 from message_services.discord.message_moderation.moderation_functions import moderate
 from message_services.discord.routine_functions.routine_functions import *
-from message_services.telegram.telegram_service import warn_admins
-from commands.discordCommands import run_discord_commands
 from message_services.discord.discord_events import *
 from commands.default_commands import calcular_idade
 from IA_Functions.terceiras.openAI import *
@@ -10,11 +8,10 @@ from database.database import *
 from datetime import datetime, timedelta
 from typing import Literal
 from dateutil import tz
-import time
+import requests
 import discord
 import sqlite3
 import re
-import asyncio
 
 conn = sqlite3.connect('discord')
 c = conn.cursor()
@@ -660,7 +657,7 @@ async def approvePortaria(ctx: discord.Interaction, member: discord.Member, data
 
 @bot.tree.command(name=f'call_titio', description=f'Faz {BOT_NAME} chamar o titio')
 async def callAdmin(ctx: discord.Interaction, message: str):
-    warn_admins(ctx.user.name, message)
+    requests.post(f"https://api.telegram.org/bot{os.getenv('TELEGRAM_TOKEN')}/sendMessage?chat_id={os.getenv('TELEGRAM_ADMIN')}&text={ctx.user.name}: {message}")
     try:
         resp = await ctx.response.send_message(content='O titio foi avisado! agora é só esperar :3', ephemeral=True)
         return resp

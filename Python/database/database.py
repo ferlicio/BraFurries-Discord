@@ -1,4 +1,3 @@
-from typing import Union
 import mysql.connector
 import discord
 from models.cities import cities
