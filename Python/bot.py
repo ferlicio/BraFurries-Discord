@@ -1,8 +1,7 @@
-from message_services.message_service import run_Services
-from api.api_services import run_api
+
+from message_services.discord.discord_service import run_discord_client
 from database.database import *
 import sys, codecs
-import threading
 
 sys.stdout = codecs.getwriter("utf-8")(sys.stdout.detach())
 chatBot = {
@@ -12,12 +11,7 @@ chatBot = {
 
 startDatabase()
 
-threads = []
-threads.append(threading.Thread(target=run_Services, args=(chatBot,)))
-threads.append(threading.Thread(target=run_api))
+run_discord_client(chatBot)
 
-for thread in threads:
-    thread.daemon = True
-    thread.start()
-for thread in threads:
-    thread.join()
+
+
