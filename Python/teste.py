@@ -1,4 +1,4 @@
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, ReplyKeyboardRemove, Update, KeyboardButton, Message
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardRemove, Update
 from telegram.ext import CommandHandler, CallbackQueryHandler, MessageHandler, filters, Application, ContextTypes, ConversationHandler
 from database.database import endConnection, endConnectionWithCommit, getEventsByOwner, rescheduleEventDate, scheduleNextEventDate, startConnection
 from datetime import datetime
