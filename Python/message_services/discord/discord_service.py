@@ -7,7 +7,7 @@ from commands.default_commands import calcular_idade
 from IA_Functions.terceiras.openAI import *
 from discord.ext import commands, tasks
 from database.database import *
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Literal
 from dateutil import tz
 import time
@@ -37,6 +37,7 @@ async def on_ready():
     bot.config = Config(getConfig(guild))
     if DISCORD_BUMP_WARN: bumpWarning.start()
     if DISCORD_HAS_BUMP_REWARD: bumpReward.start()
+    cronJobs.start()
     configForVips.start()
 
 @bot.event
@@ -72,22 +73,45 @@ async def on_member_update(before:discord.member.Member, after:discord.member.Me
 
 
 
+@tasks.loop(hours=12)
+async def cronJobs():
+    mydbAndCursor = startConnection()
+    expiringTempRoles = getExpiringTempRoles(mydbAndCursor[0], DISCORD_GUILD_ID)
+    for TempRole in expiringTempRoles:
+        guild = bot.get_guild(DISCORD_GUILD_ID)
+        member = guild.get_member(TempRole['user_id'])
+        role = guild.get_role(TempRole['role_id'])
+        print(f'{member.name} perdeu o cargo {role.name}')
+        pass
+        if member != None and role != None:
+            await member.remove_roles(role)
+            deleteTempRole(mydbAndCursor[1], TempRole['id'])
+    endConnectionWithCommit(mydbAndCursor)
+    return
+
 
 @tasks.loop(hours=2) #0.16   10 minutos
 async def bumpWarning():
     now = datetime.now().strftime("%H:%M:%S")
     if int(now[:2])>=DISCORD_BUMP_WARNING_TIME[0] and int(now[:2])<=DISCORD_BUMP_WARNING_TIME[1]:
-        channel = bot.get_channel(853971735514316880)
-        async for msg in channel.history(limit=5):
+        bumpChannel = bot.get_channel(853971735514316880)
+        generalChannel = bot.get_channel(753348623844114452)
+        async for msg in bumpChannel.history(limit=5):
             if msg.author.id == 302050872383242240:
                 lastMessage = msg
                 break
         lastBump = lastMessage.created_at.astimezone(tz.gettz('America/Sao_Paulo'))
         timeSinceLastBump = datetime.now(tz.gettz('America/Sao_Paulo')) - lastBump
-        if timeSinceLastBump.days >= 1 or timeSinceLastBump.total_seconds() >= 7200:
+        needToWarn = True
+        async for msg in generalChannel.history(limit=200):
+            if msg.author.id == 1106756281420759051 and msg.content.__contains__('bump'):
+                if datetime.now(tz.gettz('America/Sao_Paulo')) - msg.created_at.astimezone(tz.gettz('America/Sao_Paulo')) < timedelta(hours=2):
+                    needToWarn = False
+                break
+        if (timeSinceLastBump.days >= 1 or timeSinceLastBump.total_seconds() >= 7200) and needToWarn:
             from message_services.discord.routine_functions.messages import bump
             import random
-            generalChannel = bot.get_channel(753348623844114452)
+            
             await generalChannel.send(f"{bump[int(random.random() * len(bump))]} {lastMessage.jump_url}")
 
 @tasks.loop(hours=24) #0.16   10 minutos
@@ -516,14 +540,14 @@ async def connectAccount(ctx: discord.Interaction,user: discord.Member, telegram
 ####################################################################################################################
 
 
-@bot.tree.command(name=f'say_as_{BOT_NAME.lower()}', description=f'Faz {BOT_NAME} falar em um canal de texto')
+@bot.tree.command(name=f'{BOT_NAME.lower()}_diz', description=f'Faz {BOT_NAME} falar em um canal de texto')
 async def sayAsCoddy(ctx: discord.Interaction, channel: discord.TextChannel, message: str):
     channelId = discord.utils.get(ctx.guild.channels, name=channel.name)
     await channelId.send(message)
     resp = await ctx.response.send_message(content='mensagem enviada!', ephemeral=True)
     return resp
 
-@bot.tree.command(name=f'coddy_status', description=f'Muda o status do {BOT_NAME}')
+@bot.tree.command(name=f'{BOT_NAME.lower()}_status', description=f'Muda o status do {BOT_NAME}')
 async def changeMood(ctx: discord.Interaction, mood: Literal['jogando', 'ouvindo','assistindo'], message: str):
     moodDiscord = 'playing' if mood == 'jogando' else 'listening' if mood == 'ouvindo' else 'watching'
     await bot.change_presence(activity=discord.Activity(type=getattr(discord.ActivityType, moodDiscord), name=message))
@@ -571,11 +595,13 @@ async def approvePortaria(ctx: discord.Interaction, member: discord.Member, data
         if channel.permissions_for(member).send_messages:
             if (cargoVisitante in member.roles and carteirinhaProvisoria in member.roles) or (cargoVisitante not in member.roles):
                 return await ctx.response.send_message(content=f'O membro <@{member.id}> ja foi aprovado!', ephemeral=True)
-            if not (cargoMaior18 in member.roles or cargoMenor18 in member.roles):
-                return await ctx.response.send_message(content=f'O membro <@{member.id}> ainda não pegou seus cargos!' if carteirinhaCargos in member.roles 
-                                                        else f'O membro <@{member.id}> ainda não tem a carteirinha de cargos, use o comando "/portaria_cargos" antes', ephemeral=True)
             if (datetime.now().date() - member.created_at.date()).days < 30:
                 await member.add_roles(carteirinhaProvisoria, cargoVisitante)
+                mydbAndCursor = startConnection()
+                duration = timedelta(days=15)
+                expiration_date = datetime.utcnow() + duration
+                assignTempRole(mydbAndCursor[0], ctx.guild_id, member, carteirinhaProvisoria.id, expiration_date, 'Carteirinha provisória')
+                endConnectionWithCommit(mydbAndCursor)
                 channel.edit(name=f'{channel.name}-provisória' if not channel.name.__contains__('provisória') else channel.name, category=provisoriaCategory)
                 return await ctx.response.send_message(content=f'O membro <@{member.id}> entrará no servidor com carteirinha provisória e terá acesso restrito ao servidor. Lembre de avisar o membro sobre isso', ephemeral=True)
             regex = r'(\d{1,2})\/(\d{1,2})\/(\d{2,4})|(\d{1,2})\sde\s(janeiro|fevereiro|março|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro)\sde\s(\d{2,4})'
@@ -587,18 +613,22 @@ async def approvePortaria(ctx: discord.Interaction, member: discord.Member, data
                 matchEmbeded = pattern.search(message.embeds[1].description) if message.embeds and isinstance(message.embeds[1].description, str) else None
                 if matchMessage or matchEmbeded or data_nascimento:
                     date_str = matchMessage.group() if matchMessage else matchEmbeded.group()
+                    await ctx.response.send_message(content=f'verificando idade...', ephemeral=True)
                     try:
                         if '/' in date_str:
                             day, month, year = map(int, date_str.split('/'))
                         else:
-                            date_str = [x for x in date_str if x.isdigit() or x in months]
-                            day, month_str, year = date_str.split()
+                            date_str = [x for x in date_str.split(' ') if x != None and (x.isdigit() or x in months) ]
+                            day, month_str, year = date_str
                             month = months.index(month_str) + 1
                             day, year = int(day), int(year)
                         date = datetime(year, month, day)
                         if date.year > 1975 and date.year < datetime.now().year:
                             age = (datetime.now().date() - date.date()).days
                             cargoMenor13 = ctx.guild.get_role(938399264231534632)
+                            if not (cargoMaior18 in member.roles or cargoMenor18 in member.roles) and age >= 4745:
+                                return await ctx.edit_original_response(content=f'O membro <@{member.id}> ainda não pegou seus cargos!' if carteirinhaCargos in member.roles 
+                                                                        else f'O membro <@{member.id}> ainda não tem a carteirinha de cargos, use o comando "/portaria_cargos" antes')
                             if age >= 6570: #18+ anos
                                 await member.add_roles(cargoMaior18)
                                 await member.remove_roles(cargoMenor18, cargoMenor13)
@@ -609,13 +639,13 @@ async def approvePortaria(ctx: discord.Interaction, member: discord.Member, data
                                 await member.remove_roles(cargoMaior18, cargoMenor18)
                                 await member.add_roles(carteirinhaProvisoria, cargoVisitante, cargoMenor13)
                                 await channel.edit(name=f'{channel.name}-provisória' if not channel.name.__contains__('provisória') else channel.name,category=provisoriaCategory)
-                                return await ctx.response.send_message(content=f'Por ser menor de 13 anos, o membro <@{member.id}> entrará no servidor com carteirinha provisória e terá acesso restrito ao servidor. Lembre de avisar o membro sobre isso.', ephemeral=True)
+                                return await ctx.edit_original_response(content=f'Por ser menor de 13 anos, o membro <@{member.id}> entrará no servidor com carteirinha provisória e terá acesso restrito ao servidor. Lembre de avisar o membro sobre isso.')
                             await member.remove_roles(carteirinhaCargos, cargoVisitante)
-                            return await ctx.response.send_message(content=f'O membro <@{member.id}> foi aprovado com sucesso!\nLembre de dar boas vindas a ele no <#753348623844114452> :3', ephemeral=True)
+                            return await ctx.edit_original_response(content=f'O membro <@{member.id}> foi aprovado com sucesso!\nLembre de dar boas vindas a ele no <#753348623844114452> :3')
                         else:
-                            return await ctx.response.send_message(content=f'Data inválida encontrada: {date_str}\nO membro tem {(datetime.now().date() - date.date()).year} anos?', ephemeral=True)
+                            return await ctx.edit_original_response(content=f'Data inválida encontrada: {date_str}\nO membro tem {(datetime.now().date() - date.date()).year} anos?')
                     except ValueError:
-                        return await ctx.response.send_message(content=f'Data inválida encontrada: {date_str}', ephemeral=True)
+                        return await ctx.edit_original_response(content=f'Data inválida encontrada: {date_str}')
             return await ctx.response.send_message(content=f'Não foi possível encontrar a data de nascimento do membro <@{member.id}> na portaria\nEm ultimo caso, digite a data de nascimento nos argumentos do comando.', ephemeral=True)
     return await ctx.response.send_message(content=f'O membro <@{member.id}> não está na portaria', ephemeral=True)
     
@@ -640,6 +670,32 @@ async def callAdmin(ctx: discord.Interaction, message: str):
             await channel.send(content='O titio foi avisado! agora é só esperar :3')
         pass
 
+
+@bot.tree.command(name=f'temp_role', description=f'Adiciona um cargo temporário a um membro')
+async def addTempRole(ctx: discord.Interaction, member: discord.Member, role: discord.Role, duration: str):
+    mydbAndCursor = startConnection()
+    #duration pode ser dias(d), semanas(s), meses(m). exemplo: 1d, 2s, 3m
+    duration = duration.lower()
+    if duration[-1] not in ['d', 's', 'm'] or not duration[:-1].isdigit() or duration.__len__() < 2:
+        return await ctx.response.send_message(content='''Duração inválida! Você informou uma duração no formato "1d", "2s" ou "3m"?\nSiglas: d=dias, s=semanas, m=meses''', ephemeral=True)
+    if int(duration[:-1]) == 0:
+        return await ctx.response.send_message(content='''Duração inválida! Você informou uma duração maior que 0?''', ephemeral=True)
+    if role in member.roles:
+        return await ctx.response.send_message(content=f'O membro <@{member.id}> já tem o cargo {role.name}!', ephemeral=True)
+    #calcula qual vai ser a data de expiração do cargo
+    if duration[-1] == 'd':
+        duration = timedelta(days=int(duration[:-1]))
+    elif duration[-1] == 's':
+        duration = timedelta(weeks=int(duration[:-1]))
+    else:
+        duration = timedelta(months=int(duration[:-1]))
+    expiration_date = datetime.utcnow() + duration
+    await ctx.response.send_message(content=f'Adicionando o cargo...', ephemeral=True)
+    roleAssignment = assignTempRole(mydbAndCursor[0], ctx.guild_id, member, role.id, expiration_date, 'porque sim')
+    endConnectionWithCommit(mydbAndCursor)
+    if roleAssignment:
+        await member.add_roles(role)
+        return await ctx.edit_original_response(content=f'O membro <@{member.id}> agora tem o cargo {role.name} por {duration}!')
 
 
 #@bot.tree.command(name='mod-calc_idade', description=f'Use esse recurso para calcular a idade de alguém de acordo com a data de nascimento')

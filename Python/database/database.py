@@ -1,3 +1,4 @@
+from typing import Union
 import mysql.connector
 import discord
 from models.cities import cities
@@ -206,26 +207,15 @@ def getAllLocals(mydb):
     locals_list = [{'id': local[0], 'locale_abbrev': local[1], 'locale_name': local[2]} for local in myResult]
     return locals_list
 
-def includeUser(mydb, user: discord.User or str):
+def includeUser(mydb, user:discord.User):
     cursor = mydb.cursor()
-    if type(user) != str:
-        username = user.name
-    else:
-        username = user
-    
+    username = user.name
     foundUser = False
-    if type(user) != str:
-        query = f"""SELECT * FROM discord_user WHERE discord_user_id = '{user.id}';"""
-        cursor.execute(query)
-        result = cursor.fetchone()
-        if result != None:
-            foundUser = True
-    else:
-        query = f"""SELECT * FROM telegram_user WHERE username = '{user}';"""
-        cursor.execute(query)
-        result = cursor.fetchone()
-        if result != None:
-            foundUser = True
+    query = f"""SELECT * FROM discord_user WHERE discord_user_id = '{user.id}';"""
+    cursor.execute(query)
+    result = cursor.fetchone()
+    if result != None:
+        foundUser = True
     
     if foundUser:
         return result[1]
@@ -243,16 +233,16 @@ def includeUser(mydb, user: discord.User or str):
 
         # Inserir o usuário na tabela `discord_user`
         try:
+            print(user.id)
             query = f"""INSERT INTO discord_user (user_id, discord_user_id, username, display_name, banned)
-                VALUES ({user_id}, {user.id}, '{username}', '{user.nick}', {False});""" if type(user) != str else f"""
-                INSERT IGNORE INTO telegram_user (user_id, username, display_name, banned)
-                VALUES ({user_id}, '{user}', '{username}', {False});"""
+                VALUES ({user_id}, {user.id}, '{username}', '{user.nick}', {False});"""
             cursor.execute(query)
-        except:
+        except mysql.connector.errors.IntegrityError as e:
+            print(e)
             pass
         return user_id
 
-def includeLocale(mydb, abbrev:str, user:discord.User or str, availableLocals:list):
+def includeLocale(mydb, abbrev:str, user:discord.User, availableLocals:list):
     user_id = includeUser(mydb, user)
     cursor = mydb.cursor()
     for local in availableLocals:
@@ -300,7 +290,7 @@ JOIN user_birthday ON users.id = user_birthday.user_id;"""
     myresult = [{'username': i[0], 'birth_date': i[1]} for i in myresult]
     return myresult
 
-def includeEvent(mydb, user: discord.Member or str, locale_id:int, city:str, event_name:str, address:str, price:float, starting_datetime: datetime, ending_datetime: datetime, description: str, group_link:str, website:str, max_price:float, event_logo_url:str):
+def includeEvent(mydb, user: discord.Member, locale_id:int, city:str, event_name:str, address:str, price:float, starting_datetime: datetime, ending_datetime: datetime, description: str, group_link:str, website:str, max_price:float, event_logo_url:str):
     user_id = includeUser(mydb, user)
     cursor = mydb.cursor()
     creds = getCredentials()
@@ -388,7 +378,7 @@ FROM events
 JOIN users ON events.host_user_id = users.id
 JOIN locale ON events.locale_id = locale.id
 WHERE events.locale_id = '{locale_id}'
-WHERE events.approved = 1;"""
+AND events.approved = 1;"""
     cursor.execute(query)
     myresult = cursor.fetchall()
     #convertendo para uma lista de dicionários
@@ -413,7 +403,7 @@ FROM events
 JOIN users ON events.host_user_id = users.id
 JOIN locale ON events.locale_id = locale.id
 WHERE events.event_name = '{event_name}'
-WHERE events.approved = 1;"""
+AND events.approved = 1;"""
     cursor.execute(query)
     myresult = cursor.fetchall()
     if myresult == []:
@@ -421,11 +411,12 @@ WHERE events.approved = 1;"""
 FROM events
 JOIN users ON events.host_user_id = users.id
 JOIN locale ON events.locale_id = locale.id
-WHERE events.event_name LIKE '%{event_name}%';"""
+WHERE events.event_name LIKE '%{event_name}%'
+AND events.approved = 1;"""
         cursor.execute(query)
         myresult = cursor.fetchall()
     #convertendo para uma lista de dicionários
-    propriedades = ['id','event_name', 'address', 'price', 'starting_datetime', 'ending_datetime', 'description', 'group_chat_link', 'host_user', 'state', 'state_abbrev', 'city', 'website']
+    propriedades = ['id','event_name', 'address', 'price', 'starting_datetime', 'ending_datetime', 'description', 'group_chat_link', 'host_user', 'state', 'state_abbrev', 'city', 'website', 'logo_url', 'max_price']
     resultados_finais = []
     for i in myresult:
         evento_dict = dict(zip(propriedades, i))
@@ -436,7 +427,7 @@ WHERE events.event_name LIKE '%{event_name}%';"""
         if evento_dict['group_chat_link'] != None and not evento_dict['group_chat_link'].__contains__('http'):
             evento_dict['group_chat_link'] = f'https://{evento_dict["group_chat_link"]}'
         resultados_finais.append(evento_dict)
-    return myresult[0] if myresult != [] else None 
+    return resultados_finais[0] if resultados_finais != [] else None 
     
 def getEventsByOwner(mydb, owner_name:str):
     cursor = mydb.cursor()
@@ -459,7 +450,7 @@ WHERE users.username = '{owner_name}';"""
         if evento_dict['group_chat_link'] != None and not evento_dict['group_chat_link'].__contains__('http'):
             evento_dict['group_chat_link'] = f'https://{evento_dict["group_chat_link"]}'
         resultados_finais.append(evento_dict)
-    return myresult
+    return resultados_finais
 
 def approveEventById(mydb, event_id:int):
     cursor = mydb.cursor()
@@ -583,4 +574,49 @@ def admConnectTelegramAccount(mydb, discord_user:discord.User, telegram_user:str
             return False
     else:
         return True
-        
+    
+
+def assignTempRole(mydb, guild_id:int, discord_user:discord.User, role_id:str, expiring_date:datetime, reason:str):
+    cursor = mydb.cursor()
+    query = f"""SELECT id FROM discord_servers WHERE guild_id = '{guild_id}';"""
+    cursor.execute(query)
+    discord_community_id = cursor.fetchall()[0][0]
+    user_id = includeUser(mydb, discord_user)
+    query = f"""SELECT id FROM discord_user WHERE user_id = '{user_id}';"""
+    cursor.execute(query)
+    result = cursor.fetchall()
+    discord_user_id = result[0][0]
+    try:
+        query = f"""INSERT INTO temp_roles (disc_community_id, disc_user_id, role_id, expiring_date, reason)
+        VALUES ('{discord_community_id}', '{discord_user_id}', '{role_id}', '{expiring_date}', '{reason}');"""
+        cursor.execute(query)
+        return True
+    except Exception as e:
+        print(e)
+        return False
+    
+def getExpiringTempRoles(mydb, guild_id:int):
+    cursor = mydb.cursor()
+    query = f"""SELECT id FROM discord_servers WHERE guild_id = '{guild_id}';"""
+    cursor.execute(query)
+    discord_community_id = cursor.fetchall()[0][0]
+    query = f"""SELECT temp_roles.id, temp_roles.role_id, discord_user.discord_user_id FROM temp_roles
+JOIN discord_user ON temp_roles.disc_user_id = discord_user.id
+WHERE temp_roles.disc_community_id = '{discord_community_id}'
+AND temp_roles.expiring_date >= NOW();
+    """
+    cursor.execute(query)
+    myresult = cursor.fetchall()
+    ## convertendo para uma lista de dicionários
+    propriedades = ['id','role_id', 'user_id']
+    resultados_finais = []
+    for i in myresult:
+        temp_role_dict = dict(zip(propriedades, i))
+        resultados_finais.append(temp_role_dict)
+    return resultados_finais
+
+def deleteTempRole(cursor, tempRoleDBId:int):
+    query = f"""DELETE FROM temp_roles
+WHERE id = {tempRoleDBId}"""
+    cursor.execute(query)
+    return True
