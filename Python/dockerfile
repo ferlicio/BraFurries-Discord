@@ -10,4 +10,4 @@ COPY . .
 
 ## RUN mkdir -p /app/data
 
-CMD ["python", "discord.py"]
+CMD ["python", "main.py"]
