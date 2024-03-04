@@ -362,7 +362,9 @@ async def listEvents(ctx: discord.Interaction):
     '\n'.join(filter(None, [
         f">    **Chat do evento**: <{event['group_chat_link']}>" if event['group_chat_link']!=None else '',
         f">    **Site**: <{event['website']}>" if event['website']!=None else '',
-        f'''>    **Preço**: {"A partir de R$"+str(f"{event['price']:.2f}").replace('.',',') if event['price']!=0 else 'Gratuito'}'''
+        f'''>    **Preço**: {"Ingressos esgotados" if event['out_of_tickets']
+    else "Vendas encerradas" if event['sales_ended']
+    else "A partir de R$"+str(f"{event['price']:.2f}").replace('.',',') if event['price']!=0 else 'Gratuito'}'''
         ]))
         for event in sorted(result, key=lambda event: event["starting_datetime"]))
         await ctx.followup.send(content=f'''Aqui estão os próximos eventos registrados:\n{eventsResponse}\n
@@ -388,7 +390,9 @@ async def listEventsByState(ctx: discord.Interaction, state: str):
     '\n'.join(filter(None, [
         f">    **Chat do evento**: <{event['group_chat_link']}>" if event['group_chat_link']!=None else '',
         f">    **Site**: <{event['website']}>" if event['website']!=None else '',
-        f'''>    **Preço**: {"A partir de R$"+str(f"{event['price']:.2f}").replace('.',',') if event['price']!=0 else 'Gratuito'}'''
+        f'''>    **Preço**: {"Ingressos esgotados" if event['out_of_tickets']
+    else "Vendas encerradas" if event['sales_ended']
+    else "A partir de R$"+str(f"{event['price']:.2f}").replace('.',',') if event['price']!=0 else 'Gratuito'}'''
         ]))
         for event in sorted(result, key=lambda event: event["starting_datetime"]))
         await ctx.followup.send(content=f'''Aqui estão os próximos eventos registrados em {state}:\n{eventsResponse}\n
@@ -416,8 +420,10 @@ async def showEvent(ctx: discord.Interaction, event_name: str):
         if event['website']!=None: embeded_description += f"""
 **Site**: <{event['website']}>""" 
         embeded_description += f"""
-**Preço**: {"De R$"+str(f"{event['price']:.2f}").replace('.',',')+" a "+"R${:,.2f}".format(event['max_price']).replace(",", "x").replace(".", ",").replace("x", ".") if (event['price']!=0 and event['max_price']!=0) 
-            else f'R$'+str(f"{event['price']:.2f}").replace('.',',') if event['max_price']==0 and event['price']!=0 else 'Gratuito'}"""
+**Preço**: {"Ingressos esgotados" if event['out_of_tickets']
+    else "Vendas encerradas" if event['sales_ended']
+    else "De R$"+str(f"{event['price']:.0f}").replace('.',',')+" a "+"R${:,.0f}".format(event['max_price']).replace(",", "x").replace(".", ",").replace("x", ".") if (event['price']!=0 and event['max_price']!=0) 
+    else f'R$'+str(f"{event['price']:.0f}").replace('.',',') if (event['max_price']==0 or event['max_price']==event['price']) and event['price']!=0 else 'Gratuito'}"""
         if event['description']!=None: embeded_description += f"""
 
 {event['description']}
@@ -601,7 +607,7 @@ async def approvePortaria(ctx: discord.Interaction, member: discord.Member, data
                 endConnectionWithCommit(mydbAndCursor)
                 channel.edit(name=f'{channel.name}-provisória' if not channel.name.__contains__('provisória') else channel.name, category=provisoriaCategory)
                 return await ctx.response.send_message(content=f'O membro <@{member.id}> entrará no servidor com carteirinha provisória e terá acesso restrito ao servidor. Lembre de avisar o membro sobre isso', ephemeral=True)
-            regex = r'(\d{1,2})\/(\d{1,2})\/(\d{2,4})|(\d{1,2})\sde\s(janeiro|fevereiro|março|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro)\sde\s(\d{2,4})'
+            regex = r'(\d{1,2})(\s*\/\s*|\sd[eo]\s)(\d{1,2}|(janeiro|fevereiro|março|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro))(\s*\/\s*|\sd[eo]\s)(\d{2,4})'
             pattern = re.compile(regex)
             months = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro']
             async for message in channel.history(limit=100):
@@ -611,13 +617,21 @@ async def approvePortaria(ctx: discord.Interaction, member: discord.Member, data
                 if matchMessage or matchEmbeded or data_nascimento:
                     date_str = matchMessage.group() if matchMessage else matchEmbeded.group()
                     await ctx.response.send_message(content=f'verificando idade...', ephemeral=True)
+                    if data_nascimento: date_str = data_nascimento
                     try:
                         if '/' in date_str:
-                            day, month, year = map(int, date_str.split('/'))
+                            if months in date_str:
+                                day, month_str, year = date_str.split('/').strip()
+                                month = months.index(month_str) + 1
+                                day, year = int(day), int(year)
+                            else:
+                                day, month, year = map(int, date_str.replace(' ','').split('/'))
+                            if year.__len__==2 :year+=2000 if year < (datetime.now().date().year - 2000) else 1900
                         else:
                             date_str = [x for x in date_str.split(' ') if x != None and (x.isdigit() or x in months) ]
                             day, month_str, year = date_str
                             month = months.index(month_str) + 1
+                            if year.__len__==2 :year+=2000 if year < (datetime.now().date().year - 2000) else 1900
                             day, year = int(day), int(year)
                         date = datetime(year, month, day)
                         if date.year > 1975 and date.year < datetime.now().year:
