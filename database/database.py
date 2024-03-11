@@ -1,6 +1,7 @@
+
+from typing import Union
 import mysql.connector
 import discord
-from models.cities import cities
 from datetime import date, datetime
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
@@ -64,20 +65,6 @@ def endConnectionWithCommit(mydbAndCursor:list):
     endConnection(mydbAndCursor)
 
 
-def startDatabase():
-    mydb = connectToDatabase()
-    cursor = mydb.cursor()
-
-    if os.environ['DATABASE_STARTED']:
-        return
-    else:
-        for abbrev, city in cities.items():
-            query = f"""INSERT IGNORE INTO locale (locale_abbrev, locale_name) VALUES ('{abbrev}','{city}');"""
-            cursor.execute(query)
-        mydb.commit()
-        os.environ['DATABASE_STARTED'] = 'True'
-        dotenv.set_key(dotenv_file, "DATABASE_STARTED", os.environ["DATABASE_STARTED"])
-        return
 
 def getConfig(guild:discord.Guild):
     mydb = connectToDatabase()
@@ -155,14 +142,15 @@ WHERE discord_servers.guild_id = '{guild.id}'"""
 def hasGPTEnabled(guild:discord.Guild):
     mydb = connectToDatabase()
     cursor = mydb.cursor(buffered=True)
-    query = f"""SELECT has_gpt_enabled FROM server_settings
+    query = f"""SELECT has_gpt_enabled, gpt_model FROM server_settings
 WHERE server_guild_id = '{guild.id}';"""
     cursor.execute(query)
     myresult = cursor.fetchone()
     cursor.close()
     mydb.close()
-    has_gpt_enabled = myresult[0]==1
-    return has_gpt_enabled
+    propriedades = ['enabled','model']
+    gpt_dict = dict(zip(propriedades, myresult))
+    return gpt_dict
 
 def CreateGCalendarDescription(price:float, max_price:float, group_link:str, website:str):
     CalendarDescription = None
@@ -206,15 +194,26 @@ def getAllLocals(mydb):
     locals_list = [{'id': local[0], 'locale_abbrev': local[1], 'locale_name': local[2]} for local in myResult]
     return locals_list
 
-def includeUser(mydb, user:discord.User):
+def includeUser(mydb, user: Union[discord.User,str]):
     cursor = mydb.cursor()
-    username = user.name
+    if type(user) != str:
+        username = user.name
+    else:
+        username = user
+    
     foundUser = False
-    query = f"""SELECT * FROM discord_user WHERE discord_user_id = '{user.id}';"""
-    cursor.execute(query)
-    result = cursor.fetchone()
-    if result != None:
-        foundUser = True
+    if type(user) != str:
+        query = f"""SELECT * FROM discord_user WHERE discord_user_id = '{user.id}';"""
+        cursor.execute(query)
+        result = cursor.fetchone()
+        if result != None:
+            foundUser = True
+    else:
+        query = f"""SELECT * FROM telegram_user WHERE username = '{user}';"""
+        cursor.execute(query)
+        result = cursor.fetchone()
+        if result != None:
+            foundUser = True
     
     if foundUser:
         return result[1]
@@ -232,12 +231,12 @@ def includeUser(mydb, user:discord.User):
 
         # Inserir o usuário na tabela `discord_user`
         try:
-            print(user.id)
             query = f"""INSERT INTO discord_user (user_id, discord_user_id, username, display_name, banned)
-                VALUES ({user_id}, {user.id}, '{username}', '{user.nick}', {False});"""
+                VALUES ({user_id}, {user.id}, '{username}', '{user.nick}', {False});""" if type(user) != str else f"""
+                INSERT IGNORE INTO telegram_user (user_id, username, display_name, banned)
+                VALUES ({user_id}, '{user}', '{username}', {False});"""
             cursor.execute(query)
-        except mysql.connector.errors.IntegrityError as e:
-            print(e)
+        except:
             pass
         return user_id
 
@@ -289,7 +288,7 @@ JOIN user_birthday ON users.id = user_birthday.user_id;"""
     myresult = [{'username': i[0], 'birth_date': i[1]} for i in myresult]
     return myresult
 
-def includeEvent(mydb, user: discord.Member, locale_id:int, city:str, event_name:str, address:str, price:float, starting_datetime: datetime, ending_datetime: datetime, description: str, group_link:str, website:str, max_price:float, event_logo_url:str):
+def includeEvent(mydb, user: Union[discord.User,str], locale_id:int, city:str, event_name:str, address:str, price:float, starting_datetime: datetime, ending_datetime: datetime, description: str, group_link:str, website:str, max_price:float, event_logo_url:str):
     user_id = includeUser(mydb, user)
     cursor = mydb.cursor()
     creds = getCredentials()
@@ -324,7 +323,7 @@ def includeEvent(mydb, user: discord.Member, locale_id:int, city:str, event_name
 
 def getAllEvents(mydb):
     cursor = mydb.cursor()
-    query = f"""SELECT events.id, events.event_name, events.address, events.point_name, events.price, events.max_price, events.starting_datetime, events.ending_datetime, events.description, events.group_chat_link, users.username, locale.locale_name, locale.locale_abbrev, events.city, events.website
+    query = f"""SELECT events.id, events.event_name, events.address, events.point_name, events.price, events.max_price, events.starting_datetime, events.ending_datetime, events.description, events.group_chat_link, users.username, locale.locale_name, locale.locale_abbrev, events.city, events.website, events.out_of_tickets, events.sales_ended
 FROM events
 JOIN users ON events.host_user_id = users.id
 JOIN locale ON events.locale_id = locale.id
@@ -332,7 +331,7 @@ WHERE events.approved = 1"""
     cursor.execute(query)
     myresult = cursor.fetchall()
     #convertendo para uma lista de dicionários
-    propriedades = ['id','event_name', 'address', 'point_name', 'price', 'max_price', 'starting_datetime', 'ending_datetime', 'description', 'group_chat_link', 'host_user', 'state', 'state_abbrev', 'city', 'website']
+    propriedades = ['id','event_name', 'address', 'point_name', 'price', 'max_price', 'starting_datetime', 'ending_datetime', 'description', 'group_chat_link', 'host_user', 'state', 'state_abbrev', 'city', 'website', 'out_of_tickets', 'sales_ended']
     resultados_finais = []
     for i in myresult:
         evento_dict = dict(zip(propriedades, i))
@@ -348,7 +347,7 @@ WHERE events.approved = 1"""
 
 def getAllPendingApprovalEvents(mydb):
     cursor = mydb.cursor()
-    query = f"""SELECT events.id, events.event_name, events.address, events.point_name, events.price, events.max_price, events.starting_datetime, events.ending_datetime, events.description, events.group_chat_link, users.username, locale.locale_name, locale.locale_abbrev, events.city, events.website
+    query = f"""SELECT events.id, events.event_name, events.address, events.point_name, events.price, events.max_price, events.starting_datetime, events.ending_datetime, events.description, events.group_chat_link, users.username, locale.locale_name, locale.locale_abbrev, events.city, events.website, events.out_of_tickets, events.sales_ended
 FROM events
 JOIN users ON events.host_user_id = users.id
 JOIN locale ON events.locale_id = locale.id
@@ -356,7 +355,7 @@ WHERE events.approved = 0"""
     cursor.execute(query)
     myresult = cursor.fetchall()
     #convertendo para uma lista de dicionários
-    propriedades = ['id','event_name', 'address', 'point_name', 'price', 'max_price', 'starting_datetime', 'ending_datetime', 'description', 'group_chat_link', 'host_user', 'state', 'state_abbrev', 'city', 'website']
+    propriedades = ['id','event_name', 'address', 'point_name', 'price', 'max_price', 'starting_datetime', 'ending_datetime', 'description', 'group_chat_link', 'host_user', 'state', 'state_abbrev', 'city', 'website', 'out_of_tickets', 'sales_ended']
     resultados_finais = []
     for i in myresult:
         evento_dict = dict(zip(propriedades, i))
@@ -372,7 +371,7 @@ WHERE events.approved = 0"""
 
 def getEventsByState(mydb, locale_id:int):
     cursor = mydb.cursor()
-    query = f"""SELECT events.id, events.event_name, events.address, events.point_name, events.price, events.max_price, events.starting_datetime, events.ending_datetime, events.description, events.group_chat_link, users.username, locale.locale_name, locale.locale_abbrev, events.city, events.website
+    query = f"""SELECT events.id, events.event_name, events.address, events.point_name, events.price, events.max_price, events.starting_datetime, events.ending_datetime, events.description, events.group_chat_link, users.username, locale.locale_name, locale.locale_abbrev, events.city, events.website, events.out_of_tickets, events.sales_ended
 FROM events
 JOIN users ON events.host_user_id = users.id
 JOIN locale ON events.locale_id = locale.id
@@ -381,7 +380,7 @@ AND events.approved = 1;"""
     cursor.execute(query)
     myresult = cursor.fetchall()
     #convertendo para uma lista de dicionários
-    propriedades = ['id','event_name', 'address', 'point_name', 'price', 'max_price', 'starting_datetime', 'ending_datetime', 'description', 'group_chat_link', 'host_user', 'state', 'state_abbrev', 'city', 'website']
+    propriedades = ['id','event_name', 'address', 'point_name', 'price', 'max_price', 'starting_datetime', 'ending_datetime', 'description', 'group_chat_link', 'host_user', 'state', 'state_abbrev', 'city', 'website', 'out_of_tickets', 'sales_ended']
     resultados_finais = []
     for i in myresult:
         evento_dict = dict(zip(propriedades, i))
@@ -397,7 +396,7 @@ AND events.approved = 1;"""
 
 def getEventByName(mydb, event_name:str):
     cursor = mydb.cursor()
-    query = f"""SELECT events.id, events.event_name, events.address, events.point_name, events.price, events.max_price, events.starting_datetime, events.ending_datetime, events.description, events.group_chat_link, users.username, locale.locale_name, locale.locale_abbrev, events.city, events.website, events.event_logo_url, events.max_price
+    query = f"""SELECT events.id, events.event_name, events.address, events.point_name, events.price, events.max_price, events.starting_datetime, events.ending_datetime, events.description, events.group_chat_link, users.username, locale.locale_name, locale.locale_abbrev, events.city, events.website, events.event_logo_url, events.max_price, events.out_of_tickets, events.sales_ended
 FROM events
 JOIN users ON events.host_user_id = users.id
 JOIN locale ON events.locale_id = locale.id
@@ -406,7 +405,7 @@ AND events.approved = 1;"""
     cursor.execute(query)
     myresult = cursor.fetchall()
     if myresult == []:
-        query = f"""SELECT events.id, events.event_name, events.address, events.point_name, events.price, events.max_price, events.starting_datetime, events.ending_datetime, events.description, events.group_chat_link, users.username, locale.locale_name, locale.locale_abbrev, events.city, events.website, events.event_logo_url, events.max_price
+        query = f"""SELECT events.id, events.event_name, events.address, events.point_name, events.price, events.max_price, events.starting_datetime, events.ending_datetime, events.description, events.group_chat_link, users.username, locale.locale_name, locale.locale_abbrev, events.city, events.website, events.event_logo_url, events.max_price, events.out_of_tickets, events.sales_ended
 FROM events
 JOIN users ON events.host_user_id = users.id
 JOIN locale ON events.locale_id = locale.id
@@ -415,7 +414,7 @@ AND events.approved = 1;"""
         cursor.execute(query)
         myresult = cursor.fetchall()
     #convertendo para uma lista de dicionários
-    propriedades = ['id','event_name', 'address', 'point_name', 'price', 'max_price', 'starting_datetime', 'ending_datetime', 'description', 'group_chat_link', 'host_user', 'state', 'state_abbrev', 'city', 'website', 'logo_url', 'max_price']
+    propriedades = ['id','event_name', 'address', 'point_name', 'price', 'max_price', 'starting_datetime', 'ending_datetime', 'description', 'group_chat_link', 'host_user', 'state', 'state_abbrev', 'city', 'website', 'logo_url', 'max_price', 'out_of_tickets', 'sales_ended']
     resultados_finais = []
     for i in myresult:
         evento_dict = dict(zip(propriedades, i))
@@ -430,7 +429,7 @@ AND events.approved = 1;"""
     
 def getEventsByOwner(mydb, owner_name:str):
     cursor = mydb.cursor()
-    query = f"""SELECT events.id, events.event_name, events.address, events.point_name, events.price, events.max_price, events.starting_datetime, events.ending_datetime, events.description, events.group_chat_link, users.username, locale.locale_name, locale.locale_abbrev, events.city, events.website
+    query = f"""SELECT events.id, events.event_name, events.address, events.point_name, events.price, events.max_price, events.starting_datetime, events.ending_datetime, events.description, events.group_chat_link, users.username, locale.locale_name, locale.locale_abbrev, events.city, events.website, events.out_of_tickets, events.sales_ended
 FROM events
 JOIN users ON events.host_user_id = users.id
 JOIN locale ON events.locale_id = locale.id
@@ -438,7 +437,7 @@ WHERE users.username = '{owner_name}';"""
     cursor.execute(query)
     myresult = cursor.fetchall()
     #convertendo para uma lista de dicionários
-    propriedades = ['id','event_name', 'address', 'point_name', 'price', 'max_price', 'starting_datetime', 'ending_datetime', 'description', 'group_chat_link', 'host_user', 'state', 'state_abbrev', 'city', 'website']
+    propriedades = ['id','event_name', 'address', 'point_name', 'price', 'max_price', 'starting_datetime', 'ending_datetime', 'description', 'group_chat_link', 'host_user', 'state', 'state_abbrev', 'city', 'website', 'out_of_tickets', 'sales_ended']
     resultados_finais = []
     for i in myresult:
         evento_dict = dict(zip(propriedades, i))
@@ -602,7 +601,7 @@ def getExpiringTempRoles(mydb, guild_id:int):
     query = f"""SELECT temp_roles.id, temp_roles.role_id, discord_user.discord_user_id FROM temp_roles
 JOIN discord_user ON temp_roles.disc_user_id = discord_user.id
 WHERE temp_roles.disc_community_id = '{discord_community_id}'
-AND temp_roles.expiring_date >= NOW();
+AND temp_roles.expiring_date <= NOW();
     """
     cursor.execute(query)
     myresult = cursor.fetchall()

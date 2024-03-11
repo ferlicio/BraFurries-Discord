@@ -9,8 +9,6 @@ chatBot = {
 }
 
 
-startDatabase()
-
 run_discord_client(chatBot)
 
 
