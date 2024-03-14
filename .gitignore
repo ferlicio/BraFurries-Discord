@@ -163,3 +163,4 @@ cython_debug/
 ..GitPushMain.bat 
 credentials.json
 token.json
+teste*.py

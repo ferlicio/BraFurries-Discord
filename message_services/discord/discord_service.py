@@ -1,3 +1,5 @@
+import asyncio
+import random
 from message_services.discord.message_moderation.moderation_functions import moderate
 from message_services.discord.routine_functions.routine_functions import *
 from message_services.discord.discord_events import *
@@ -5,13 +7,13 @@ from commands.default_commands import calcular_idade
 from IA_Functions.terceiras.openAI import *
 from discord.ext import commands, tasks
 from database.database import *
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Literal
 from dateutil import tz
 import requests
 import discord
 import sqlite3
-import re
+import re, pytz
 
 conn = sqlite3.connect('discord')
 c = conn.cursor()
@@ -40,23 +42,48 @@ async def on_ready():
 @bot.event
 async def on_message(message: discord.Message):
     inputChat = message.content
+    response = None
     if message.author.bot == True:
         return
-    ##função de moderação
-    moderated = await moderate(bot, message)
-    if moderated: return
-    ##checagem se esta em fase de testes
-    if DISCORD_IS_TESTING and (message.channel.id != DISCORD_TEST_CHANNEL and not isinstance(message.channel, discord.channel.DMChannel)):
+    
+    await mentionArtRoles(bot, message)
+    await secureArtPosts(message)
+
+    #se for uma DM e não for o criador, não responde
+    if isinstance(message.channel, discord.channel.DMChannel) and not message.author.id == os.getenv('CREATOR_ID'):
         return
-    #checa se menciona o bot ou se é uma DM
-    if not message.content.lower().__contains__(bot.chatBot['name'].lower()) and not bot.user in message.mentions and not isinstance(message.channel, discord.channel.DMChannel):
+    
+    #se não menciona o bot ou se é uma DM, ou se é uma mensagem aleatória, não responde
+    if (not message.content.lower().__contains__(bot.chatBot['name'].lower()) and  
+        not bot.user in message.mentions and 
+        not isinstance(message.channel, discord.channel.DMChannel)) or (
+        random.random() > 0.7 and datetime.now(pytz.timezone('America/Sao_Paulo')).hour < 8):
+            return 
+
+    #se for os canais não permitidos, não responde
+    allowedChannels = [753348623844114452]
+    if not message.channel.id in allowedChannels:
         return
-    #respondendo
-    if (hasGPTEnabled(message.guild)):
-        response = await retornaRespostaGPT(inputChat, message.author.nick if message.author.nick
-                                            else message.author.name, bot, message.channel.id, 'Discord')
-    else:
-        response = '''Eu to desativado por enquanto, mas logo logo eu volto! \nFale com o titio derg se você quiser saber mais sobre como ajudar a me manter ativo ;3'''
+    
+    #se for horario de dormir, responde que está dormindo
+    if datetime.now(pytz.timezone('America/Sao_Paulo')).hour < 8:
+            response = '''coddy está a mimir, às 8 horas eu volto😴'''
+    
+    if not response:
+        #respondendo
+        await asyncio.sleep(2)
+        async with message.channel.typing():
+            gpt_properties = hasGPTEnabled(message.guild)
+            if gpt_properties['enabled']:
+                memberRoles = [role.name for role in message.author.roles]
+                memberGenre = memberRoles[(next(i for i, item in enumerate(memberRoles) if 'Gênero' in item))-1]
+                memberGenre = "ele" if "Membro" in memberGenre else "ela" if "Membra" in memberGenre else "ele/ela"
+                memberSpecies = memberRoles[(next(i for i, item in enumerate(memberRoles) if 'Espécies' in item))-1]
+                response = await retornaRespostaGPT(inputChat, message.author.display_name if message.author.display_name
+                                                    else message.author.name, memberGenre, memberSpecies, bot, message.channel.id, 'Discord', gpt_properties['model'])
+            else:
+                response = '''Eu to desativado por enquanto, mas logo logo eu volto! \nFale com o titio derg se você quiser saber mais sobre como ajudar a me manter ativo ;3'''
+            await asyncio.sleep(2)
     await message.channel.send(response)
     await bot.process_commands(message)
 
@@ -72,19 +99,9 @@ async def on_member_update(before:discord.member.Member, after:discord.member.Me
 
 @tasks.loop(hours=12)
 async def cronJobs():
-    mydbAndCursor = startConnection()
-    expiringTempRoles = getExpiringTempRoles(mydbAndCursor[0], DISCORD_GUILD_ID)
-    for TempRole in expiringTempRoles:
-        guild = bot.get_guild(DISCORD_GUILD_ID)
-        member = guild.get_member(TempRole['user_id'])
-        role = guild.get_role(TempRole['role_id'])
-        print(f'{member.name} perdeu o cargo {role.name}')
-        pass
-        if member != None and role != None:
-            await member.remove_roles(role)
-            deleteTempRole(mydbAndCursor[1], TempRole['id'])
-    endConnectionWithCommit(mydbAndCursor)
-    return
+    await removeTempRoles(bot)
+
+
 
 
 @tasks.loop(hours=2) #0.16   10 minutos
@@ -108,7 +125,6 @@ async def bumpWarning():
         if (timeSinceLastBump.days >= 1 or timeSinceLastBump.total_seconds() >= 7200) and needToWarn:
             from message_services.discord.routine_functions.messages import bump
             import random
-            
             await generalChannel.send(f"{bump[int(random.random() * len(bump))]} {lastMessage.jump_url}")
 
 @tasks.loop(hours=24) #0.16   10 minutos
@@ -315,7 +331,10 @@ async def listBirthdays(ctx: discord.Interaction):
 async def addEvent(ctx: discord.Interaction, user: any, state:str, city:str, event_name:str, address:str, price:float, starting_date: str, starting_time: str, ending_date: str, ending_time: str, description: str = None, group_link:str = None, site:str = None, max_price:float = None, event_logo_url:str = None):
     try:
         datetime.strptime(starting_date, "%d/%m/%Y")
-        datetime.strptime(ending_date, "%d/%m/%Y")
+        if ending_date == None:
+            ending_date = starting_date
+        else:
+            datetime.strptime(ending_date, "%d/%m/%Y")
     except ValueError:
         return await ctx.response.send_message(content='''Data inválida! você informou uma data no formato "dd/mm/aaaa"? <:catsip:851024825333186560>''', ephemeral=True)
     try:
@@ -324,6 +343,7 @@ async def addEvent(ctx: discord.Interaction, user: any, state:str, city:str, eve
     except ValueError:
         return await ctx.response.send_message(content='''Horário inválido! você informou um horário no formato "hh:mm"? <:catsip:851024825333186560>''', ephemeral=True)
     starting_datetime = datetime.strptime(f'{starting_date} {starting_time}', '%d/%m/%Y %H:%M')
+
     ending_datetime = datetime.strptime(f'{ending_date} {ending_time}', '%d/%m/%Y %H:%M')
     if starting_datetime > ending_datetime:
         #teste se a data e hora de inicio é maior que a data e hora de encerramento
@@ -342,7 +362,7 @@ async def addEventWithDiscordUser(ctx: discord.Interaction, user: discord.Member
     await addEvent(ctx, user, estado, cidade, event_name, address, price, starting_date, starting_time, ending_date, ending_time, description, group_link, site, max_price, event_logo_url)
     pass
 @bot.tree.command(name=f'novo_evento_por_usuario', description=f'Adiciona um evento ao calendário usando um usuário do telegram')
-async def addEventWithTelegramUser(ctx: discord.Interaction, telegram_username: str, estado:str, cidade:str, event_name:str, address:str, price:float, starting_date: str, starting_time: str, ending_date: str, ending_time: str, description: str = None, group_link:str = None, site:str = None, max_price:float = None, event_logo_url:str = None):
+async def addEventWithTelegramUser(ctx: discord.Interaction, telegram_username: str, estado:str, cidade:str, event_name:str, address:str, price:float, starting_date: str, starting_time: str, ending_time: str, ending_date: str = None, description: str = None, group_link:str = None, site:str = None, max_price:float = None, event_logo_url:str = None):
     await addEvent(ctx, telegram_username, estado, cidade, event_name, address, price, starting_date, starting_time, ending_date, ending_time, description, group_link, site, max_price, event_logo_url)
     pass
 
@@ -354,19 +374,7 @@ async def listEvents(ctx: discord.Interaction):
     result = getAllEvents(mydbAndCursor[0])
     endConnection(mydbAndCursor)
     if result:
-        eventsResponse = '\n\n'.join(
-    f'''> # {event["event_name"].title()}
->    **Data**: {event["starting_datetime"].strftime("%d/%m/%Y") if event["starting_datetime"].strftime("%d/%m/%Y") == event["ending_datetime"].strftime("%d/%m/%Y") else f"{event['starting_datetime'].strftime('%d')} a {event['ending_datetime'].strftime('%d/%m/%Y')}"}{" - das "+event["starting_datetime"].strftime("%H:%M")+" às "+event["ending_datetime"].strftime("%H:%M") if event["starting_datetime"] == event["ending_datetime"] else ''}
->    **Local**: {event["city"]}, {event["state_abbrev"]}
->    **Endereço**: {event["address"]} ''' + '\n'+
-    '\n'.join(filter(None, [
-        f">    **Chat do evento**: <{event['group_chat_link']}>" if event['group_chat_link']!=None else '',
-        f">    **Site**: <{event['website']}>" if event['website']!=None else '',
-        f'''>    **Preço**: {"Ingressos esgotados" if event['out_of_tickets']
-    else "Vendas encerradas" if event['sales_ended']
-    else "A partir de R$"+str(f"{event['price']:.2f}").replace('.',',') if event['price']!=0 else 'Gratuito'}'''
-        ]))
-        for event in sorted(result, key=lambda event: event["starting_datetime"]))
+        eventsResponse = formatEventList(result)
         await ctx.followup.send(content=f'''Aqui estão os próximos eventos registrados:\n{eventsResponse}\n
 ```Se você quiser ver mais detalhes sobre um evento, use o comando "/evento <nome do evento>"```
 Adicione tambem a nossa agenda de eventos ao seu google agenda e tenha todos os eventos na palma da sua mão! {os.getenv('GOOGLE_CALENDAR_LINK')}''')
@@ -382,19 +390,7 @@ async def listEventsByState(ctx: discord.Interaction, state: str):
     result = getEventsByState(mydbAndCursor[0], locale_id)
     endConnection(mydbAndCursor)
     if result:
-        eventsResponse = '\n\n'.join(
-    f'''> # {event["event_name"].title()}
->    **Data**: {event["starting_datetime"].strftime("%d/%m/%Y") if event["starting_datetime"].strftime("%d/%m/%Y") == event["ending_datetime"].strftime("%d/%m/%Y") else f"{event['starting_datetime'].strftime('%d')} a {event['ending_datetime'].strftime('%d/%m/%Y')}"}{" - das "+event["starting_datetime"].strftime("%H:%M")+" às "+event["ending_datetime"].strftime("%H:%M") if event["starting_datetime"] == event["ending_datetime"] else ''}
->    **Local**: {event["city"]}, {event["state_abbrev"]}
->    **Endereço**: {event["address"]} ''' + '\n'+
-    '\n'.join(filter(None, [
-        f">    **Chat do evento**: <{event['group_chat_link']}>" if event['group_chat_link']!=None else '',
-        f">    **Site**: <{event['website']}>" if event['website']!=None else '',
-        f'''>    **Preço**: {"Ingressos esgotados" if event['out_of_tickets']
-    else "Vendas encerradas" if event['sales_ended']
-    else "A partir de R$"+str(f"{event['price']:.2f}").replace('.',',') if event['price']!=0 else 'Gratuito'}'''
-        ]))
-        for event in sorted(result, key=lambda event: event["starting_datetime"]))
+        eventsResponse = formatEventList(result)
         await ctx.followup.send(content=f'''Aqui estão os próximos eventos registrados em {state}:\n{eventsResponse}\n
 ```Se você quiser ver mais detalhes sobre um evento, use o comando "/evento <nome do evento>"```
 Adicione tambem a nossa agenda de eventos ao seu google agenda e tenha todos os eventos na palma da sua mão! {os.getenv('GOOGLE_CALENDAR_LINK')}''')
@@ -411,31 +407,7 @@ async def showEvent(ctx: discord.Interaction, event_name: str):
     event = getEventByName(mydbAndCursor[0], event_name)
     endConnection(mydbAndCursor)
     if event:
-        embeded_description = f'''**Data**: {event["starting_datetime"].strftime("%d/%m/%Y") if event["starting_datetime"].strftime("%d/%m/%Y") == event["ending_datetime"].strftime("%d/%m/%Y") 
-                                            else f"{event['starting_datetime'].strftime('%d')} a {event['ending_datetime'].strftime('%d/%m/%Y')}"}{" - das "+event["starting_datetime"].strftime("%H:%M")+" às "+event["ending_datetime"].strftime("%H:%M") if event["starting_datetime"].strftime("%d/%m/%Y") == event["ending_datetime"].strftime("%d/%m/%Y") else ''}
-**Local**: {event["city"]}, {event["state_abbrev"]}
-**Endereço**: {event["address"]}'''
-        if event['group_chat_link']!=None: embeded_description += f"""
-**Chat do evento**: <{event['group_chat_link']}>"""
-        if event['website']!=None: embeded_description += f"""
-**Site**: <{event['website']}>""" 
-        embeded_description += f"""
-**Preço**: {"Ingressos esgotados" if event['out_of_tickets']
-    else "Vendas encerradas" if event['sales_ended']
-    else "De R$"+str(f"{event['price']:.0f}").replace('.',',')+" a "+"R${:,.0f}".format(event['max_price']).replace(",", "x").replace(".", ",").replace("x", ".") if (event['price']!=0 and event['max_price']!=0) 
-    else f'R$'+str(f"{event['price']:.0f}").replace('.',',') if (event['max_price']==0 or event['max_price']==event['price']) and event['price']!=0 else 'Gratuito'}"""
-        if event['description']!=None: embeded_description += f"""
-
-{event['description']}
-"""
-        eventEmbeded = discord.Embed(
-            color=discord.Color.blue(),
-            title=event["event_name"].title(),
-            description=embeded_description
-        )
-        if event["logo_url"]!=None:
-            eventEmbeded.set_thumbnail(url=event["logo_url"])
-        else: eventEmbeded.set_author(name='')
+        eventEmbeded = formatSingleEvent(event)
         return await ctx.followup.send(embed=eventEmbeded)
     else:
         return await ctx.followup.send(content=f'Não há eventos registrados com esse nome. Tem certeza que digitou o nome certo?')
@@ -551,10 +523,14 @@ async def sayAsCoddy(ctx: discord.Interaction, channel: discord.TextChannel, mes
     return resp
 
 @bot.tree.command(name=f'{BOT_NAME.lower()}_status', description=f'Muda o status do {BOT_NAME}')
-async def changeMood(ctx: discord.Interaction, mood: Literal['jogando', 'ouvindo','assistindo'], message: str):
+async def changeMood(ctx: discord.Interaction, mood: Literal['jogando','ouvindo','assistindo','mensagem'], message: str):
     moodDiscord = 'playing' if mood == 'jogando' else 'listening' if mood == 'ouvindo' else 'watching'
-    await bot.change_presence(activity=discord.Activity(type=getattr(discord.ActivityType, moodDiscord), name=message))
-    resp = await ctx.response.send_message(content=f'{BOT_NAME} está {mood} {message}!', ephemeral=True)
+    if mood == 'mensagem':
+        await bot.change_presence(name=message)
+        resp = await ctx.response.send_message(content=f'{BOT_NAME} está com o status de "{message}"', ephemeral=True)
+    else:
+        await bot.change_presence(activity=discord.Activity(type=getattr(discord.ActivityType, moodDiscord), name=message))
+        resp = await ctx.response.send_message(content=f'{BOT_NAME} está {mood} {message}!', ephemeral=True)
     return resp
 
 
@@ -572,8 +548,9 @@ async def changeMood(ctx: discord.Interaction, mood: Literal['jogando', 'ouvindo
 @bot.tree.command(name=f'portaria_cargos', description=f'Permite que um membro na portaria pegue seus cargos')
 async def portariaCargos(ctx: discord.Interaction, member: discord.Member):
     portariaCategory = discord.utils.get(ctx.guild.categories, id=753342674576211999)
+    provisoriaCategory = discord.utils.get(ctx.guild.categories, id=1178531112042111016)
     carteirinhaDeCargos = ctx.guild.get_role(860492272054829077)
-    for channel in portariaCategory.channels:
+    for channel in portariaCategory.channels+provisoriaCategory.channels:
         if channel.permissions_for(member).send_messages:
             if carteirinhaDeCargos in member.roles:
                 return await ctx.response.send_message(content=f'O membro <@{member.id}> ja está com a carteirinha de cargos!', ephemeral=True)
@@ -599,39 +576,45 @@ async def approvePortaria(ctx: discord.Interaction, member: discord.Member, data
             if (cargoVisitante in member.roles and carteirinhaProvisoria in member.roles) or (cargoVisitante not in member.roles):
                 return await ctx.response.send_message(content=f'O membro <@{member.id}> ja foi aprovado!', ephemeral=True)
             if (datetime.now().date() - member.created_at.date()).days < 30:
+                await ctx.response.send_message(content=f'Atribuindo carteirinha provisória...', ephemeral=True)
                 await member.add_roles(carteirinhaProvisoria, cargoVisitante)
+                await member.remove_roles(carteirinhaCargos)
                 mydbAndCursor = startConnection()
                 duration = timedelta(days=15)
                 expiration_date = datetime.utcnow() + duration
+                await ctx.edit_original_response(content=f'O membro <@{member.id}> entrará no servidor com **carteirinha provisória** e terá acesso restrito ao servidor por sua conta ter **menos de 30 dias**. \nLembre de avisar o membro sobre isso')
                 assignTempRole(mydbAndCursor[0], ctx.guild_id, member, carteirinhaProvisoria.id, expiration_date, 'Carteirinha provisória')
                 endConnectionWithCommit(mydbAndCursor)
-                channel.edit(name=f'{channel.name}-provisória' if not channel.name.__contains__('provisória') else channel.name, category=provisoriaCategory)
-                return await ctx.response.send_message(content=f'O membro <@{member.id}> entrará no servidor com carteirinha provisória e terá acesso restrito ao servidor. Lembre de avisar o membro sobre isso', ephemeral=True)
+                await channel.edit(name=f'{channel.name}-provisória' if not channel.name.__contains__('provisória') else channel.name, category=provisoriaCategory)
+                return 
             regex = r'(\d{1,2})(\s*\/\s*|\sd[eo]\s)(\d{1,2}|(janeiro|fevereiro|março|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro))(\s*\/\s*|\sd[eo]\s)(\d{2,4})'
             pattern = re.compile(regex)
             months = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro']
             async for message in channel.history(limit=100):
                 if message.author.id != member.id: pass
                 matchMessage = pattern.search(message.content)
-                matchEmbeded = pattern.search(message.embeds[1].description) if message.embeds and isinstance(message.embeds[1].description, str) else None
+                if message.embeds and message.embeds.__len__() > 1:
+                    matchEmbeded = pattern.search(message.embeds[1].description) if isinstance(message.embeds[1].description, str) else None  
+                else: matchEmbeded = None
                 if matchMessage or matchEmbeded or data_nascimento:
                     date_str = matchMessage.group() if matchMessage else matchEmbeded.group()
                     await ctx.response.send_message(content=f'verificando idade...', ephemeral=True)
                     if data_nascimento: date_str = data_nascimento
                     try:
                         if '/' in date_str:
-                            if months in date_str:
+                            if [i for i in months if i in date_str]:
                                 day, month_str, year = date_str.split('/').strip()
                                 month = months.index(month_str) + 1
+                                if str(year).__len__()<=2 :year+=2000 if year < (datetime.now().date().year - 2000) else 1900
                                 day, year = int(day), int(year)
                             else:
                                 day, month, year = map(int, date_str.replace(' ','').split('/'))
-                            if year.__len__==2 :year+=2000 if year < (datetime.now().date().year - 2000) else 1900
+                                if str(year).__len__()<=2 :year+=2000 if year < (datetime.now().date().year - 2000) else 1900
                         else:
                             date_str = [x for x in date_str.split(' ') if x != None and (x.isdigit() or x in months) ]
                             day, month_str, year = date_str
                             month = months.index(month_str) + 1
-                            if year.__len__==2 :year+=2000 if year < (datetime.now().date().year - 2000) else 1900
+                            if str(year).__len__()<=2 :year+=2000 if year < (datetime.now().date().year - 2000) else 1900
                             day, year = int(day), int(year)
                         date = datetime(year, month, day)
                         if date.year > 1975 and date.year < datetime.now().year:
