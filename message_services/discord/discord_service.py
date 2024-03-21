@@ -206,7 +206,7 @@ async def changeVipColor(ctx: discord.Interaction, cor: str):
                 return await ctx.response.send_message(content='''# Cor invalida!\n 
 Você precisa informar uma cor no formato Hex (#000000).
 Você pode procurar por uma cor em https://htmlcolorcodes.com/color-picker/ e testa-la usando o comando "?color #000000"''', ephemeral=False)
-            if not colorIsAvailable(cor):
+            if not await colorIsAvailable(cor):
                 return await ctx.response.send_message(content='''Cor inválida! você precisa informar uma cor que não seja muito parecida com a cor de algum cargo da staff''', ephemeral=True)
             corFormatada = int(cor.replace('#','0x'),16)
             customRole = discord.utils.get(ctx.guild.roles, name=f"{DISCORD_VIP_CUSTOM_ROLE_PREFIX} {ctx.user.name}")
@@ -214,8 +214,8 @@ Você pode procurar por uma cor em https://htmlcolorcodes.com/color-picker/ e te
                 print(f'Não foi possível encontrar um cargo VIP para {ctx.user.name}')
                 customRole = await ctx.guild.create_role(name=f"{DISCORD_VIP_CUSTOM_ROLE_PREFIX} {ctx.user.name}", color=corFormatada, mentionable=False, reason="Cargo criado para membros VIPs")
                 if DISCORD_HAS_ROLE_DIVISION:
-                    divisionStart = ctx.get_role(DISCORD_VIP_ROLE_DIVISION_START_ID)
-                    divisionEnd = ctx.get_role(DISCORD_VIP_ROLE_DIVISION_END_ID)
+                    divisionStart = discord.utils.get(ctx.guild.roles, id=DISCORD_VIP_ROLE_DIVISION_START_ID) 
+                    divisionEnd = discord.utils.get(ctx.guild.roles, id=DISCORD_VIP_ROLE_DIVISION_END_ID)
                     await rearrangeRoleInsideInterval(ctx, customRole.id, divisionStart, divisionEnd)
                 await ctx.user.add_roles(customRole)
             else:
@@ -374,10 +374,19 @@ async def listEvents(ctx: discord.Interaction):
     result = getAllEvents(mydbAndCursor[0])
     endConnection(mydbAndCursor)
     if result:
-        eventsResponse = formatEventList(result)
-        await ctx.followup.send(content=f'''Aqui estão os próximos eventos registrados:\n{eventsResponse}\n
-```Se você quiser ver mais detalhes sobre um evento, use o comando "/evento <nome do evento>"```
-Adicione tambem a nossa agenda de eventos ao seu google agenda e tenha todos os eventos na palma da sua mão! {os.getenv('GOOGLE_CALENDAR_LINK')}''')
+        formattedEvents = formatEventList(result)
+        eventsResponse = []
+        for event in formattedEvents:
+            if eventsResponse == []:
+                eventsResponse.append(f'''Aqui estão os próximos eventos registrados:\n'''+event+'\n‎')
+            else:
+                eventsResponse.append('\n\n'+ event)
+                if event != formattedEvents[-1]:
+                    eventsResponse[-1] += '\n‎'
+        eventsResponse[-1] += f'''\n\n```Se você quiser ver mais detalhes sobre um evento, use o comando "/evento <nome do evento>"```
+Adicione tambem a nossa agenda de eventos ao seu google agenda e tenha todos os eventos na palma da sua mão! {os.getenv('GOOGLE_CALENDAR_LINK')}'''
+        for message in eventsResponse:
+            await ctx.followup.send(content=message) if message != eventsResponse[-1] else await ctx.channel.send(content=message)
     else:
         return await ctx.followup.send(content=f'Não há eventos registrados... que tal ser o primeiro? :3')
     
@@ -390,10 +399,19 @@ async def listEventsByState(ctx: discord.Interaction, state: str):
     result = getEventsByState(mydbAndCursor[0], locale_id)
     endConnection(mydbAndCursor)
     if result:
-        eventsResponse = formatEventList(result)
-        await ctx.followup.send(content=f'''Aqui estão os próximos eventos registrados em {state}:\n{eventsResponse}\n
-```Se você quiser ver mais detalhes sobre um evento, use o comando "/evento <nome do evento>"```
-Adicione tambem a nossa agenda de eventos ao seu google agenda e tenha todos os eventos na palma da sua mão! {os.getenv('GOOGLE_CALENDAR_LINK')}''')
+        formattedEvents = formatEventList(result)
+        eventsResponse = []
+        for event in formattedEvents:
+            if eventsResponse == []:
+                eventsResponse.append(f'''Aqui estão os próximos eventos registrados:\n'''+event+'\n‎')
+            else:
+                eventsResponse.append('\n\n'+ event)
+                if event != formattedEvents[-1]:
+                    eventsResponse[-1] += '\n‎'
+        eventsResponse[-1] += f'''\n\n```Se você quiser ver mais detalhes sobre um evento, use o comando "/evento <nome do evento>"```
+Adicione tambem a nossa agenda de eventos ao seu google agenda e tenha todos os eventos na palma da sua mão! {os.getenv('GOOGLE_CALENDAR_LINK')}'''
+        for message in eventsResponse:
+            await ctx.followup.send(content=message) if message != eventsResponse[-1] else await ctx.channel.send(content=message)
     else:
         return await ctx.followup.send(content=f'Não há eventos registrados em {state}... que tal ser o primeiro? :3')
     
@@ -493,6 +511,11 @@ async def approveEvent(ctx: discord.Interaction, event_id: int):
         return await ctx.followup.send(content=f'Não foi possível aprovar o evento')
 
 
+@bot.tree.command(name=f'evento_add_staff', description=f'Adiciona um membro da staff como organizador de um evento')
+async def addStaffToEvent(ctx: discord.Interaction, event_id: int, staff: discord.Member):
+    pass
+
+
 ####################################################################################################################
 # COMANDO DE CONEXÃO DE CONTAS
 ####################################################################################################################
@@ -526,7 +549,7 @@ async def sayAsCoddy(ctx: discord.Interaction, channel: discord.TextChannel, mes
 async def changeMood(ctx: discord.Interaction, mood: Literal['jogando','ouvindo','assistindo','mensagem'], message: str):
     moodDiscord = 'playing' if mood == 'jogando' else 'listening' if mood == 'ouvindo' else 'watching'
     if mood == 'mensagem':
-        await bot.change_presence(name=message)
+        await bot.change_presence(activity=discord.CustomActivity(name=message))
         resp = await ctx.response.send_message(content=f'{BOT_NAME} está com o status de "{message}"', ephemeral=True)
     else:
         await bot.change_presence(activity=discord.Activity(type=getattr(discord.ActivityType, moodDiscord), name=message))
