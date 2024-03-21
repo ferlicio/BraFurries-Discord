@@ -3,7 +3,8 @@ from settings import *
 import discord, asyncio
 from colormath.color_objects import sRGBColor, LabColor
 from colormath.color_conversions import convert_color
-from colormath.color_diff import delta_e_cie2000
+from colormath.color_diff import _get_lab_color1_vector, _get_lab_color2_matrix
+from colormath import color_diff_matrix
 
 def getVIPConfigurations(guild):
     VIPStatus = {'VIPRoles': [], 'hasVIPCustomization': DISCORD_HAS_VIP_CUSTOM_ROLES, 'hasRoleDivision': DISCORD_HAS_ROLE_DIVISION,
@@ -59,28 +60,41 @@ async def colorIsAvailable(color:str):
 
         color1_lab = convert_color(color1_rgb, LabColor)
         color2_lab = convert_color(color2_rgb, LabColor)
-
-        color_distance = delta_e_cie2000(color1_lab, color2_lab)  # Aqui está a mudança
+        color1_vector = _get_lab_color1_vector(color1_lab)
+        color2_matrix = _get_lab_color2_matrix(color2_lab)
+        delta_e = color_diff_matrix.delta_e_cie2000(
+            color1_vector, color2_matrix, Kl=1, Kc=1, Kh=1)[0]
+        
+        color_distance = delta_e.item()
 
         if color_distance < 11.0:
             return False
     return True
     
 def formatEventList(eventList):
-    formattedList = '\n\n'.join(
-    f'''> # {event["event_name"].title()}
+    sortedEventList = sorted(eventList, key=lambda event: event["starting_datetime"])
+    messages = []
+    
+    for event in sortedEventList:
+        formattedEvent = (f'''> # {event["event_name"].title()}
 >    **Data**: {event["starting_datetime"].strftime("%d/%m/%Y") if event["starting_datetime"].strftime("%d/%m/%Y") == event["ending_datetime"].strftime("%d/%m/%Y") else f"{event['starting_datetime'].strftime('%d')} a {event['ending_datetime'].strftime('%d/%m/%Y')}"}{" - das "+event["starting_datetime"].strftime("%H:%M")+" às "+event["ending_datetime"].strftime("%H:%M") if event["starting_datetime"] == event["ending_datetime"] else ''}
 >    **Local**: {event["city"]}, {event["state_abbrev"]}
 >    **Endereço**: {event["address"]} ''' + '\n'+
-    '\n'.join(filter(None, [
-        f">    **Chat do evento**: <{event['group_chat_link']}>" if event['group_chat_link']!=None else '',
-        f">    **Site**: <{event['website']}>" if event['website']!=None else '',
-        f'''>    **Preço**: {"Ingressos esgotados" if event['out_of_tickets']
-    else "Vendas encerradas" if event['sales_ended']
-    else "A partir de R$"+str(f"{event['price']:.2f}").replace('.',',') if event['price']!=0 else 'Gratuito'}'''
-        ]))
-        for event in sorted(eventList, key=lambda event: event["starting_datetime"]))
-    return formattedList
+        '\n'.join(filter(None, [
+            f">    **Chat do evento**: <{event['group_chat_link']}>" if event['group_chat_link']!=None else '',
+            f">    **Site**: <{event['website']}>" if event['website']!=None else '',
+            f'''>    **Preço**: {"Ingressos esgotados" if event['out_of_tickets']
+        else "Vendas encerradas" if event['sales_ended']
+        else "A partir de R$"+str(f"{event['price']:.2f}").replace('.',',') if event['price']!=0 else 'Gratuito'}'''
+            ])))
+        if messages != []:
+            if messages[-1].__len__() + '\n\n'.__len__() + formattedEvent.__len__() < 1500:
+                messages[-1] += '\n\n' + formattedEvent
+            else:
+                messages.append(formattedEvent)
+        else:
+            messages.append(formattedEvent)
+    return messages
 
 def formatSingleEvent(event):
     embeded_description = f'''**Data**: {event["starting_datetime"].strftime("%d/%m/%Y") if event["starting_datetime"].strftime("%d/%m/%Y") == event["ending_datetime"].strftime("%d/%m/%Y") 
