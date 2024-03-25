@@ -1,1 +1,1 @@
-# BraFurries-API
+# BraFurries-Discord
