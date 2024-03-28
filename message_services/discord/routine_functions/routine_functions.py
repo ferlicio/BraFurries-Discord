@@ -70,6 +70,21 @@ async def colorIsAvailable(color:str):
         if color_distance < 11.0:
             return False
     return True
+
+
+async def addVipRole(ctx) -> discord.Role:
+    customRole = discord.utils.get(ctx.guild.roles, name=f"{DISCORD_VIP_CUSTOM_ROLE_PREFIX} {ctx.user.name}")
+    if customRole == None:
+        print(f'Não foi possível encontrar um cargo VIP para {ctx.user.name}')
+        customRole = await ctx.guild.create_role(name=f"{DISCORD_VIP_CUSTOM_ROLE_PREFIX} {ctx.user.name}", mentionable=False, reason="Cargo criado para membros VIPs")
+        if DISCORD_HAS_ROLE_DIVISION:
+            divisionStart = discord.utils.get(ctx.guild.roles, id=DISCORD_VIP_ROLE_DIVISION_START_ID) 
+            divisionEnd = discord.utils.get(ctx.guild.roles, id=DISCORD_VIP_ROLE_DIVISION_END_ID)
+            await rearrangeRoleInsideInterval(ctx, customRole.id, divisionStart, divisionEnd)
+        await ctx.user.add_roles(customRole)
+    elif not ctx.user.roles.__contains__(customRole):
+        await ctx.user.add_roles(customRole)
+    return customRole
     
 def formatEventList(eventList):
     sortedEventList = sorted(eventList, key=lambda event: event["starting_datetime"])
