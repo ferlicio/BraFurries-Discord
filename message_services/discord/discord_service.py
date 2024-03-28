@@ -558,6 +558,86 @@ async def changeMood(ctx: discord.Interaction, mood: Literal['jogando','ouvindo'
 
 
 ####################################################################################################################
+# COMANDOS DE XP
+####################################################################################################################
+
+
+@bot.tree.command(name=f'xp', description=f'Mostra a quantidade de xp de um membro')
+async def showXp(ctx: discord.Interaction, member: discord.Member):
+    pass
+
+@bot.tree.command(name=f'xp_ranking', description=f'Mostra o ranking de xp dos membros')
+async def showXpRanking(ctx: discord.Interaction):
+    pass
+
+@bot.tree.command(name=f'xp_resetar', description=f'Resetar a quantidade de xp de um membro')
+async def resetXp(ctx: discord.Interaction, member: discord.Member):
+    pass
+
+@bot.tree.command(name=f'xp_resetar_todos', description=f'Resetar a quantidade de xp de todos os membros')
+async def resetAllXp(ctx: discord.Interaction):
+    pass
+
+@bot.tree.command(name=f'xp_adicionar', description=f'Adiciona xp a um membro')
+async def addXp(ctx: discord.Interaction, member: discord.Member, xp: int):
+    pass
+
+@bot.tree.command(name=f'xp_remover', description=f'Remove xp de um membro')
+async def removeXp(ctx: discord.Interaction, member: discord.Member, xp: int):
+    pass
+
+###############################################################
+
+@bot.tree.command(name=f'loja', description=f'Compre itens com seu dinheiro')
+async def shop(ctx: discord.Interaction):
+    pass
+
+@bot.tree.command(name=f'rp_inventario', description=f'Mostra os itens que você possui')
+async def inventory(ctx: discord.Interaction):
+    pass
+
+@bot.tree.command(name=f'rp_usar', description=f'Usa um item do seu inventário')
+async def useItem(ctx: discord.Interaction, item: str):
+    pass
+
+@bot.tree.command(name=f'rp_vender', description=f'Vende um item do seu inventário')
+async def sellItem(ctx: discord.Interaction, item: str):
+    pass
+
+################################################################
+
+@bot.tree.command(name=f'daily', description=f'Pega sua recompensa diária')
+async def daily(ctx: discord.Interaction):
+    pass
+
+@bot.tree.command(name=f'rp_banho', description=f'Tomar banho dá xp sabia?')
+async def bath(ctx: discord.Interaction):
+    pass
+
+@bot.tree.command(name=f'rp_trabalhar', description=f'Trabalha em troca de xp e dinheiro')
+async def work(ctx: discord.Interaction):
+    pass
+
+@bot.tree.command(name=f'rp_duelo', description=f'Desafie alguém para um duelo')
+async def duel(ctx: discord.Interaction, member: discord.Member):
+    pass
+
+@bot.tree.command(name=f'rp_desenhar', description=f'Desenhe algo!')
+async def draw(ctx: discord.Interaction):
+    pass
+
+@bot.tree.command(name=f'rp_escrever', description=f'Escreva uma história')
+async def write(ctx: discord.Interaction):
+    pass
+
+""" @bot.tree.command(name=f'rp_missao', description=f'Complete missões para ganhar xp e dinheiro')
+async def mission(ctx: discord.Interaction):
+    pass """
+
+
+
+
+####################################################################################################################
 # COMANDOS DE MODERAÇÃO
 ####################################################################################################################
 
@@ -620,9 +700,11 @@ async def approvePortaria(ctx: discord.Interaction, member: discord.Member, data
                     matchEmbeded = pattern.search(message.embeds[1].description) if isinstance(message.embeds[1].description, str) else None  
                 else: matchEmbeded = None
                 if matchMessage or matchEmbeded or data_nascimento:
-                    date_str = matchMessage.group() if matchMessage else matchEmbeded.group()
+                    if data_nascimento: 
+                        date_str = data_nascimento
+                    else: 
+                        date_str = matchMessage.group() if matchMessage else matchEmbeded.group()
                     await ctx.response.send_message(content=f'verificando idade...', ephemeral=True)
-                    if data_nascimento: date_str = data_nascimento
                     try:
                         if '/' in date_str:
                             if [i for i in months if i in date_str]:
