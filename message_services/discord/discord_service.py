@@ -200,48 +200,38 @@ async def configForVips(color=discord.Color.default()):
 
 @bot.tree.command(name=f'vip-mudar_cor', description=f'Muda a cor do cargo VIP do membro')
 async def changeVipColor(ctx: discord.Interaction, cor: str):
-    for role in ctx.user.roles: #percorre os cargos do membro
-        if DISCORD_VIP_ROLES_ID.__contains__(role.id): #se o membro tiver um cargo VIP
-            if not re.match(r'^#(?:[a-fA-F0-9]{3}){1,2}$', cor):
-                return await ctx.response.send_message(content='''# Cor invalida!\n 
+    userVipRoles = [role.id for role in ctx.user.roles if DISCORD_VIP_ROLES_ID.__contains__(role.id)]
+    if userVipRoles.__len__() != 0:
+        if not re.match(r'^#(?:[a-fA-F0-9]{3}){1,2}$', cor):
+            return await ctx.response.send_message(content='''# Cor invalida!\n 
 Você precisa informar uma cor no formato Hex (#000000).
 Você pode procurar por uma cor em https://htmlcolorcodes.com/color-picker/ e testa-la usando o comando "?color #000000"''', ephemeral=False)
-            if not await colorIsAvailable(cor):
-                return await ctx.response.send_message(content='''Cor inválida! você precisa informar uma cor que não seja muito parecida com a cor de algum cargo da staff''', ephemeral=True)
-            corFormatada = int(cor.replace('#','0x'),16)
-            customRole = discord.utils.get(ctx.guild.roles, name=f"{DISCORD_VIP_CUSTOM_ROLE_PREFIX} {ctx.user.name}")
-            if customRole == None:
-                print(f'Não foi possível encontrar um cargo VIP para {ctx.user.name}')
-                customRole = await ctx.guild.create_role(name=f"{DISCORD_VIP_CUSTOM_ROLE_PREFIX} {ctx.user.name}", color=corFormatada, mentionable=False, reason="Cargo criado para membros VIPs")
-                if DISCORD_HAS_ROLE_DIVISION:
-                    divisionStart = discord.utils.get(ctx.guild.roles, id=DISCORD_VIP_ROLE_DIVISION_START_ID) 
-                    divisionEnd = discord.utils.get(ctx.guild.roles, id=DISCORD_VIP_ROLE_DIVISION_END_ID)
-                    await rearrangeRoleInsideInterval(ctx, customRole.id, divisionStart, divisionEnd)
-                await ctx.user.add_roles(customRole)
-            else:
-                await customRole.edit(color=corFormatada)
-            return await ctx.response.send_message(content=f'Cor do cargo VIP alterada para {cor} com sucesso!', ephemeral=False)
+        if not await colorIsAvailable(cor):
+            return await ctx.response.send_message(content='''Cor inválida! você precisa informar uma cor que não seja muito parecida com a cor de algum cargo da staff''', ephemeral=True)
+        corFormatada = int(cor.replace('#','0x'),16)
+        customRole = await addVipRole(ctx)
+        await customRole.edit(color=corFormatada)
+        return await ctx.response.send_message(content=f'Cor do cargo VIP alterada para {cor} com sucesso!', ephemeral=False)
     return await ctx.response.send_message(content='Você não é vip! você não pode fazer isso', ephemeral=True)
 
 @bot.tree.command(name=f'vip-mudar_icone', description=f'Muda o icone do cargo VIP do membro')
 async def changeVipIcon(ctx: discord.Interaction, icon: str):
-    for role in ctx.user.roles:
-        if DISCORD_VIP_ROLES_ID.__contains__(role.id):
-            try:
-                customRole = discord.utils.get(ctx.guild.roles, name=f"{DISCORD_VIP_CUSTOM_ROLE_PREFIX} {ctx.user.name}")
-                if customRole == None:
-                    print(f'Não foi possível encontrar um cargo VIP para {ctx.user.name}')
-                    customRole = await ctx.guild.create_role(name=f"{DISCORD_VIP_CUSTOM_ROLE_PREFIX} {ctx.user.name}", color=discord.Color.default(), mentionable=False, reason="Cargo criado para membros VIPs")
-                    if DISCORD_HAS_ROLE_DIVISION:
-                        divisionStart = ctx.get_role(DISCORD_VIP_ROLE_DIVISION_START_ID)
-                        divisionEnd = ctx.get_role(DISCORD_VIP_ROLE_DIVISION_END_ID)
-                        rearrangeRoleInsideInterval(ctx, customRole.id, divisionStart, divisionEnd)
-                    await ctx.user.add_roles(customRole)
-                await customRole.edit(display_icon=icon)
-                await ctx.response.send_message(content='Ícone do cargo VIP alterado com sucesso!', ephemeral=False)
-            except Exception as e:
-                await ctx.response.send_message(content='''Ícone inválido! você precisa informar um emoji válido. Se você quiser usar um emoji 
-customizado como os do servidor, você ira precisar pedir a algum staff''', ephemeral=True)
+    userVipRoles = [role.id for role in ctx.user.roles if DISCORD_VIP_ROLES_ID.__contains__(role.id)]
+    if userVipRoles.__len__() != 0:
+        try:
+            customRole = await addVipRole(ctx)
+            if icon.__contains__('<') or icon.__contains__('>') or icon.__contains__(':'):
+                try:
+                    emoji = ctx.guild.get_emoji(int(icon.replace('<','').replace('>','').split(':')[2]))
+                except:
+                    return await ctx.response.send_message(content='''Ícone inválido! apenas emojis do servidor são permitidos''', ephemeral=True)
+                icon = await emoji.read()
+            await customRole.edit(display_icon=icon)
+            return await ctx.response.send_message(content='Ícone do cargo VIP alterado com sucesso!', ephemeral=False)
+        except Exception as e:
+            print(e)
+            return await ctx.response.send_message(content='''Algo deu errado, avise o titio sobre!''', ephemeral=True)
+    return await ctx.response.send_message(content='Você não é vip! você não pode fazer isso', ephemeral=True)
 
 @bot.tree.command(name=f'testes', description=f'teste')
 async def test(ctx: discord.Interaction, message: str):
