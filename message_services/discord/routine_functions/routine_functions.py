@@ -1,10 +1,20 @@
-from database.database import *
-from settings import *
-import discord, asyncio
 from colormath.color_objects import sRGBColor, LabColor
 from colormath.color_conversions import convert_color
 from colormath.color_diff import _get_lab_color1_vector, _get_lab_color2_matrix
 from colormath import color_diff_matrix
+from IA_Functions.terceiras.openAI import retornaRespostaGPT
+from models.bot import Config
+from database.database import *
+from settings import *
+import discord, asyncio, re, random, pytz
+
+def getServerConfigurations(bot):
+    guild = bot.get_guild(DISCORD_GUILD_ID)
+    bot.config = Config(getConfig(guild))
+
+def getServerLevelConfig():
+    levelConfig = getLevelConfig(DISCORD_GUILD_ID)
+    return levelConfig
 
 def getVIPConfigurations(guild):
     VIPStatus = {'VIPRoles': [], 'hasVIPCustomization': DISCORD_HAS_VIP_CUSTOM_ROLES, 'hasRoleDivision': DISCORD_HAS_ROLE_DIVISION,
@@ -182,3 +192,66 @@ async def secureArtPosts(message:discord.Message):
         await message.delete()
         await message.author.send('Você não tem permissão para enviar mensagens no post de outro artista!')
     return
+
+
+async def warnMemberWithMissingQuestions(message:discord.Message):
+    if message.author.id != 557628352828014614:
+        return
+    channel = message.channel
+    async for ficha in channel.history(limit=1, oldest_first=True):
+        if ficha != message:
+            return
+        if ficha.embeds and ficha.embeds.__len__() > 1:
+            if ficha.embeds[1].description != None:
+                regex = r'\*\*5- Resuma o que dizem as regras 1.A e 6.A\*\* ``` ```'
+                pattern = re.compile(regex)
+                naoRespondeu = bool(pattern.search(ficha.embeds[1].description))
+                print(naoRespondeu)
+                if naoRespondeu:
+                    return await message.channel.send(f'''Olá membro novo! Você não respondeu a pergunta 5 do formulário, mas não tem problema! Você ainda pode mandar aqui no chat ;3
+Caso precise, as regras estão disponíveis em <#753346684695609394>''')
+                break
+            else:
+                return
+            
+
+async def botAnswerOnMention(bot, message:discord.Message):
+    inputChat = message.content
+    response = None
+    #se for uma DM e não for o criador, não responde
+    if isinstance(message.channel, discord.channel.DMChannel) and not message.author.id == os.getenv('CREATOR_ID'):
+        return
+    
+    #se não menciona o bot ou se é uma DM, ou se é uma mensagem aleatória, não responde
+    if (not message.content.lower().__contains__(bot.chatBot['name'].lower()) and  
+        not bot.user in message.mentions and 
+        not isinstance(message.channel, discord.channel.DMChannel)) or (
+        random.random() > 0.7 and datetime.now(pytz.timezone('America/Sao_Paulo')).hour < 8):
+            return 
+
+    #se for os canais não permitidos, não responde
+    allowedChannels = [753348623844114452]
+    if not message.channel.id in allowedChannels:
+        return
+    
+    #se for horario de dormir, responde que está dormindo
+    if datetime.now(pytz.timezone('America/Sao_Paulo')).hour < 8:
+            response = '''coddy está a mimir, às 8 horas eu volto😴'''
+    
+    if not response:
+        #respondendo
+        await asyncio.sleep(2)
+        async with message.channel.typing():
+            gpt_properties = hasGPTEnabled(message.guild)
+            if gpt_properties['enabled']:
+                memberRoles = [role.name for role in message.author.roles]
+                memberGenre = memberRoles[(next(i for i, item in enumerate(memberRoles) if 'Gênero' in item))-1]
+                memberGenre = "ele" if "Membro" in memberGenre else "ela" if "Membra" in memberGenre else "ele/ela"
+                memberSpecies = memberRoles[(next(i for i, item in enumerate(memberRoles) if 'Espécies' in item))-1]
+                response = await retornaRespostaGPT(inputChat, message.author.display_name if message.author.display_name
+                                                    else message.author.name, memberGenre, memberSpecies, bot, message.channel.id, 'Discord', gpt_properties['model'])
+            else:
+                response = '''Eu to desativado por enquanto, mas logo logo eu volto! \nFale com o titio derg se você quiser saber mais sobre como ajudar a me manter ativo ;3'''
+            await asyncio.sleep(2)
+    await message.channel.send(response)
+    await bot.process_commands(message)

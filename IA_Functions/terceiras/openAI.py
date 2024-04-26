@@ -7,10 +7,9 @@ import pytz
 
 
 
-client = AsyncOpenAI(api_key=os.getenv('OPENAI_TOKEN'))
-
 async def retornaRespostaGPT(texto, usuario, genero, especie, bot:commands.Bot, channelID, app, gptModel):
     try:
+        client = AsyncOpenAI(api_key=os.getenv('OPENAI_TOKEN'))
         creator_id = os.getenv('CREATOR_ID')
         guild_id = os.getenv('DISCORD_GUILD_ID')
         historico = []

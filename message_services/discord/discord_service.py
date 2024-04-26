@@ -1,28 +1,23 @@
-import asyncio
-import random
-from message_services.discord.message_moderation.moderation_functions import moderate
 from message_services.discord.routine_functions.routine_functions import *
 from message_services.discord.discord_events import *
 from commands.default_commands import calcular_idade
 from IA_Functions.terceiras.openAI import *
-from discord.ext import commands, tasks
+from discord.ext import tasks
+from models.bot import *
 from database.database import *
 from datetime import datetime, timedelta, timezone
 from typing import Literal
 from dateutil import tz
 import requests
 import discord
-import sqlite3
-import re, pytz
-
-conn = sqlite3.connect('discord')
-c = conn.cursor()
-c.execute('CREATE TABLE IF NOT EXISTS bump (id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT)')
+import re
 
 intents = discord.Intents.default()
 for DISCORD_INTENT in DISCORD_INTENTS:
     setattr(intents, DISCORD_INTENT, True)
-bot = commands.Bot(command_prefix=DISCORD_BOT_PREFIX, intents=discord.Intents.all())
+bot = MyBot(config=None,command_prefix=DISCORD_BOT_PREFIX, intents=discord.Intents.all())
+levelConfig = None
+
 
 @bot.event
 async def on_ready():
@@ -34,58 +29,23 @@ async def on_ready():
         print(e)
     guild = bot.get_guild(DISCORD_GUILD_ID)
     bot.config = Config(getConfig(guild))
+    print(bot.config)
     if DISCORD_BUMP_WARN: bumpWarning.start()
     if DISCORD_HAS_BUMP_REWARD: bumpReward.start()
-    cronJobs.start()
+    cronJobs12h.start()
+    cronJobs30m.start()
     configForVips.start()
 
 @bot.event
 async def on_message(message: discord.Message):
-    inputChat = message.content
-    response = None
-    if message.author.bot == True:
+    await warnMemberWithMissingQuestions(message)
+
+    if message.author.bot:
         return
     
     await mentionArtRoles(bot, message)
     await secureArtPosts(message)
-
-    #se for uma DM e não for o criador, não responde
-    if isinstance(message.channel, discord.channel.DMChannel) and not message.author.id == os.getenv('CREATOR_ID'):
-        return
-    
-    #se não menciona o bot ou se é uma DM, ou se é uma mensagem aleatória, não responde
-    if (not message.content.lower().__contains__(bot.chatBot['name'].lower()) and  
-        not bot.user in message.mentions and 
-        not isinstance(message.channel, discord.channel.DMChannel)) or (
-        random.random() > 0.7 and datetime.now(pytz.timezone('America/Sao_Paulo')).hour < 8):
-            return 
-
-    #se for os canais não permitidos, não responde
-    allowedChannels = [753348623844114452]
-    if not message.channel.id in allowedChannels:
-        return
-    
-    #se for horario de dormir, responde que está dormindo
-    if datetime.now(pytz.timezone('America/Sao_Paulo')).hour < 8:
-            response = '''coddy está a mimir, às 8 horas eu volto😴'''
-    
-    if not response:
-        #respondendo
-        await asyncio.sleep(2)
-        async with message.channel.typing():
-            gpt_properties = hasGPTEnabled(message.guild)
-            if gpt_properties['enabled']:
-                memberRoles = [role.name for role in message.author.roles]
-                memberGenre = memberRoles[(next(i for i, item in enumerate(memberRoles) if 'Gênero' in item))-1]
-                memberGenre = "ele" if "Membro" in memberGenre else "ela" if "Membra" in memberGenre else "ele/ela"
-                memberSpecies = memberRoles[(next(i for i, item in enumerate(memberRoles) if 'Espécies' in item))-1]
-                response = await retornaRespostaGPT(inputChat, message.author.display_name if message.author.display_name
-                                                    else message.author.name, memberGenre, memberSpecies, bot, message.channel.id, 'Discord', gpt_properties['model'])
-            else:
-                response = '''Eu to desativado por enquanto, mas logo logo eu volto! \nFale com o titio derg se você quiser saber mais sobre como ajudar a me manter ativo ;3'''
-            await asyncio.sleep(2)
-    await message.channel.send(response)
-    await bot.process_commands(message)
+    await botAnswerOnMention(bot,message)
 
 @bot.event
 async def on_reaction_add(reaction, user):
@@ -98,8 +58,16 @@ async def on_member_update(before:discord.member.Member, after:discord.member.Me
 
 
 @tasks.loop(hours=12)
-async def cronJobs():
+async def cronJobs12h():
     await removeTempRoles(bot)
+
+@tasks.loop(minutes=30)
+async def cronJobs30m():
+    getServerConfigurations(bot)
+    if bot.config.hasLevels != False: 
+        print('Configurações de níveis não encontradas')
+        pass
+    
 
 
 
@@ -233,10 +201,7 @@ async def changeVipIcon(ctx: discord.Interaction, icon: str):
             return await ctx.response.send_message(content='''Algo deu errado, avise o titio sobre!''', ephemeral=True)
     return await ctx.response.send_message(content='Você não é vip! você não pode fazer isso', ephemeral=True)
 
-@bot.tree.command(name=f'testes', description=f'teste')
-async def test(ctx: discord.Interaction, message: str):
-    print(message)
-    await ctx.response.send_message(content=f'{message}', ephemeral=False)
+
 
 
 ####################################################################################################################
@@ -683,9 +648,9 @@ async def approvePortaria(ctx: discord.Interaction, member: discord.Member, data
             regex = r'(\d{1,2})(\s*\/\s*|\sd[eo]\s)(\d{1,2}|(janeiro|fevereiro|março|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro))(\s*\/\s*|\sd[eo]\s)(\d{2,4})'
             pattern = re.compile(regex)
             months = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro']
-            async for message in channel.history(limit=100):
+            async for message in channel.history(limit=1, oldest_first=True):
                 if message.author.id != member.id: pass
-                matchMessage = pattern.search(message.content)
+                matchMessage = pattern.search(message.content.lower())
                 if message.embeds and message.embeds.__len__() > 1:
                     matchEmbeded = pattern.search(message.embeds[1].description) if isinstance(message.embeds[1].description, str) else None  
                 else: matchEmbeded = None
@@ -785,6 +750,10 @@ async def addTempRole(ctx: discord.Interaction, member: discord.Member, role: di
     if roleAssignment:
         await member.add_roles(role)
         return await ctx.edit_original_response(content=f'O membro <@{member.id}> agora tem o cargo {role.name} por {duration}!')
+
+@bot.tree.command(name=f'testes', description=f'teste')
+async def test(ctx: discord.Interaction, channel: discord.TextChannel):
+    await ctx.channel.send(f'{ctx.user.flags},{ctx.user.public_flags},{ctx.user.system},{ctx.user.status}')
 
 
 #@bot.tree.command(name='mod-calc_idade', description=f'Use esse recurso para calcular a idade de alguém de acordo com a data de nascimento')
