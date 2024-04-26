@@ -152,6 +152,9 @@ else f'R$'+str(f"{event['price']:.0f}").replace('.',',') if (event['max_price']=
 async def removeTempRoles(bot):
     mydbAndCursor = startConnection()
     expiringTempRoles = getExpiringTempRoles(mydbAndCursor[0], DISCORD_GUILD_ID)
+    if expiringTempRoles == []:
+        endConnection(mydbAndCursor)
+        return
     for TempRole in expiringTempRoles:
         guild = bot.get_guild(DISCORD_GUILD_ID)
         member = guild.get_member(TempRole['user_id'])
