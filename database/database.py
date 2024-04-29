@@ -216,7 +216,7 @@ def includeUser(mydb, user: Union[discord.Member,str]):
     if type(user) != str:
         username = user.name
         displayName = user.nick if user.nick != None else user.display_name
-        memberSince = user.joined_at
+        memberSince = user.joined_at.strftime('%Y-%m-%d %H:%M:%S')
     else:
         username = user
         displayName = user

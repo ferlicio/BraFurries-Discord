@@ -652,7 +652,7 @@ async def approvePortaria(ctx: discord.Interaction, member: discord.Member, data
                 await member.remove_roles(carteirinhaCargos)
                 mydbAndCursor = startConnection()
                 duration = timedelta(days=15)
-                expiration_date = datetime.now(datetime.UTC) + duration
+                expiration_date = datetime.utcnow() + duration
                 await ctx.edit_original_response(content=f'O membro <@{member.id}> entrará no servidor com **carteirinha provisória** e terá acesso restrito ao servidor por sua conta ter **menos de 30 dias**. \nLembre de avisar o membro sobre isso')
                 assignTempRole(mydbAndCursor[0], ctx.guild_id, member, carteirinhaProvisoria.id, expiration_date, 'Carteirinha provisória')
                 endConnectionWithCommit(mydbAndCursor)
@@ -756,7 +756,7 @@ async def addTempRole(ctx: discord.Interaction, member: discord.Member, role: di
         duration = timedelta(weeks=int(duration[:-1]))
     else:
         duration = timedelta(months=int(duration[:-1]))
-    expiration_date = datetime.now(datetime.UTC) + duration
+    expiration_date = datetime.utcnow() + duration
     await ctx.response.send_message(content=f'Adicionando o cargo...', ephemeral=True)
     roleAssignment = assignTempRole(mydbAndCursor[0], ctx.guild_id, member, role.id, expiration_date, 'porque sim')
     endConnectionWithCommit(mydbAndCursor)
