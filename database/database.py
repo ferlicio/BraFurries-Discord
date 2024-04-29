@@ -8,6 +8,7 @@ from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
+from models.user import User
 import os.path
 import dotenv
 
@@ -195,12 +196,32 @@ def getAllLocals(mydb):
     locals_list = [{'id': local[0], 'locale_abbrev': local[1], 'locale_name': local[2]} for local in myResult]
     return locals_list
 
-def includeUser(mydb, user: Union[discord.User,str]):
+def getUserInfo(mydb, user:discord.User):
+    cursor = mydb.cursor()
+    user_id = includeUser(mydb, user)
+    query = f"""SELECT users.username, discord_user.discord_user_id, discord_user.display_name, discord_user.banned
+FROM users
+JOIN discord_user ON users.id = discord_user.user_id
+WHERE discord_user.discord_user_id = '{user_id}';"""
+    cursor.execute(query)
+    myresult = cursor.fetchall()
+    user = User(name=myresult[0][0], isVip=False, 
+                level=0, birthday=None, locale=None, memberSince=None, 
+                warnings=[], xp=0, coins=0, inventory=[])
+    
+
+
+def includeUser(mydb, user: Union[discord.Member,str]):
     cursor = mydb.cursor()
     if type(user) != str:
         username = user.name
+        displayName = user.nick if user.nick != None else user.display_name
+        memberSince = user.joined_at
     else:
         username = user
+        displayName = user
+        memberSince = datetime.now()
+
     
     foundUser = False
     if type(user) != str:
@@ -220,8 +241,8 @@ def includeUser(mydb, user: Union[discord.User,str]):
         return result[1]
     # Verificar se o usuário já existe na tabela `users`
     try: 
-        query = f"""INSERT INTO users (username)
-    VALUES ('{username}');"""
+        query = f"""INSERT INTO users (display_name, username, member_since)
+    VALUES ('{displayName}','{username}','{memberSince}');"""
         cursor.execute(query)
     finally:
         # Obter o id do usuário na tabela `users`

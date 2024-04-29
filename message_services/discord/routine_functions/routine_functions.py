@@ -3,8 +3,9 @@ from colormath.color_conversions import convert_color
 from colormath.color_diff import _get_lab_color1_vector, _get_lab_color2_matrix
 from colormath import color_diff_matrix
 from IA_Functions.terceiras.openAI import retornaRespostaGPT
-from models.bot import Config
+from discord.ext import commands
 from database.database import *
+from models.bot import Config
 from settings import *
 import discord, asyncio, re, random, pytz
 
@@ -149,7 +150,7 @@ else f'R$'+str(f"{event['price']:.0f}").replace('.',',') if (event['max_price']=
     else: eventEmbeded.set_author(name='')
     return eventEmbeded
 
-async def removeTempRoles(bot):
+async def removeTempRoles(bot:commands.Bot):
     mydbAndCursor = startConnection()
     expiringTempRoles = getExpiringTempRoles(mydbAndCursor[0], DISCORD_GUILD_ID)
     if expiringTempRoles == []:
@@ -159,10 +160,11 @@ async def removeTempRoles(bot):
         guild = bot.get_guild(DISCORD_GUILD_ID)
         member = guild.get_member(TempRole['user_id'])
         role = guild.get_role(TempRole['role_id'])
-        print(f'{member.name} perdeu o cargo {role.name}')
-        pass
         if member != None and role != None:
             await member.remove_roles(role)
+            print(f'{member.name} perdeu o cargo {role.name}')
+            deleteTempRole(mydbAndCursor[1], TempRole['id'])
+        elif member == None:
             deleteTempRole(mydbAndCursor[1], TempRole['id'])
     endConnectionWithCommit(mydbAndCursor)
     return
