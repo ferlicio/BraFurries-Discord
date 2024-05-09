@@ -211,7 +211,6 @@ async def warnMemberWithMissingQuestions(message:discord.Message):
                 regex = r'\*\*5- Resuma o que dizem as regras 1.A e 6.A\*\* ``` ```'
                 pattern = re.compile(regex)
                 naoRespondeu = bool(pattern.search(ficha.embeds[1].description))
-                print(naoRespondeu)
                 if naoRespondeu:
                     return await message.channel.send(f'''Olá membro novo! Você não respondeu a pergunta 5 do formulário, mas não tem problema! Você ainda pode mandar aqui no chat ;3
 Caso precise, as regras estão disponíveis em <#753346684695609394>''')
@@ -241,7 +240,7 @@ async def botAnswerOnMention(bot, message:discord.Message):
     
     #se for horario de dormir, responde que está dormindo
     if datetime.now(pytz.timezone('America/Sao_Paulo')).hour < 8:
-            response = '''coddy está a mimir, às 8 horas eu volto😴'''
+            response = '''coddy está a mimir, às 8 horas eu volto 😴'''
     
     if not response:
         #respondendo
@@ -260,3 +259,23 @@ async def botAnswerOnMention(bot, message:discord.Message):
             await asyncio.sleep(2)
     await message.channel.send(response)
     await bot.process_commands(message)
+
+
+async def checkTicketsState(bot:commands.Bot):
+    guild = bot.get_guild(DISCORD_GUILD_ID)
+    provisoriaCategory = discord.utils.get(guild.categories, id=1178531112042111016)
+    portariaCategory = discord.utils.get(guild.categories, id=753342674576211999)
+    regex = r'<@([0-9]*)>'
+    pattern = re.compile(regex)
+    for channel in (portariaCategory.channels+provisoriaCategory.channels):
+        async for message in channel.history(limit=1, oldest_first=True):
+            member = pattern.search(message.content)
+            if member != None:
+                member = guild.get_member(int(member.group(1)))
+                if member != None:
+                    if not member.roles.__contains__(discord.utils.get(guild.roles, id=DISCORD_MEMBER_NOT_VERIFIED_ROLE)):
+                        if not channel.name.__contains__('-ok'):
+                            await channel.edit(name=f'{channel.name}-ok')
+                else: 
+                    if not channel.name.__contains__('-quitado'):
+                        await channel.edit(name=f'{channel.name}-quitado')

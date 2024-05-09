@@ -220,7 +220,7 @@ def includeUser(mydb, user: Union[discord.Member,str]):
     else:
         username = user
         displayName = user
-        memberSince = datetime.now()
+        memberSince = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
     
     foundUser = False
@@ -289,11 +289,11 @@ WHERE locale.locale_abbrev = '{abbrev}';"""
             myresult = [i[0] for i in myresult]
             return myresult
         
-def includeBirthday(mydb, date:date, user:discord.User):
+def includeBirthday(mydb, date:date, user:discord.User, mentionable:bool):
     user_id = includeUser(mydb, user)
     cursor = mydb.cursor()
     try:
-        query = f"""INSERT INTO user_birthday (user_id, birth_date) VALUES ('{user_id}','{date}');"""
+        query = f"""INSERT INTO user_birthday (user_id, birth_date, verified, mentionable) VALUES ('{user_id}','{date}',FALSE,{mentionable});"""
         cursor.execute(query)
         return True
     except:
@@ -303,7 +303,8 @@ def getAllBirthdays(mydb):
     cursor = mydb.cursor()
     query = f"""SELECT users.username, user_birthday.birth_date
 FROM users
-JOIN user_birthday ON users.id = user_birthday.user_id;"""
+JOIN user_birthday ON users.id = user_birthday.user_id
+WHERE user_birthday.mentionable = 1;"""
     cursor.execute(query)
     myresult = cursor.fetchall()
     #convertendo para uma lista de dicionários
@@ -638,5 +639,71 @@ AND temp_roles.expiring_date <= NOW();
 def deleteTempRole(cursor, tempRoleDBId:int):
     query = f"""DELETE FROM temp_roles
 WHERE id = {tempRoleDBId}"""
+    cursor.execute(query)
+    return True
+
+def warnMember(mydb, guild_id:int, discord_user:discord.User, reason:str):
+    cursor = mydb.cursor()
+    user_id = includeUser(mydb, discord_user)
+    query = f"""SELECT community_id FROM discord_servers WHERE guild_id = '{guild_id}';"""
+    cursor.execute(query)
+    community_id = cursor.fetchall()[0][0]
+    date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    try:
+        query = f"""INSERT INTO warnings (user_id, community_id, date, reason, expired)
+        VALUES ('{user_id}', '{community_id}', '{date}', '{reason}', FALSE);"""
+        cursor.execute(query)
+        query = f"""SELECT COUNT(*) FROM warnings
+WHERE user_id = '{user_id}'
+AND community_id = '{community_id}';"""
+        cursor.execute(query)
+        warningsCount = cursor.fetchall()[0][0]
+        #pegar o número de warnings necessários para banir o usuário
+        query = f"""SELECT warnings_limit FROM warnings_settings
+WHERE community_id = '{community_id}';"""
+        cursor.execute(query)
+        warningsLimit = cursor.fetchall()[0][0]
+        return {'warningsCount': warningsCount, 'warningsLimit': warningsLimit}
+    except Exception as e:
+        print(e)
+        return False
+    
+def getWarnings(mydb, guild_id:int, discord_user:discord.User):
+    cursor = mydb.cursor()
+    user_id = includeUser(mydb, discord_user)
+    query = f"""SELECT community_id FROM discord_servers WHERE guild_id = '{guild_id}';"""
+    cursor.execute(query)
+    community_id = cursor.fetchall()[0][0]
+    query = f"""SELECT date, reason, expired FROM warnings
+WHERE user_id = '{user_id}'
+AND community_id = '{community_id}';"""
+    cursor.execute(query)
+    myresult = cursor.fetchall()
+    propriedades = ['date', 'reason', 'expired']
+    resultados_finais = []
+    for i in myresult:
+        warning_dict = dict(zip(propriedades, i))
+        warning_dict['date'] = datetime.strptime(f"{warning_dict['date']}", '%Y-%m-%d %H:%M:%S')
+        resultados_finais.append(warning_dict)
+    return resultados_finais
+
+def getStaffRoles(mydb, guild_id:int):
+    cursor = mydb.cursor()
+    query = f"""SELECT staff_roles FROM server_settings WHERE server_guild_id = '{guild_id}';"""
+    cursor.execute(query)
+    myresult = cursor.fetchall()
+    return myresult[0][0]
+
+def approveUser(mydb, guild_id:int, discord_user:discord.User):
+    cursor = mydb.cursor()
+    includeBirthday(mydb, date, discord_user, False)
+    return True
+    user_id = includeUser(mydb, discord_user)
+    query = f"""SELECT community_id FROM discord_servers WHERE guild_id = '{guild_id}';"""
+    cursor.execute(query)
+    community_id = cursor.fetchall()[0][0]
+    query = f"""UPDATE discord_user SET approved_at = NOW()
+WHERE user_id = '{user_id}'
+AND community_id = '{community_id}';"""
     cursor.execute(query)
     return True
