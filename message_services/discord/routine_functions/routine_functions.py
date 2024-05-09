@@ -274,8 +274,8 @@ async def checkTicketsState(bot:commands.Bot):
                 member = guild.get_member(int(member.group(1)))
                 if member != None:
                     if not member.roles.__contains__(discord.utils.get(guild.roles, id=DISCORD_MEMBER_NOT_VERIFIED_ROLE)):
-                        if not channel.name.__contains__('-ok'):
-                            await channel.edit(name=f'{channel.name}-ok')
+                        if not channel.name.__contains__('-✅'):
+                            await channel.edit(name=f'{channel.name}-✅')
                 else: 
-                    if not channel.name.__contains__('-quitado'):
-                        await channel.edit(name=f'{channel.name}-quitado')
+                    if not channel.name.__contains__('-❌'):
+                        await channel.edit(name=f'{channel.name}-❌')

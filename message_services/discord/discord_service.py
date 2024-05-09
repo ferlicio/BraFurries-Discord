@@ -4,6 +4,7 @@ from commands.default_commands import calcular_idade
 from IA_Functions.terceiras.openAI import *
 from discord.ext import tasks
 from models.bot import *
+from models.cities import *
 from database.database import *
 from datetime import datetime, timedelta
 from typing import Literal
@@ -215,19 +216,19 @@ async def changeVipIcon(ctx: discord.Interaction, icon: str):
 
 
 @bot.tree.command(name=f'registrar_local', description=f'Registra o seu local')
-async def registerLocal(ctx: discord.Interaction, local: str):
+async def registerLocal(ctx: discord.Interaction, local: citiesList):
     mydbAndCursor = startConnection()
     availableLocals = getAllLocals(mydbAndCursor[0])
-    if await localeIsAvailable(ctx, mydbAndCursor, local):
-        await ctx.response.defer()
-        result = includeLocale(mydbAndCursor[0],local.upper(), ctx.user, availableLocals)
-        endConnectionWithCommit(mydbAndCursor)
-        if result:
-            for locale in availableLocals:
-                if locale['locale_abbrev'] == local.upper():
-                    return await ctx.followup.send(content=f'você foi registrado em {locale["locale_name"]}!', ephemeral=False)
-        else:
-            return await ctx.followup.send(content=f'Não foi possível registrar você! você já está registrado em algum local?', ephemeral=True)
+    local = cityLetterCodes[local]
+    await ctx.response.defer()
+    result = includeLocale(mydbAndCursor[0],local.upper(), ctx.user, availableLocals)
+    endConnectionWithCommit(mydbAndCursor)
+    if result:
+        for locale in availableLocals:
+            if locale['locale_abbrev'] == local.upper():
+                return await ctx.followup.send(content=f'você foi registrado em {locale["locale_name"]}!', ephemeral=False)
+    else:
+        return await ctx.followup.send(content=f'Não foi possível registrar você! você já está registrado em algum local?', ephemeral=True)
     return
     
     

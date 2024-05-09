@@ -211,7 +211,7 @@ WHERE discord_user.discord_user_id = '{user_id}';"""
     
 
 
-def includeUser(mydb, user: Union[discord.Member,str]):
+def includeUser(mydb, user: Union[discord.Member,str], guild:discord.Guild=1, approvedAt:datetime=None):
     cursor = mydb.cursor()
     if type(user) != str:
         username = user.name
@@ -221,28 +221,42 @@ def includeUser(mydb, user: Union[discord.Member,str]):
         username = user
         displayName = user
         memberSince = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    approvedAt = approvedAt.strftime('%Y-%m-%d %H:%M:%S') if approvedAt != None else memberSince
 
     
     foundUser = False
     if type(user) != str:
-        query = f"""SELECT * FROM discord_user WHERE discord_user_id = '{user.id}';"""
+        query = f"""SELECT user_id FROM discord_user WHERE discord_user_id = '{user.id}';"""
         cursor.execute(query)
         result = cursor.fetchone()
         if result != None:
             foundUser = True
     else:
-        query = f"""SELECT * FROM telegram_user WHERE username = '{user}';"""
+        query = f"""SELECT user_id FROM telegram_user WHERE username = '{user}';"""
         cursor.execute(query)
         result = cursor.fetchone()
         if result != None:
             foundUser = True
     
     if foundUser:
-        return result[1]
+        user_id = result[0]
+        query = f"""SELECT user_id FROM user_community_status WHERE user_id = '{user_id}';"""
+        cursor.execute(query)
+        result = cursor.fetchone()
+        if result != None:
+            return user_id
+        else:
+            query = f"""SELECT community_id FROM discord_servers WHERE guild_id = '{guild.id}';"""
+            cursor.execute(query)
+            community_id = cursor.fetchone()[0]
+            query = f"""INSERT INTO user_community_status (user_id, community_id, member_since, approved, approved_at, is_vip, banned)
+        VALUES ('{user_id}', ${community_id}, '{memberSince}', 1, '{approvedAt}', 0, 0);"""
+            cursor.execute(query)
+            return user_id
     # Verificar se o usuário já existe na tabela `users`
     try: 
-        query = f"""INSERT INTO users (display_name, username, member_since)
-    VALUES ('{displayName}','{username}','{memberSince}');"""
+        query = f"""INSERT INTO users (display_name, username)
+    VALUES ('{displayName}','{username}');"""
         cursor.execute(query)
     finally:
         # Obter o id do usuário na tabela `users`
@@ -250,6 +264,13 @@ def includeUser(mydb, user: Union[discord.Member,str]):
         cursor.execute(query)
         result = cursor.fetchone()
         user_id = result[0]
+        # Inserir o usuário na tabela `user_community_status`
+        query = f"""SELECT community_id FROM discord_servers WHERE guild_id = '{guild.id}';"""
+        cursor.execute(query)
+        community_id = cursor.fetchone()[0]
+        query = f"""INSERT INTO user_community_status (user_id, community_id, member_since, approved, approved_at, is_vip, banned)
+    VALUES ('{user_id}', ${community_id}, '{memberSince}', 1, '{approvedAt}', 0, 0);"""
+        cursor.execute(query)
 
         # Inserir o usuário na tabela `discord_user`
         try:
@@ -695,15 +716,6 @@ def getStaffRoles(mydb, guild_id:int):
     return myresult[0][0]
 
 def approveUser(mydb, guild_id:int, discord_user:discord.User):
-    cursor = mydb.cursor()
+    includeUser(mydb, discord_user, guild_id, datetime.now())
     includeBirthday(mydb, date, discord_user, False)
-    return True
-    user_id = includeUser(mydb, discord_user)
-    query = f"""SELECT community_id FROM discord_servers WHERE guild_id = '{guild_id}';"""
-    cursor.execute(query)
-    community_id = cursor.fetchall()[0][0]
-    query = f"""UPDATE discord_user SET approved_at = NOW()
-WHERE user_id = '{user_id}'
-AND community_id = '{community_id}';"""
-    cursor.execute(query)
     return True
