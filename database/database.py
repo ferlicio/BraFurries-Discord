@@ -211,7 +211,7 @@ WHERE discord_user.discord_user_id = '{user_id}';"""
     
 
 
-def includeUser(mydb, user: Union[discord.Member,str], guild:discord.Guild=1, approvedAt:datetime=None):
+def includeUser(mydb, user: Union[discord.Member,str], guildId:discord.Guild.id=1, approvedAt:datetime=None):
     cursor = mydb.cursor()
     if type(user) != str:
         username = user.name
@@ -246,11 +246,11 @@ def includeUser(mydb, user: Union[discord.Member,str], guild:discord.Guild=1, ap
         if result != None:
             return user_id
         else:
-            query = f"""SELECT community_id FROM discord_servers WHERE guild_id = '{guild.id}';"""
+            query = f"""SELECT community_id FROM discord_servers WHERE guild_id = '{guildId}';"""
             cursor.execute(query)
             community_id = cursor.fetchone()[0]
             query = f"""INSERT INTO user_community_status (user_id, community_id, member_since, approved, approved_at, is_vip, banned)
-        VALUES ('{user_id}', ${community_id}, '{memberSince}', 1, '{approvedAt}', 0, 0);"""
+        VALUES ('{user_id}', {community_id}, '{memberSince}', 1, '{approvedAt}', 0, 0);"""
             cursor.execute(query)
             return user_id
     # Verificar se o usuário já existe na tabela `users`
@@ -265,7 +265,7 @@ def includeUser(mydb, user: Union[discord.Member,str], guild:discord.Guild=1, ap
         result = cursor.fetchone()
         user_id = result[0]
         # Inserir o usuário na tabela `user_community_status`
-        query = f"""SELECT community_id FROM discord_servers WHERE guild_id = '{guild.id}';"""
+        query = f"""SELECT community_id FROM discord_servers WHERE guild_id = '{guildId}';"""
         cursor.execute(query)
         community_id = cursor.fetchone()[0]
         query = f"""INSERT INTO user_community_status (user_id, community_id, member_since, approved, approved_at, is_vip, banned)
@@ -274,10 +274,10 @@ def includeUser(mydb, user: Union[discord.Member,str], guild:discord.Guild=1, ap
 
         # Inserir o usuário na tabela `discord_user`
         try:
-            query = f"""INSERT INTO discord_user (user_id, discord_user_id, username, display_name, banned)
-                VALUES ({user_id}, {user.id}, '{username}', '{user.nick}', {False});""" if type(user) != str else f"""
-                INSERT IGNORE INTO telegram_user (user_id, username, display_name, banned)
-                VALUES ({user_id}, '{user}', '{username}', {False});"""
+            query = f"""INSERT INTO discord_user (user_id, discord_user_id, username, display_name)
+                VALUES ({user_id}, {user.id}, '{username}', '{user.nick}');""" if type(user) != str else f"""
+                INSERT IGNORE INTO telegram_user (user_id, username, display_name)
+                VALUES ({user_id}, '{user}', '{username}';"""
             cursor.execute(query)
         except:
             pass

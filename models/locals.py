@@ -1,7 +1,7 @@
 from typing import Literal
 
 
-cityNames = {
+stateNames = {
     "SP":"São Paulo",
     "RJ":"Rio de Janeiro",
     "MG":"Minas Gerais",
@@ -31,7 +31,7 @@ cityNames = {
     "BA":"Bahia",
 }
 
-cityLetterCodes = {
+stateLetterCodes = {
     "São Paulo":"SP",
     "Rio de Janeiro":"RJ",
     "Minas Gerais":"MG",
@@ -61,7 +61,7 @@ cityLetterCodes = {
     "Bahia":"BA",
 }
 
-citiesList = Literal[
+statesList = Literal[
     "Acre",
     "Alagoas",
     "Amapá",
