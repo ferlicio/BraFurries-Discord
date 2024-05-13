@@ -221,7 +221,7 @@ async def registerLocal(ctx: discord.Interaction, local: str):
     availableLocals = getAllLocals(mydbAndCursor[0])
     if stateLetterCodes[local]:
         await ctx.response.defer()
-        result = includeLocale(mydbAndCursor[0],local.upper(), ctx.user, availableLocals)
+        result = includeLocale(mydbAndCursor[0], ctx.guild.id, local.upper(), ctx.user, availableLocals)
         endConnectionWithCommit(mydbAndCursor)
         if result:
             for locale in availableLocals:
@@ -260,15 +260,15 @@ async def registerBirthday(ctx: discord.Interaction, data: str, mencionavel: Lit
     except ValueError:
         return await ctx.response.send_message(content='''Data de nascimento inválida! você informou uma data no formato "dd/mm/aaaa"? <:catsip:851024825333186560>''', ephemeral=True)
     birthdayAsDate = datetime.strptime(data, '%d/%m/%Y').date()
-    mydbAndCursor = startConnection()
     mencionavel = True if mencionavel == "sim" else False
     await ctx.response.defer()
-    result = includeBirthday(mydbAndCursor[0],birthdayAsDate, ctx.user, mencionavel)
+    mydbAndCursor = startConnection()
+    result = includeBirthday(mydbAndCursor[0], ctx.guild.id, birthdayAsDate, ctx.user, mencionavel)
     endConnectionWithCommit(mydbAndCursor)
     if result:
         return await ctx.followup.send(content=f'você foi registrado com o aniversário {data}!', ephemeral=False)
     else:
-        return await ctx.followup.send(content=f'Não foi possível registrar você! você já está registrado?', ephemeral=True)
+        return await ctx.followup.send(content=f'Você ja está registrado', ephemeral=True)
     
 
 @bot.tree.command(name=f'aniversarios', description=f'Lista todos os aniversários registrados')
@@ -488,7 +488,7 @@ async def addStaffToEvent(ctx: discord.Interaction, event_id: int, staff: discor
 async def connectAccount(ctx: discord.Interaction,user: discord.Member, telegram_username: str):
     mydbAndCursor = startConnection()
     await ctx.response.defer()
-    result = admConnectTelegramAccount(mydbAndCursor[0], user, telegram_username)
+    result = admConnectTelegramAccount(mydbAndCursor[0], ctx.guild.id, user, telegram_username)
     endConnectionWithCommit(mydbAndCursor)
     if result:
         return await ctx.followup.send(content=f'Sua conta foi conectada com sucesso! agora você pode usar os comandos do bot no discord e no telegram', ephemeral=False)
@@ -603,14 +603,7 @@ async def mission(ctx: discord.Interaction):
 # COMANDOS DE PERFIL
 ####################################################################################################################
 
-@bot.tree.command(name=f'perfil', description=f'Mostra o perfil de um membro')
-async def profile(ctx: discord.Interaction, member: discord.Member=None):
-    ctx.response.defer()
-    if member == None:
-        member = ctx.user
-        mydbAndCursor = startConnection()
-        memberProfile = getUserInfo(mydbAndCursor[0], member) 
-    pass
+
 
 
 ####################################################################################################################
@@ -618,7 +611,27 @@ async def profile(ctx: discord.Interaction, member: discord.Member=None):
 ####################################################################################################################
 
 
+@bot.tree.command(name=f'perfil', description=f'Mostra o perfil de um membro')
+async def profile(ctx: discord.Interaction, member: discord.Member):
+    await ctx.response.defer()
+    mydbAndCursor = startConnection()
+    memberProfile = getUserInfo(mydbAndCursor[0], member, ctx.guild.id)
+    endConnectionWithCommit(mydbAndCursor)
+    profileDescription = generateUserDescription(memberProfile)
+    embedUserProfile = discord.Embed(
+        color=discord.Color.from_str('#febf10'),
+        title='@'+(member.name)+' (ID '+str(member.id)+")", 
+        description=profileDescription)
+    embedUserProfile.set_thumbnail(url=member.avatar.url)
+    embedUserProfile.set_author(
+        name=(member.nick if member.nick != None else member.global_name)+f' (level {memberProfile.level})', 
+        icon_url=member.guild_avatar.url if member.guild_avatar != None else member.avatar.url)
+    embedUserProfile.set_footer(text=f'{memberProfile.warnings.__len__()} Warns{"  -  Ultimo warn em "+datetime.now().strftime("%d/%m/%Y") if memberProfile.warnings.__len__() > 0 else f""}{"  -  >> DE CASTIGO <<" if member.is_timed_out() else ""}')
+    await ctx.followup.send(embed=embedUserProfile)
+
+
 """@bot.tree.command(name=f'adm-banir', description=f'Bane um membro do servidor')"""
+
 
 
 @bot.tree.command(name=f'warn', description=f'Aplica um warn em um membro')
@@ -697,20 +710,20 @@ async def approvePortaria(ctx: discord.Interaction, member: discord.Member, data
                 else:
                     matchEmbeded = pattern.search(message.embeds[1].description) if isinstance(message.embeds[1].description, str) else None
                 if matchEmbeded:
-                    await ctx.response.send_message(content=f'verificando idade...', ephemeral=True)
+                    await ctx.response.send_message(content=f'registrando usuario...', ephemeral=True)
                     try:
                         day = int(matchEmbeded.group(1))
                         month = int(matchEmbeded.group(2) if matchEmbeded.group(2).isdigit() else months.index(matchEmbeded.group(2)))
                         year = int(matchEmbeded.group(3))
                         if str(year).__len__()<=2 :year+=2000 if year < (datetime.now().date().year - 2000) else 1900
-                        date = datetime(year, month, day)
-                        if date.year > 1975 and date.year < datetime.now().year:
-                            age = (datetime.now().date() - date.date()).days
+                        birthday = datetime(year, month, day)
+                        if birthday.year > 1975 and birthday.year < datetime.now().year:
+                            age = (datetime.now().date() - birthday.date()).days
                             if not (cargoMaior18 in member.roles or cargoMenor18 in member.roles) and age >= 4745:
                                 return await ctx.edit_original_response(content=f'O membro <@{member.id}> ainda não pegou seus cargos!' if carteirinhaCargos in member.roles 
                                                                         else f'O membro <@{member.id}> ainda não tem a carteirinha de cargos, use o comando "/portaria_cargos" antes')
                             mydbAndCursor = startConnection()
-                            approveUser(mydbAndCursor[0], ctx.guild.id, member)
+                            approveUser(mydbAndCursor[0], ctx.guild.id, member, birthday.date())
                             endConnectionWithCommit(mydbAndCursor)
                             if age >= 6570: #18+ anos
                                 await member.add_roles(cargoMaior18)
@@ -724,10 +737,10 @@ async def approvePortaria(ctx: discord.Interaction, member: discord.Member, data
                                 await channel.edit(name=f'{channel.name}-provisória' if not channel.name.__contains__('provisória') else channel.name,category=provisoriaCategory)
                                 return await ctx.edit_original_response(content=f'Por ser menor de 13 anos, o membro <@{member.id}> entrará no servidor com carteirinha provisória e terá acesso restrito ao servidor. Lembre de avisar o membro sobre isso.')
                             await member.remove_roles(carteirinhaCargos, cargoVisitante)
-                            await channel.edit(name=f'{channel.name}-ok' if not channel.name.__contains__('-ok') else channel.name)
+                            await channel.edit(name=f'{channel.name}-✅' if not channel.name.__contains__('-✅') else channel.name)
                             return await ctx.edit_original_response(content=f'O membro <@{member.id}> foi aprovado com sucesso!\nLembre de dar boas vindas a ele no <#753348623844114452> :3')
                         else:
-                            return await ctx.edit_original_response(content=f'Data inválida encontrada: {matchEmbeded.group(0)}\nO membro tem {(datetime.now().date() - date.date()).year} anos?')
+                            return await ctx.edit_original_response(content=f'Data inválida encontrada: {matchEmbeded.group(0)}\nO membro tem {(datetime.now().date() - birthday.date()).year} anos?')
                     except ValueError:
                         return await ctx.edit_original_response(content=f'Data inválida encontrada: {matchEmbeded.group(0)}')
             return await ctx.response.send_message(content=f'Não foi possível encontrar a data de nascimento do membro <@{member.id}> na portaria\nEm ultimo caso, digite a data de nascimento nos argumentos do comando.', ephemeral=True)

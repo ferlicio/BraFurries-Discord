@@ -279,3 +279,30 @@ async def checkTicketsState(bot:commands.Bot):
                 else: 
                     if not channel.name.__contains__('-❌'):
                         await channel.edit(name=f'{channel.name}-❌')
+
+
+def generateUserDescription(member: User):
+    userDescription = f'## Membro '
+    if member.isPartner or member.isVip:
+        userDescription += f'VIP' if member.isPartner else ''
+        userDescription += f' - ' if member.isPartner and member.isVip else ''
+        userDescription += f'Parceiro Oficial' if member.isVip else ''
+    else:
+        userDescription += f'Comum'
+    userDescription += f'\n**Tipo de VIF:** {member.vipType}' if member.isVip else ''
+    userDescription += f'\n**Entrou em:** {member.memberSince.strftime("%d/%m/%Y")}'
+    userDescription += f'\n**Aprovado em:** {member.approvedAt.strftime("%d/%m/%Y") + (f" (a {(datetime.now()-member.approvedAt).days} dias)" if (datetime.now()-member.approvedAt).days < 45 else "")}'
+    userDescription += f'\n**Aniversário:** {member.birthday.strftime("%d/%m/%Y")}' if member.birthday != None else ''
+    userDescription += f'\n\n'
+    if member.locale or member.coins or member.inventory:
+        userDescription += f'\nRegistrado em **{member.locale}**' if member.locale else ''
+        userDescription += f'\n**Moedas: ** {member.coins}' if member.coins else ''
+        userDescription += f'\n**Inventário: {member.inventory.__len__} itens no inventário**' if member.inventory else ''
+    if member.staffOf.__len__() > 0:
+        userDescription += f'\n\n'
+        userDescription += f'\n**Staff {"dos eventos" if member.staffOf.__len__ > 1 else "do evento"}** {member.staffOf}'
+        for event in member.staffOf:
+            userDescription += f'\n- *{event.name}*'
+
+    return userDescription
+

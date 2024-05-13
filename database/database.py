@@ -196,23 +196,11 @@ def getAllLocals(mydb):
     locals_list = [{'id': local[0], 'locale_abbrev': local[1], 'locale_name': local[2]} for local in myResult]
     return locals_list
 
-def getUserInfo(mydb, user:discord.User):
-    cursor = mydb.cursor()
-    user_id = includeUser(mydb, user)
-    query = f"""SELECT users.username, discord_user.discord_user_id, discord_user.display_name, discord_user.banned
-FROM users
-JOIN discord_user ON users.id = discord_user.user_id
-WHERE discord_user.discord_user_id = '{user_id}';"""
-    cursor.execute(query)
-    myresult = cursor.fetchall()
-    user = User(name=myresult[0][0], isVip=False, 
-                level=0, birthday=None, locale=None, memberSince=None, 
-                warnings=[], xp=0, coins=0, inventory=[])
-    
 
 
-def includeUser(mydb, user: Union[discord.Member,str], guildId:discord.Guild.id=1, approvedAt:datetime=None):
-    cursor = mydb.cursor()
+
+def includeUser(mydb, user: Union[discord.Member,str], guildId:discord.Guild.id=os.getenv('DISCORD_GUILD_ID'), approvedAt:datetime=None):
+    cursor = mydb.cursor(buffered=True)
     if type(user) != str:
         username = user.name
         displayName = user.nick if user.nick != None else user.display_name
@@ -223,23 +211,47 @@ def includeUser(mydb, user: Union[discord.Member,str], guildId:discord.Guild.id=
         memberSince = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     approvedAt = approvedAt.strftime('%Y-%m-%d %H:%M:%S') if approvedAt != None else memberSince
 
-    
     foundUser = False
     if type(user) != str:
         query = f"""SELECT user_id FROM discord_user WHERE discord_user_id = '{user.id}';"""
         cursor.execute(query)
         result = cursor.fetchone()
         if result != None:
-            foundUser = True
+            user_id = result[0]
+            query = f"""SELECT discord_user.display_name, users.display_name 
+    FROM discord_user 
+    JOIN users ON discord_user.user_id = {user_id}
+    WHERE user_id = '{user_id}';"""
+            cursor.execute(query)
+            displayNameToUpdate = cursor.fetchone()
+
     else:
         query = f"""SELECT user_id FROM telegram_user WHERE username = '{user}';"""
         cursor.execute(query)
         result = cursor.fetchone()
         if result != None:
-            foundUser = True
+            user_id = result[0]
+            query = f"""SELECT discord_user.display_name, users.display_name  
+    FROM discord_user 
+    JOIN users ON discord_user.user_id = {user_id}
+    WHERE user_id = '{user_id}';"""
+            cursor.execute(query)
+            displayNameToUpdate = cursor.fetchone()
+
+    if result != None:
+        foundUser = True
+        if displayNameToUpdate[0] != displayName:
+            query = f"""UPDATE discord_user
+SET display_name = '{displayName}'
+WHERE user_id = '{user_id}';"""
+            cursor.execute(query)
+        if displayNameToUpdate[1] != displayName:
+            query = f"""UPDATE users
+SET display_name = '{displayName}'
+WHERE id = '{user_id}';"""
+            cursor.execute(query)
     
     if foundUser:
-        user_id = result[0]
         query = f"""SELECT user_id FROM user_community_status WHERE user_id = '{user_id}';"""
         cursor.execute(query)
         result = cursor.fetchone()
@@ -248,7 +260,8 @@ def includeUser(mydb, user: Union[discord.Member,str], guildId:discord.Guild.id=
         else:
             query = f"""SELECT community_id FROM discord_servers WHERE guild_id = '{guildId}';"""
             cursor.execute(query)
-            community_id = cursor.fetchone()[0]
+            result = cursor.fetchone()
+            community_id = result[0]
             query = f"""INSERT INTO user_community_status (user_id, community_id, member_since, approved, approved_at, is_vip, banned)
         VALUES ('{user_id}', {community_id}, '{memberSince}', 1, '{approvedAt}', 0, 0);"""
             cursor.execute(query)
@@ -267,9 +280,10 @@ def includeUser(mydb, user: Union[discord.Member,str], guildId:discord.Guild.id=
         # Inserir o usuário na tabela `user_community_status`
         query = f"""SELECT community_id FROM discord_servers WHERE guild_id = '{guildId}';"""
         cursor.execute(query)
-        community_id = cursor.fetchone()[0]
+        result = cursor.fetchone()
+        community_id = result[0]
         query = f"""INSERT INTO user_community_status (user_id, community_id, member_since, approved, approved_at, is_vip, banned)
-    VALUES ('{user_id}', ${community_id}, '{memberSince}', 1, '{approvedAt}', 0, 0);"""
+    VALUES ({user_id}, {community_id}, '{memberSince}', true, '{approvedAt}', false, false);"""
         cursor.execute(query)
 
         # Inserir o usuário na tabela `discord_user`
@@ -283,8 +297,8 @@ def includeUser(mydb, user: Union[discord.Member,str], guildId:discord.Guild.id=
             pass
         return user_id
 
-def includeLocale(mydb, abbrev:str, user:discord.User, availableLocals:list):
-    user_id = includeUser(mydb, user)
+def includeLocale(mydb, guildId: discord.Guild.id, abbrev:str, user:discord.User, availableLocals:list):
+    user_id = includeUser(mydb, user, guildId)
     cursor = mydb.cursor()
     for local in availableLocals:
         if local['locale_abbrev'] == abbrev:
@@ -310,8 +324,11 @@ WHERE locale.locale_abbrev = '{abbrev}';"""
             myresult = [i[0] for i in myresult]
             return myresult
         
-def includeBirthday(mydb, date:date, user:discord.User, mentionable:bool):
-    user_id = includeUser(mydb, user)
+def includeBirthday(mydb, guildId: discord.Guild.id, date:date, user:discord.User, mentionable:bool, userId:int=None):
+    if userId != None:
+        user_id = userId
+    else:
+        user_id = includeUser(mydb, user, guildId)
     cursor = mydb.cursor()
     try:
         query = f"""INSERT INTO user_birthday (user_id, birth_date, verified, mentionable) VALUES ('{user_id}','{date}',FALSE,{mentionable});"""
@@ -331,6 +348,55 @@ WHERE user_birthday.mentionable = 1;"""
     #convertendo para uma lista de dicionários
     myresult = [{'username': i[0], 'birth_date': i[1]} for i in myresult]
     return myresult
+
+def getUserInfo(mydb, user:discord.Member, guildId:discord.Guild.id, userId:int=None) -> User:
+    cursor = mydb.cursor()
+    if userId != None:
+        user_id = userId
+    else:
+        user_id = includeUser(mydb, user, guildId)
+    query = f"""SELECT discord_user.discord_user_id, discord_user.display_name, 
+user_community_status.member_since, user_community_status.approved_at, 
+user_community_status.is_vip, user_community_status.is_partner, user_level.level,
+user_birthday.birth_date, user_birthday.verified, locale.locale_name, user_economy.bank_balance
+FROM users
+LEFT JOIN discord_user ON users.id = discord_user.user_id
+LEFT JOIN user_community_status ON users.id = user_community_status.user_id
+LEFT JOIN user_birthday ON user_birthday.user_id = users.id
+LEFT JOIN user_level ON user_level.user_id = users.id AND user_level.server_guild_id = '{guildId}'
+LEFT JOIN user_locale ON user_locale.user_id = users.id
+LEFT JOIN locale ON locale.id = user_locale.locale_id
+LEFT JOIN warnings ON warnings.user_id = users.id
+LEFT JOIN user_economy ON user_economy.user_id = users.id AND user_economy.server_guild_id = '{guildId}'
+WHERE discord_user.user_id = '{user_id}';"""
+    cursor.execute(query)
+    myresult = cursor.fetchone()
+    propriedades = ['discord_user_id', 'display_name', 'member_since', 'approved_at', 'is_vip', 'is_partner', 'level', 'birth_date', 'verified_birth_date', 'locale', 'bank_balance']
+    userDict = dict(zip(propriedades, myresult))
+    query = f"""SELECT warnings.reason, warnings.date
+FROM warnings
+JOIN users ON warnings.user_id = users.id
+WHERE users.id = '{user_id}';"""
+    cursor.execute(query)
+    warnings = cursor.fetchall()
+    warnings = [{'reason': i[0], 'date': i[1]} for i in warnings] if warnings != [] else []
+    userDict['warnings'] = warnings
+    #query = f"""SELECT items.item, items.description, items.amount
+#FROM items
+#JOIN users ON items.user_id = users.id
+#WHERE users.id = '{user_id}';"""
+    #cursor.execute(query)
+    #inventory = cursor.fetchall()
+    #inventory = [{'item': i[0], 'description': i[1], 'amount': i[2]} for i in inventory]
+    #userDict['inventory'] = inventory
+
+    user = User(name=user.display_name, memberSince=userDict['member_since'], approvedAt=userDict['approved_at'],
+                isVip=userDict['is_vip'], isPartner=userDict['is_partner'], level=userDict['level'], 
+                birthday=userDict['birth_date'], locale=userDict['locale'], 
+                warnings=userDict['warnings'], coins=userDict['bank_balance'], 
+                inventory=[], staffOf=[])
+    return user
+    
 
 def includeEvent(mydb, user: Union[discord.User,str], locale_id:int, city:str, event_name:str, address:str, price:float, starting_datetime: datetime, ending_datetime: datetime, description: str, group_link:str, website:str, max_price:float, event_logo_url:str):
     user_id = includeUser(mydb, user)
@@ -623,7 +689,7 @@ def assignTempRole(mydb, guild_id:int, discord_user:discord.User, role_id:str, e
     query = f"""SELECT id FROM discord_servers WHERE guild_id = '{guild_id}';"""
     cursor.execute(query)
     discord_community_id = cursor.fetchall()[0][0]
-    user_id = includeUser(mydb, discord_user)
+    user_id = includeUser(mydb, discord_user, guild_id)
     query = f"""SELECT id FROM discord_user WHERE user_id = '{user_id}';"""
     cursor.execute(query)
     result = cursor.fetchall()
@@ -665,7 +731,7 @@ WHERE id = {tempRoleDBId}"""
 
 def warnMember(mydb, guild_id:int, discord_user:discord.User, reason:str):
     cursor = mydb.cursor()
-    user_id = includeUser(mydb, discord_user)
+    user_id = includeUser(mydb, discord_user, guild_id)
     query = f"""SELECT community_id FROM discord_servers WHERE guild_id = '{guild_id}';"""
     cursor.execute(query)
     community_id = cursor.fetchall()[0][0]
@@ -691,7 +757,7 @@ WHERE community_id = '{community_id}';"""
     
 def getWarnings(mydb, guild_id:int, discord_user:discord.User):
     cursor = mydb.cursor()
-    user_id = includeUser(mydb, discord_user)
+    user_id = includeUser(mydb, discord_user, guild_id)
     query = f"""SELECT community_id FROM discord_servers WHERE guild_id = '{guild_id}';"""
     cursor.execute(query)
     community_id = cursor.fetchall()[0][0]
@@ -715,7 +781,7 @@ def getStaffRoles(mydb, guild_id:int):
     myresult = cursor.fetchall()
     return myresult[0][0]
 
-def approveUser(mydb, guild_id:int, discord_user:discord.User):
-    includeUser(mydb, discord_user, guild_id, datetime.now())
-    includeBirthday(mydb, date, discord_user, False)
+def approveUser(mydb, guild_id:int, discord_user:discord.User, date:date):
+    userId = includeUser(mydb, discord_user, guild_id, datetime.now())
+    includeBirthday(mydb, guild_id, date, discord_user, False, userId)
     return True

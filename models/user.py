@@ -1,4 +1,5 @@
 from datetime import datetime
+from models.event import Event
 
 class Warnings():
     def __init__(self, reason, date):
@@ -27,18 +28,23 @@ class Item():
 
 
 class User():
-    def __init__(self, name, isVip, memberSince, level=None, locale=None, birthday:datetime=None, vipSince=None, warnings:list[Warnings]=[], xp=0, coins=0, inventory:list[Item]=[]):
+    def __init__(self, name, memberSince:datetime, approvedAt:datetime = None, isVip:bool=False, isPartner:bool=False, level:int=0, locale=None, birthday:datetime=None, birthdayVerified:bool=False, vipType=None, vipSince=None, warnings:list[Warnings]=[], xp=0, coins=0, inventory:list[Item]=[], staffOf:list[Event]=[]):
         self.name = name
         self.isVip = isVip
+        self.isPartner = isPartner
+        self.vipType = vipType
         self.vipSince = vipSince
         self.memberSince = memberSince
+        self.approvedAt = approvedAt if approvedAt else memberSince
         self.warnings = warnings
         self.birthday = birthday
+        self.birthdayVerified = birthdayVerified
         self.locale = locale
-        self.level = level
-        self.xp = xp
-        self.coins = coins
-        self.inventory = inventory
+        self.level = level if level else 0
+        self.xp = xp if xp else 0
+        self.coins = coins if coins else 0
+        self.inventory = inventory if inventory else []
+        self.staffOf = staffOf
 
     def __str__(self):
         return f'Name: {self.name}'
