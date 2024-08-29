@@ -8,7 +8,7 @@ from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
-from models.user import User
+from models.user import User, CustomRole
 import os.path
 import dotenv
 
@@ -203,13 +203,15 @@ def includeUser(mydb, user: Union[discord.Member,str], guildId:discord.Guild.id=
     cursor = mydb.cursor(buffered=True)
     if type(user) != str:
         username = user.name
-        displayName = user.nick if user.nick != None else user.display_name
+        displayName = user.display_name
         memberSince = user.joined_at.strftime('%Y-%m-%d %H:%M:%S')
+        approved = 0 if discord.utils.get(user.guild.roles, id=860453882323927060) in user.roles else 1
     else:
         username = user
         displayName = user
         memberSince = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    approvedAt = approvedAt.strftime('%Y-%m-%d %H:%M:%S') if approvedAt != None else memberSince
+        approved = 0
+    approvedAt = approvedAt.strftime('%Y-%m-%d %H:%M:%S') if approvedAt != None else None
 
     foundUser = False
     if type(user) != str:
@@ -252,10 +254,15 @@ WHERE id = '{user_id}';"""
             cursor.execute(query)
     
     if foundUser:
-        query = f"""SELECT user_id FROM user_community_status WHERE user_id = '{user_id}';"""
+        query = f"""SELECT user_id, approved_at FROM user_community_status WHERE user_id = '{user_id}';"""
         cursor.execute(query)
         result = cursor.fetchone()
         if result != None:
+            if result[1] == None and approvedAt != None:
+                query = f"""UPDATE user_community_status
+SET approved_at = '{approvedAt}', approved = 1
+WHERE user_id = '{user_id}';"""
+                cursor.execute(query)
             return user_id
         else:
             query = f"""SELECT community_id FROM discord_servers WHERE guild_id = '{guildId}';"""
@@ -263,7 +270,7 @@ WHERE id = '{user_id}';"""
             result = cursor.fetchone()
             community_id = result[0]
             query = f"""INSERT INTO user_community_status (user_id, community_id, member_since, approved, approved_at, is_vip, banned)
-        VALUES ('{user_id}', {community_id}, '{memberSince}', 1, '{approvedAt}', 0, 0);"""
+        VALUES ('{user_id}', {community_id}, '{memberSince}', {approved}, {"'"+approvedAt+"'" if approvedAt != None else 'NULL'}, 0, 0);"""
             cursor.execute(query)
             return user_id
     # Verificar se o usuário já existe na tabela `users`
@@ -283,7 +290,7 @@ WHERE id = '{user_id}';"""
         result = cursor.fetchone()
         community_id = result[0]
         query = f"""INSERT INTO user_community_status (user_id, community_id, member_since, approved, approved_at, is_vip, banned)
-    VALUES ({user_id}, {community_id}, '{memberSince}', true, '{approvedAt}', false, false);"""
+    VALUES ({user_id}, {community_id}, '{memberSince}', {approved}, {"'"+approvedAt+"'" if approvedAt != None else 'NULL'}, false, false);"""
         cursor.execute(query)
 
         # Inserir o usuário na tabela `discord_user`
@@ -356,7 +363,7 @@ def getUserInfo(mydb, user:discord.Member, guildId:discord.Guild.id, userId:int=
     else:
         user_id = includeUser(mydb, user, guildId)
     query = f"""SELECT discord_user.discord_user_id, discord_user.display_name, 
-user_community_status.member_since, user_community_status.approved_at, 
+user_community_status.member_since, user_community_status.approved, user_community_status.approved_at, 
 user_community_status.is_vip, user_community_status.is_partner, user_level.level,
 user_birthday.birth_date, user_birthday.verified, locale.locale_name, user_economy.bank_balance
 FROM users
@@ -371,7 +378,7 @@ LEFT JOIN user_economy ON user_economy.user_id = users.id AND user_economy.serve
 WHERE discord_user.user_id = '{user_id}';"""
     cursor.execute(query)
     myresult = cursor.fetchone()
-    propriedades = ['discord_user_id', 'display_name', 'member_since', 'approved_at', 'is_vip', 'is_partner', 'level', 'birth_date', 'verified_birth_date', 'locale', 'bank_balance']
+    propriedades = ['discord_user_id', 'display_name', 'member_since', 'approved', 'approved_at', 'is_vip', 'is_partner', 'level', 'birth_date', 'verified_birth_date', 'locale', 'bank_balance']
     userDict = dict(zip(propriedades, myresult))
     query = f"""SELECT warnings.reason, warnings.date
 FROM warnings
@@ -390,11 +397,12 @@ WHERE users.id = '{user_id}';"""
     #inventory = [{'item': i[0], 'description': i[1], 'amount': i[2]} for i in inventory]
     #userDict['inventory'] = inventory
 
-    user = User(name=user.display_name, memberSince=userDict['member_since'], approvedAt=userDict['approved_at'],
-                isVip=userDict['is_vip'], isPartner=userDict['is_partner'], level=userDict['level'], 
+    user = User(name=user.display_name, memberSince=userDict['member_since'], approved=userDict['approved'],
+                approvedAt=userDict['approved_at'], isVip=userDict['is_vip'], 
+                isPartner=userDict['is_partner'], level=userDict['level'], 
                 birthday=userDict['birth_date'], locale=userDict['locale'], 
                 warnings=userDict['warnings'], coins=userDict['bank_balance'], 
-                inventory=[], staffOf=[])
+                id=user.id, username=user.name, inventory=[], staffOf=[])
     return user
     
 
@@ -781,7 +789,48 @@ def getStaffRoles(mydb, guild_id:int):
     myresult = cursor.fetchall()
     return myresult[0][0]
 
-def approveUser(mydb, guild_id:int, discord_user:discord.User, date:date):
-    userId = includeUser(mydb, discord_user, guild_id, datetime.now())
-    includeBirthday(mydb, guild_id, date, discord_user, False, userId)
+def registerUser(mydb, guild_id:int, discord_user:discord.User, birthday:date, approved_date:date=None):
+    userId = includeUser(mydb, discord_user, guild_id, datetime.now() if approved_date==None else approved_date)
+    includeBirthday(mydb, guild_id, birthday, discord_user, False, userId)
     return True
+
+def saveCustomRole(mydb, guild_id:int, discord_user:discord.User, color:str=None, iconId:int=None):
+    if color == None and iconId == None: return False
+    try:
+        user_id = includeUser(mydb, discord_user, guild_id)
+        cursor = mydb.cursor(buffered=True)
+        query = f"""SELECT user_id FROM user_custom_roles
+    WHERE user_id = '{user_id}'
+    AND server_guild_id = '{guild_id}';"""
+        cursor.execute(query)
+        myresult = cursor.fetchone()
+        if myresult != None:
+            query = f"""UPDATE user_custom_roles
+            SET {f"color = '{color}', icon_id = {iconId}" if color and iconId
+                else f"color = '{color}'" if color!= None 
+                else f"icon_id = {iconId}"}
+            WHERE user_id = '{user_id}'
+            AND server_guild_id = '{guild_id}';"""
+            cursor.execute(query)
+            return True
+        else:
+            query = f"""INSERT INTO user_custom_roles (server_guild_id, user_id, color, icon_id)
+    VALUES ({guild_id}, {user_id}, {f"'{color}'" if color else 'NULL'},{f"{iconId}" if iconId else 'NULL'});"""
+            cursor.execute(query)
+            return True
+    except:
+        return False
+    
+
+def getAllCustomRoles(mydb, guild_id:int):
+    cursor = mydb.cursor()
+    query = f"""SELECT discord_user.discord_user_id, user_custom_roles.color, user_custom_roles.icon_id FROM user_custom_roles
+JOIN discord_user ON user_custom_roles.user_id = discord_user.user_id
+WHERE user_custom_roles.server_guild_id = '{guild_id}'
+    """
+    cursor.execute(query)
+    myresult = cursor.fetchall()
+    customRoles: list[CustomRole] = []
+    for customRole in myresult:
+        customRoles.append(CustomRole(customRole[0],customRole[1],customRole[2]))
+    return customRoles
