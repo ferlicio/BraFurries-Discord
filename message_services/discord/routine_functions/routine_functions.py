@@ -83,7 +83,7 @@ async def colorIsAvailable(color:str):
     return True
 
 
-async def addVipRole(ctx) -> discord.Role:
+async def addVipRole(ctx:discord.Interaction) -> discord.Role:
     customRole = discord.utils.get(ctx.guild.roles, name=f"{DISCORD_VIP_CUSTOM_ROLE_PREFIX} {ctx.user.name}")
     if customRole == None:
         print(f'Não foi possível encontrar um cargo VIP para {ctx.user.name}')
@@ -91,7 +91,7 @@ async def addVipRole(ctx) -> discord.Role:
         if DISCORD_HAS_ROLE_DIVISION:
             divisionStart = discord.utils.get(ctx.guild.roles, id=DISCORD_VIP_ROLE_DIVISION_START_ID) 
             divisionEnd = discord.utils.get(ctx.guild.roles, id=DISCORD_VIP_ROLE_DIVISION_END_ID)
-            await rearrangeRoleInsideInterval(ctx, customRole.id, divisionStart, divisionEnd)
+            await rearrangeRoleInsideInterval(ctx.guild, customRole.id, divisionStart, divisionEnd)
         await ctx.user.add_roles(customRole)
     elif not ctx.user.roles.__contains__(customRole):
         await ctx.user.add_roles(customRole)
@@ -161,8 +161,11 @@ async def removeTempRoles(bot:commands.Bot):
         member = guild.get_member(TempRole['user_id'])
         role = guild.get_role(TempRole['role_id'])
         if member != None and role != None:
-            await member.remove_roles(role)
-            print(f'{member.name} perdeu o cargo {role.name}')
+            if member.roles.__contains__(role):
+                await member.remove_roles(role)
+                print(f'{member.name} perdeu o cargo {role.name}')
+            else:
+                print(f'{member.name} não tinha o cargo {role.name}')
             deleteTempRole(mydbAndCursor[1], TempRole['id'])
         elif member == None:
             deleteTempRole(mydbAndCursor[1], TempRole['id'])
@@ -275,7 +278,10 @@ async def checkTicketsState(bot:commands.Bot):
                 if member != None:
                     if not member.roles.__contains__(discord.utils.get(guild.roles, id=DISCORD_MEMBER_NOT_VERIFIED_ROLE)):
                         if not channel.name.__contains__('-✅'):
-                            await channel.edit(name=f'{channel.name}-✅')
+                            await channel.edit(name=f'{channel.name if not channel.name.__contains__("-🆔") else re.sub(r"-🆔", "", channel.name)}-✅')
+                    elif member.roles.__contains__(discord.utils.get(guild.roles, id=860492272054829077)):
+                        if not channel.name.__contains__('-🆔'):
+                            await channel.edit(name=f'{channel.name}-🆔')
                 else: 
                     if not channel.name.__contains__('-❌'):
                         await channel.edit(name=f'{channel.name}-❌')
@@ -289,20 +295,24 @@ def generateUserDescription(member: User):
         userDescription += f'Parceiro Oficial' if member.isVip else ''
     else:
         userDescription += f'Comum'
+    userDescription += f'\n<@{member.id}>'
     userDescription += f'\n**Tipo de VIF:** {member.vipType}' if member.isVip else ''
     userDescription += f'\n**Entrou em:** {member.memberSince.strftime("%d/%m/%Y")}'
-    userDescription += f'\n**Aprovado em:** {member.approvedAt.strftime("%d/%m/%Y") + (f" (a {(datetime.now()-member.approvedAt).days} dias)" if (datetime.now()-member.approvedAt).days < 45 else "")}'
+    userDescription += f'\n**Aprovado em:** {member.approvedAt.strftime("%d/%m/%Y") + (f" (a {(datetime.now()-member.approvedAt).days} dias)" if (datetime.now()-member.approvedAt).days < 45 else "") if member.approvedAt else "Desconhecido" if member.approved==1 else "Não aprovado"}'
     userDescription += f'\n**Aniversário:** {member.birthday.strftime("%d/%m/%Y")}' if member.birthday != None else ''
-    userDescription += f'\n\n'
+    userDescription += f'\n'
     if member.locale or member.coins or member.inventory:
         userDescription += f'\nRegistrado em **{member.locale}**' if member.locale else ''
         userDescription += f'\n**Moedas: ** {member.coins}' if member.coins else ''
         userDescription += f'\n**Inventário: {member.inventory.__len__} itens no inventário**' if member.inventory else ''
     if member.staffOf.__len__() > 0:
-        userDescription += f'\n\n'
-        userDescription += f'\n**Staff {"dos eventos" if member.staffOf.__len__ > 1 else "do evento"}** {member.staffOf}'
+        userDescription += f'\n'
+        userDescription += f'\n**Staff {"dos eventos" if member.staffOf.__len__ > 1 else "do evento"}**: {member.staffOf}'
         for event in member.staffOf:
             userDescription += f'\n- *{event.name}*'
 
     return userDescription
+
+
+
 

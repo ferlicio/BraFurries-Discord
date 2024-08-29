@@ -2,6 +2,7 @@ from message_services.discord.routine_functions.routine_functions import *
 from message_services.discord.discord_events import *
 from commands.default_commands import calcular_idade
 from IA_Functions.terceiras.openAI import *
+from verification_functions.verification import *
 from discord.ext import tasks
 from models.bot import *
 from models.locals import *
@@ -134,33 +135,37 @@ async def configForVips(color=discord.Color.default()):
     VIPRoles = getVIPConfigurations(guild)['VIPRoles']
     VIPMembers = getVIPMembers(guild)
     if VIPRoles:
-        for member in VIPMembers:
-            if DISCORD_HAS_VIP_CUSTOM_ROLES:
-                customRole = discord.utils.get(guild.roles, name=f"{DISCORD_VIP_CUSTOM_ROLE_PREFIX} {member.name}")
-                if customRole == None:
-                    for role in member.roles:
-                        if role.name.__contains__(DISCORD_VIP_CUSTOM_ROLE_PREFIX):
-                            await role.edit(name=f"{DISCORD_VIP_CUSTOM_ROLE_PREFIX} {member.name}")
-                            customRole = role
-                            break
-                    if customRole == None:
-                        print(f'Não foi possível encontrar um cargo VIP para {member.name}')
-                        customRole = await guild.create_role(name=f"{DISCORD_VIP_CUSTOM_ROLE_PREFIX} {member.name}", color=color, mentionable=False, reason="Cargo criado para membros VIPs")
-                if DISCORD_HAS_ROLE_DIVISION:
-                    divisionStart = guild.get_role(DISCORD_VIP_ROLE_DIVISION_START_ID)
-                    divisionEnd = guild.get_role(DISCORD_VIP_ROLE_DIVISION_END_ID)
-                    await rearrangeRoleInsideInterval(guild, customRole.id, divisionStart, divisionEnd)
-                await member.add_roles(customRole)
         for role in guild.roles:
             if role.name.__contains__(DISCORD_VIP_CUSTOM_ROLE_PREFIX):
-                for member in role.members:
-                    if not VIPMembers.__contains__(member):
-                        await member.remove_roles(role)
-                        if role.color == discord.Color.default() and role.display_icon == None:
+                if role.color == discord.Color.default() and role.display_icon == None:
+                    await role.delete()
+                else:
+                    member = None
+                    for serverMember in role.members:
+                        if not VIPMembers.__contains__(serverMember):
+                            member = serverMember
+                            await serverMember.remove_roles(role)
+                    if role.members.__len__() == 0:
+                        regex = rf'(?:{DISCORD_VIP_CUSTOM_ROLE_PREFIX} )(.*)'
+                        pattern = re.compile(regex)
+                        MemberName = pattern.search(role.name).group(1)
+                        member = guild.get_member_named(MemberName)
+                        if member == None: 
                             await role.delete()
+                            continue
+                    hexColor = '#%02x%02x%02x' % (role.color.r, role.color.g, role.color.b)
+                    mydbAndCursor = startConnection()
+                    roleSaved = saveCustomRole(mydbAndCursor[0],guild.id, member, int(str(hexColor).replace('#','0x'),16))
+                    endConnectionWithCommit(mydbAndCursor)
+                    if roleSaved: await role.delete()
         VIPMembers = [obj.name for obj in VIPMembers] #transforma a lista de membros em uma lista de nomes
         print('Membros VIPs encontrados:')
         print(VIPMembers)
+        
+        mydbAndCursor = startConnection()
+        getAllCustomRoles(mydbAndCursor[0], guild.id)
+        endConnection(mydbAndCursor)
+        return
                 
     else:
         print(f'Não foi possível encontrar um cargo VIP no servidor {guild.name}')
@@ -185,7 +190,10 @@ Você pode procurar por uma cor em https://htmlcolorcodes.com/color-picker/ e te
         corFormatada = int(cor.replace('#','0x'),16)
         customRole = await addVipRole(ctx)
         await customRole.edit(color=corFormatada)
-        return await ctx.response.send_message(content=f'Cor do cargo VIP alterada para {cor} com sucesso!', ephemeral=False)
+        await ctx.response.send_message(content=f'Cor do cargo VIP alterada para {cor} com sucesso!', ephemeral=False)
+        mydbAndCursor = startConnection()
+        saveCustomRole(mydbAndCursor[0], ctx.guild_id, ctx.user, color=corFormatada)
+        return endConnectionWithCommit(mydbAndCursor)
     return await ctx.response.send_message(content='Você não é vip! você não pode fazer isso', ephemeral=True)
 
 @bot.tree.command(name=f'vip-mudar_icone', description=f'Muda o icone do cargo VIP do membro')
@@ -201,7 +209,10 @@ async def changeVipIcon(ctx: discord.Interaction, icon: str):
                     return await ctx.response.send_message(content='''Ícone inválido! apenas emojis do servidor são permitidos''', ephemeral=True)
                 icon = await emoji.read()
             await customRole.edit(display_icon=icon)
-            return await ctx.response.send_message(content='Ícone do cargo VIP alterado com sucesso!', ephemeral=False)
+            await ctx.response.send_message(content='Ícone do cargo VIP alterado com sucesso!', ephemeral=False)
+            mydbAndCursor = startConnection()
+            saveCustomRole(mydbAndCursor[0], ctx.guild_id, ctx.user, iconId=emoji.id)
+            return endConnectionWithCommit(mydbAndCursor)
         except Exception as e:
             print(e)
             return await ctx.response.send_message(content='''Algo deu errado, avise o titio sobre!''', ephemeral=True)
@@ -611,6 +622,58 @@ async def mission(ctx: discord.Interaction):
 ####################################################################################################################
 
 
+@bot.tree.command(name=f'relatorio-portaria', description=f'Gera um relatório de atividades na portaria')
+async def test(ctx: discord.Interaction, periodo:Literal['semana', 'mês']):
+    if periodo == 'semana':
+        InitialDate = datetime.now() - timedelta(days=7)
+    elif periodo == 'mês':
+        InitialDate = datetime.now() - timedelta(days=30)
+    await ctx.response.send_message(content='Gerando relatório...')
+    try:
+        channel = discord.utils.get(ctx.guild.channels, id=1140486877951033375)
+        staffRoles = [discord.utils.get(ctx.guild.roles, id=829140185777307658),
+        discord.utils.get(ctx.guild.roles, id=775483946501799947),
+        discord.utils.get(ctx.guild.roles, id=1100331034542886933)]
+        staffMembers = []
+        for role in staffRoles:
+            for member in role.members:
+                staffMembers.append(member)
+        membersStats = []
+        for staff in staffMembers:
+            membersStats.append({
+                'id': staff.id,
+                'name': staff.display_name,
+                'ticketsAttended': 0
+            })
+        totalTickets = 0
+        async for message in channel.history(limit=None, after=InitialDate, before=datetime.now()):
+            if message.author.id == 557628352828014614:
+                if message.embeds.__len__() >= 1:
+                    for field in message.embeds[0].fields:
+                        if field.name == 'Users in transcript':
+                            totalTickets +=1
+                            regex = r'<@(\d+)>'
+                            pattern = re.compile(regex)
+                            matchEmbeded = pattern.findall(field.value)
+                            if matchEmbeded:
+                                for user in matchEmbeded:
+                                    for staff in membersStats:
+                                        if int(user) == staff['id']:
+                                            staff['ticketsAttended'] += 1
+                                            continue
+            pass
+        response = 'Relatório de atividades na portaria:\n'
+        membersStats = sorted(membersStats, key= lambda m: m["ticketsAttended"], reverse=True)
+        for staff in membersStats:
+            response += '**{0:32}**  {1:10} tickets atendidos\n'.format(staff["name"],staff["ticketsAttended"])
+        response += f'\n**Periodo: {periodo}**'
+        response += f'\n**Total de tickets: {totalTickets}**'
+        await ctx.edit_original_response(content=response)
+    except:
+        await ctx.edit_original_response(content='Erro ao gerar o relatório!')
+    pass
+
+
 @bot.tree.command(name=f'perfil', description=f'Mostra o perfil de um membro')
 async def profile(ctx: discord.Interaction, member: discord.Member):
     await ctx.response.defer()
@@ -620,14 +683,30 @@ async def profile(ctx: discord.Interaction, member: discord.Member):
     profileDescription = generateUserDescription(memberProfile)
     embedUserProfile = discord.Embed(
         color=discord.Color.from_str('#febf10'),
-        title='@'+(member.name)+' (ID '+str(member.id)+")", 
+        title='{0} - ID {1:64}'.format(member.name,str(member.id)), 
         description=profileDescription)
     embedUserProfile.set_thumbnail(url=member.avatar.url)
     embedUserProfile.set_author(
-        name=(member.nick if member.nick != None else member.global_name)+f' (level {memberProfile.level})', 
+        name=(member.display_name)+f' (level {memberProfile.level})', 
         icon_url=member.guild_avatar.url if member.guild_avatar != None else member.avatar.url)
     embedUserProfile.set_footer(text=f'{memberProfile.warnings.__len__()} Warns{"  -  Ultimo warn em "+datetime.now().strftime("%d/%m/%Y") if memberProfile.warnings.__len__() > 0 else f""}{"  -  >> DE CASTIGO <<" if member.is_timed_out() else ""}')
     await ctx.followup.send(embed=embedUserProfile)
+
+
+@bot.tree.command(name=f'registrar_usuario', description=f'Registra um membro')
+async def profile(ctx: discord.Interaction, member: discord.Member, data_aprovacao:str, aniversario:str):
+    mydbAndCursor = startConnection()
+    data_aprovacao = verifyDate(data_aprovacao)
+    aniversario = verifyDate(aniversario)
+    await ctx.response.send_message(content='Registrando usuário...')
+    if not data_aprovacao: return await ctx.response.send_message(content='Data de aprovação no formato errado! use o formato dd/MM/YYYY')
+    if not aniversario: return await ctx.response.send_message(content='Data de aniversário no formato errado! use o formato dd/MM/YYYY')
+    registered = registerUser(mydbAndCursor[0], ctx.guild.id, member, aniversario, data_aprovacao)
+    endConnectionWithCommit(mydbAndCursor)
+    if registered:
+        return await ctx.edit_original_response(content='Membro registrado com sucesso!')
+    else: 
+        return await ctx.edit_original_response(content='Não foi possível registrar o usuário')
 
 
 """@bot.tree.command(name=f'adm-banir', description=f'Bane um membro do servidor')"""
@@ -651,7 +730,7 @@ async def warn(ctx: discord.Interaction, membro: discord.Member, motivo: str):
                 return await ctx.edit_original_response(content=f'Warn registrado com sucesso! total de {warnings["warningsCount"]} warns no membro {membro.mention} \nAvise ao membro sobre o risco de banimento!')
             else:
                 await membro.send(f'Você recebeu um warn por "{motivo}" e atingiu o limite de {warnings["warningsCount"]} warnings do servidor!')
-                return await ctx.edit_original_response(content=f'Warn registrado com sucesso! \nCom esse warn, o membro {membro.mention} atingiu o limite de warns do servidor')
+                return await ctx.edit_original_response(content=f'Warn registrado com sucesso! \nCom esse warn, o membro {membro.mention} atingiu o limite de warns do servidor e deverá ser **Banido**')
         return await ctx.edit_original_response(content=f'Não foi possível aplicar o warn no membro {membro.mention}')
     return await ctx.response.send_message(content='Você não tem permissão para fazer isso', ephemeral=True)
 
@@ -663,12 +742,13 @@ async def portariaCargos(ctx: discord.Interaction, member: discord.Member):
     carteirinhaDeCargos = ctx.guild.get_role(860492272054829077)
     for channel in portariaCategory.channels+provisoriaCategory.channels:
         if channel.permissions_for(member).send_messages:
-            if carteirinhaDeCargos in member.roles:
-                return await ctx.response.send_message(content=f'O membro <@{member.id}> ja está com a carteirinha de cargos!', ephemeral=True)
-            if (datetime.now().date() - member.created_at.date()).days < 30:
+            if (datetime.now().date() - member.created_at.date()).days < 30 and not channel.name.__contains__("provisória"):
                 return await ctx.response.send_message(content=f'''<@{member.id}> não pode pegar seus cargos agora! A conta foi criada a menos de 30 dias
         Use o comando "/portaria_aprovar" e apos 15 dias, quando vencer a carteirinha provisória, ele poderá pegar seus cargos''', ephemeral=True)
+            if carteirinhaDeCargos in member.roles:
+                return await ctx.response.send_message(content=f'O membro <@{member.id}> ja está com a carteirinha de cargos!', ephemeral=True)
             await member.add_roles(carteirinhaDeCargos)
+            await channel.edit(name=f'{channel.name}-🆔' if not channel.name.__contains__('-🆔') else channel.name)
             return await ctx.response.send_message(content=f'<@{member.id}> agora pode pegar seus cargos!', ephemeral=True)
     return await ctx.response.send_message(content=f'O membro <@{member.id}> não está na portaria', ephemeral=True)
 
@@ -723,7 +803,7 @@ async def approvePortaria(ctx: discord.Interaction, member: discord.Member, data
                                 return await ctx.edit_original_response(content=f'O membro <@{member.id}> ainda não pegou seus cargos!' if carteirinhaCargos in member.roles 
                                                                         else f'O membro <@{member.id}> ainda não tem a carteirinha de cargos, use o comando "/portaria_cargos" antes')
                             mydbAndCursor = startConnection()
-                            approveUser(mydbAndCursor[0], ctx.guild.id, member, birthday.date())
+                            registerUser(mydbAndCursor[0], ctx.guild.id, member, birthday.date())
                             endConnectionWithCommit(mydbAndCursor)
                             if age >= 6570: #18+ anos
                                 await member.add_roles(cargoMaior18)
@@ -797,8 +877,40 @@ async def addTempRole(ctx: discord.Interaction, member: discord.Member, role: di
 
 @bot.tree.command(name=f'testes', description=f'teste')
 async def test(ctx: discord.Interaction):
-
-    await ctx.response.send_message(content='testado')
+    guild = bot.get_guild(DISCORD_GUILD_ID)  # Substitua ID_DO_SERVIDOR pelo ID do seu servidor
+    VIPRoles = getVIPConfigurations(guild)['VIPRoles']
+    VIPMembers = getVIPMembers(guild)
+    await ctx.response.send_message(content=f'Carregando...', ephemeral=True)
+    if VIPRoles:
+        #deletar os que não tem config
+        #salvar e deletar os que não tem mais vip/não tem membros com cargo
+        for role in guild.roles:
+            if role.name.__contains__(DISCORD_VIP_CUSTOM_ROLE_PREFIX):
+                if role.color == discord.Color.default() and role.display_icon == None:
+                    await role.delete()
+                else:
+                    member = None
+                    for serverMember in role.members:
+                        if not VIPMembers.__contains__(serverMember):
+                            member = serverMember
+                            await serverMember.remove_roles(role)
+                    if role.members.__len__() == 0:
+                        regex = rf'(?:{DISCORD_VIP_CUSTOM_ROLE_PREFIX} )(.*)'
+                        pattern = re.compile(regex)
+                        MemberName = pattern.search(role.name).group(1)
+                        member = guild.get_member_named(MemberName)
+                        if member == None: 
+                            await role.delete()
+                            continue
+                    hexColor = '#%02x%02x%02x' % (role.color.r, role.color.g, role.color.b)
+                    mydbAndCursor = startConnection()
+                    roleSaved = saveCustomRole(mydbAndCursor[0],guild.id, member, int(str(hexColor).replace('#','0x'),16))
+                    endConnectionWithCommit(mydbAndCursor)
+                    if roleSaved: await role.delete()
+        return
+    mydbAndCursor = startConnection()
+    getAllCustomRoles(mydbAndCursor[0], ctx.guild_id)
+    endConnection(mydbAndCursor)
 
 
 #@bot.tree.command(name='mod-calc_idade', description=f'Use esse recurso para calcular a idade de alguém de acordo com a data de nascimento')
