@@ -174,10 +174,10 @@ async def removeTempRoles(bot:commands.Bot):
 
 async def mentionArtRoles(bot, message:discord.Message):
     guild = bot.get_guild(DISCORD_GUILD_ID)
-    if (message.author.roles.__contains__(guild.get_role(835120204270534707))
-        and message.channel.type == discord.ChannelType.public_thread
+    if (message.channel.type == discord.ChannelType.public_thread
         and message.channel.parent.id == 1210574829107945513
         and message.channel.owner == message.author
+        and message.owner.roles.__contains__(guild.get_role(835120204270534707))
         ):
         availableMentions = ['#YCH', '#Rifa', '#Sorteio', '#Adopt']
         mentionableRoles = [1217107416701997147,1217109127482834965,1217109253647503411,1217112597565014128]
