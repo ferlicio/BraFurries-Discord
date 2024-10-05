@@ -363,9 +363,12 @@ async def listBirthdays(ctx: discord.Interaction):
     result = getAllBirthdays(mydbAndCursor[0])
     endConnection(mydbAndCursor)
     if result:
+        # troca os userIDs por usernames
+        for birthday in result:
+            birthday['user'] = ctx.guild.get_member(birthday['user_id'])
         birthdaysResponse = ',\n'.join(
-    f'{birthday["username"]} - {birthday["birth_date"].strftime("%d/%m")}'
-    for birthday in sorted(result, key=lambda birthday: birthday["birth_date"]))
+    f'{birthday["birth_date"].strftime("%d/%m")} - {birthday["user"].display_name}'
+    for birthday in sorted(result, key=lambda birthday: (birthday["birth_date"].month, birthday["birth_date"].day)) if birthday["user"] != None)
         return await ctx.followup.send(content=f'Aqui estão os aniversários registrados:```{birthdaysResponse}```')
     else:
         return await ctx.followup.send(content=f'Não há aniversários registrados... que tal ser o primeiro? :3')

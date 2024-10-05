@@ -359,17 +359,17 @@ WHERE user_id = '{user_id}';"""
 
 def getAllBirthdays(mydb):
     cursor = mydb.cursor()
-    query = f"""SELECT users.username, user_birthday.birth_date
-FROM users
-JOIN user_birthday ON users.id = user_birthday.user_id
+    query = f"""SELECT discord_user.discord_user_id, user_birthday.birth_date
+FROM discord_user
+JOIN user_birthday ON discord_user.user_id = user_birthday.user_id
 WHERE user_birthday.mentionable = 1;"""
     cursor.execute(query)
     myresult = cursor.fetchall()
     #convertendo para uma lista de dicionários
-    myresult = [{'username': i[0], 'birth_date': i[1]} for i in myresult]
+    myresult = [{'user_id': i[0], 'birth_date': i[1]} for i in myresult]
     return myresult
 
-def getUserInfo(mydb, user:discord.Member, guildId:discord.Guild.id, userId:int=None) -> User:
+def getUserInfo(mydb, user:discord.Member, guildId:int, userId:int=None) -> User:
     cursor = mydb.cursor()
     if userId != None:
         user_id = userId
