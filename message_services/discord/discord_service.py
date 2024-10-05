@@ -19,6 +19,8 @@ for DISCORD_INTENT in DISCORD_INTENTS:
     setattr(intents, DISCORD_INTENT, True)
 bot = MyBot(config=None,command_prefix=DISCORD_BOT_PREFIX, intents=discord.Intents.all())
 levelConfig = None
+timezone_offset = -3.0  # Pacific Standard Time (UTC−08:00)
+tzinfo = timezone(timedelta(hours=timezone_offset))
 
 
 @bot.event
@@ -104,26 +106,98 @@ async def bumpWarning():
 
 @tasks.loop(hours=24) #0.16   10 minutos
 async def bumpReward():
+    #esperar até meio dia para dar o cargo
+    waitTime = 12 - datetime.now(tzinfo).hour if datetime.now(tzinfo).hour < 12 else 36 - datetime.now(tzinfo).hour
+    await asyncio.sleep(waitTime*3600)
     # se for dia de recompensa(dia 1 do mês), dará o cargo para os tres primeiro que deram mais bump no mês(exceto os que já tem o cargo VIP)
-    if datetime.now().day == 1:
+    if datetime.now(tzinfo).day == 1:
         #pegas as mensagens do ultimo mês no canal de bump
         channel = bot.get_channel(853971735514316880)
-        bumpers = {}
-        async for msg in channel.history(limit=300):
-            # se a mensagem for do bot e for do mês passado, conta como bump
-            if msg.author.id == 302050872383242240 and (msg.created_at.month == datetime.now().month - 1 or (msg.created_at.month == 12 and datetime.now().month == 1)):
-                # agora vamos criar uma key para cada membro que deu bump
-                if not bumpers.__contains__(msg.interaction.user.name):
-                    bumpers[msg.interaction.user.name] = 0
-                bumpers[msg.interaction.user.name] += 1
-        bumpers = dict(sorted(bumpers.items(), key=lambda item: item[1], reverse=True))
-        # agora vamos mandar uma mensagem privada para o titio derg com os membros que deram mais bump
         guild = bot.get_guild(DISCORD_GUILD_ID)
+        vipRoles = getVIPConfigurations(guild)['VIPRoles']
+        bumpers = {}
+        bumpersNames = {}
+        async for msg in channel.history(after=datetime.now()-timedelta(days=30)):
+            # se a mensagem for do bot e for do mês passado, conta como bump
+            if msg.author.id == 302050872383242240:
+                # agora vamos criar uma key para cada membro que deu bump
+                if not bumpers.__contains__(msg.interaction.user.id):
+                    bumpers[msg.interaction.user.id] = 0
+                    bumpersNames[msg.interaction.user.name] = 0
+                bumpers[msg.interaction.user.id] += 1
+                bumpersNames[msg.interaction.user.name] += 1
+        bumpers = dict(sorted(bumpers.items(), key=lambda item: item[1], reverse=True))
+        bumpersNames = dict(sorted(bumpersNames.items(), key=lambda item: item[1], reverse=True))
+        otherBumpers = bumpers.copy()
+        topBumpers:list[discord.User] = []
+        alreadyVipMembers = []
+        for i in range(20):
+            member = guild.get_member(list(bumpers.keys())[i])
+            otherBumpers.pop(member.id)
+            if member == None:
+                continue
+            topBumpers.append(member)
+            if vipRoles in member.roles:
+                alreadyVipMembers.append(member)
+            if [member for member in topBumpers if member not in alreadyVipMembers].__len__() == 3 or i == (bumpers.__len__()-1):
+                break
+        for idx, membro in enumerate([member for member in topBumpers if member not in alreadyVipMembers]):
+            mydbAndCursor = startConnection()
+            if idx == 0:
+                await membro.add_roles(guild.get_role(DISCORD_VIP_ROLES_ID[1]))
+                assignTempRole(mydbAndCursor[0], guild.id, membro, DISCORD_VIP_ROLES_ID[1], datetime.now()+timedelta(days=21), "Bump Reward")
+                await membro.send(f"""Parabéns! Você foi um dos top 3 bumpers do mês passado no servidor da BraFurries e ganhou o cargo VIP {guild.get_role(DISCORD_VIP_ROLES_ID[1]).name} por 3 semanas!""")
+                (f"""
+Junto com o cargo, você também ganhou 1 nivel de VIP e algumas moedas! (em implementação)""")
+            if idx == 1:
+                await membro.add_roles(guild.get_role(DISCORD_VIP_ROLES_ID[1]))
+                assignTempRole(mydbAndCursor[0], guild.id, membro, DISCORD_VIP_ROLES_ID[1], datetime.now()+timedelta(days=14), "Bump Reward")
+                await membro.send(f"""Parabéns! Você foi um dos top 3 bumpers do mês passado no servidor da BraFurries e ganhou o cargo VIP {guild.get_role(DISCORD_VIP_ROLES_ID[1]).name} por 2 semanas!""")
+                (f"""
+Junto com o cargo, você também ganhou algumas moedas! (em implementação)""")
+            if idx == 2:
+                await membro.add_roles(guild.get_role(DISCORD_VIP_ROLES_ID[1]))
+                assignTempRole(mydbAndCursor[0], guild.id, membro, DISCORD_VIP_ROLES_ID[1], datetime.now()+timedelta(days=7), "Bump Reward")
+                await membro.send(f"Parabéns! Você foi um dos top 3 bumpers do mês passado no servidor da BraFurries e ganhou o cargo VIP {guild.get_role(DISCORD_VIP_ROLES_ID[1]).name} por 1 semana!")
+            endConnectionWithCommit(mydbAndCursor)
+            
+        for idx, membro in enumerate([member for member in topBumpers if member in alreadyVipMembers]):
+            mydbAndCursor = startConnection()
+            if idx == 0:
+                if membro == topBumpers[0]:
+                    await membro.send(f"""Parabéns! Você foi o membro que mais deu bump no servidor da BraFurries no mês passado! 
+
+Obrigado de coração por ajudar o servidor a crescer! <3""")
+                    "Porém como você ja tem um cargo VIP, apenas iremos adicionar 1 nivel de VIP para você e mais algumas moedas(em implementação)!"
+            if idx == 1:
+                if membro == topBumpers[1]:
+                    await membro.send(f"""Parabéns! Você foi o segundo membro que mais deu bump no servidor da BraFurries no mês passado!
+
+Obrigado de coração por ajudar o servidor a crescer! <3""")
+                    "Porém como você ja tem um cargo VIP, apenas iremos adicionar algumas moedas ao seu inventário!(em implementação)"
+            if idx == 2:
+                if membro == topBumpers[2]:
+                    await membro.send(f"""Parabéns! Você foi o terceiro membro que mais deu bump no servidor da BraFurries no mês passado!
+
+Obrigado de coração por ajudar o servidor a crescer! <3""")
+                    "Porém como você ja tem um cargo VIP, apenas iremos adicionar algumas moedas ao seu inventário!(em implementação)"
+            endConnectionWithCommit(mydbAndCursor)
+        
+        for membroId in otherBumpers:
+            membro = guild.get_member(membroId)
+            try:
+                print("agradecer bump: "+membro.name)
+                await membro.send(f"""Oiê! Só passando para agradecer por ter dado bump no servidor da BraFurries no mês passado!
+Você pode não ter sido um dos top 3 bumpers, mas saiba que sua ajuda é muito importante para o nosso servidor crescer! <3""")
+            except:
+                print(f"membro não encontrado: ${membroId}")
+            
+        # agora vamos mandar uma mensagem privada para o titio derg com os membros que deram mais bump
         titio = guild.get_member(167436511787220992)
         message = f"Os membros que deram bump no mês passado foram: \n"
-        for member in bumpers:
+        for member in bumpersNames:
             # se for o ultimo membro adiciona \n no final
-            message += f"{member}: {bumpers[member]}"+ ("" if list(bumpers.keys())[-1] == member else "\n")
+            message += f"{member}: {bumpersNames[member]}"+ ("" if list(bumpersNames.keys())[-1] == member else "\n")
         await titio.send(message)
         
 
@@ -279,7 +353,7 @@ async def registerBirthday(ctx: discord.Interaction, data: str, mencionavel: Lit
     if result:
         return await ctx.followup.send(content=f'você foi registrado com o aniversário {data}!', ephemeral=False)
     else:
-        return await ctx.followup.send(content=f'Você ja está registrado', ephemeral=True)
+        return await ctx.followup.send(content=f'Você ja está registrado. Yay! :3', ephemeral=True)
     
 
 @bot.tree.command(name=f'aniversarios', description=f'Lista todos os aniversários registrados')
@@ -699,14 +773,37 @@ async def profile(ctx: discord.Interaction, member: discord.Member, data_aprovac
     data_aprovacao = verifyDate(data_aprovacao)
     aniversario = verifyDate(aniversario)
     await ctx.response.send_message(content='Registrando usuário...')
-    if not data_aprovacao: return await ctx.response.send_message(content='Data de aprovação no formato errado! use o formato dd/MM/YYYY')
-    if not aniversario: return await ctx.response.send_message(content='Data de aniversário no formato errado! use o formato dd/MM/YYYY')
+    if not data_aprovacao: return await ctx.edit_original_response(content='Data de aprovação no formato errado! use o formato dd/MM/YYYY')
+    if not aniversario: return await ctx.edit_original_response(content='Data de aniversário no formato errado! use o formato dd/MM/YYYY')
     registered = registerUser(mydbAndCursor[0], ctx.guild.id, member, aniversario, data_aprovacao)
     endConnectionWithCommit(mydbAndCursor)
     if registered:
         return await ctx.edit_original_response(content='Membro registrado com sucesso!')
     else: 
         return await ctx.edit_original_response(content='Não foi possível registrar o usuário')
+    
+    
+@bot.tree.command(name=f'liberar_acesso_nsfw', description=f'Libera o acesso NSFW para o membro')
+async def profile(ctx: discord.Interaction, member: discord.Member, data_aniversario:str):
+    data_aniversario = verifyDate(data_aniversario)
+    if data_aniversario == False:
+        return await ctx.response.send_message(content='Data de aniversário inválida! use o formato dd/MM/YYYY', ephemeral=True)
+    if (datetime.now().date() - data_aniversario).days < 18*365:
+        return await ctx.response.send_message(content='O membro não tem 18 anos ainda! não pode acessar conteúdo NSFW', ephemeral=True)
+    await ctx.response.send_message(content='Processando...', ephemeral=True)
+    approved = grantNSFWAccess(ctx.guild.id, member, data_aniversario)
+    if (discord.utils.get(ctx.guild.roles, id=DISCORD_NSFW_ROLE) in member.roles):
+        return await ctx.edit_original_response(content='O membro já tem acesso NSFW!')
+    if approved == True:
+        await member.add_roles(discord.utils.get(ctx.guild.roles, id=DISCORD_NSFW_ROLE))
+        return await ctx.edit_original_response(content='Acesso liberado com sucesso!')
+    elif approved == 'not_registered':
+        return await ctx.edit_original_response(content=f'''O membro não está registrado no sistema! 
+Use o comando /registrar_usuario para registrar o membro e tente novamente''')
+    elif approved == 'dont_match':
+        return await ctx.edit_original_response(content=f'''A data de aniversário informada não corresponde ao registro!''')
+    else:
+        return await ctx.edit_original_response(content='Ocorreu um erro ao aprovar o membro')
 
 
 """@bot.tree.command(name=f'adm-banir', description=f'Bane um membro do servidor')"""
@@ -849,7 +946,7 @@ async def callAdmin(ctx: discord.Interaction, message: str):
 
 
 @bot.tree.command(name=f'temp_role', description=f'Adiciona um cargo temporário a um membro')
-async def addTempRole(ctx: discord.Interaction, member: discord.Member, role: discord.Role, duration: str):
+async def addTempRole(ctx: discord.Interaction, member: discord.Member, role: discord.Role, duration: str, reason: str= None):
     mydbAndCursor = startConnection()
     #duration pode ser dias(d), semanas(s), meses(m). exemplo: 1d, 2s, 3m
     ####### adicionar para aceitar data especifica também
@@ -858,15 +955,13 @@ async def addTempRole(ctx: discord.Interaction, member: discord.Member, role: di
         return await ctx.response.send_message(content='''Duração inválida! Você informou uma duração no formato "1d", "2s" ou "3m"?\nSiglas: d=dias, s=semanas, m=meses''', ephemeral=True)
     if int(duration[:-1]) == 0:
         return await ctx.response.send_message(content='''Duração inválida! Você informou uma duração maior que 0?''', ephemeral=True)
-    if role in member.roles:
-        return await ctx.response.send_message(content=f'O membro <@{member.id}> já tem o cargo {role.name}!', ephemeral=True)
     #calcula qual vai ser a data de expiração do cargo
     if duration[-1] == 'd':
         duration = timedelta(days=int(duration[:-1]))
     elif duration[-1] == 's':
         duration = timedelta(weeks=int(duration[:-1]))
     else:
-        duration = timedelta(months=int(duration[:-1]))
+        duration = timedelta(days=int(duration[:-1])*30)
     expiration_date = datetime.utcnow() + duration
     await ctx.response.send_message(content=f'Adicionando o cargo...', ephemeral=True)
     roleAssignment = assignTempRole(mydbAndCursor[0], ctx.guild_id, member, role.id, expiration_date, 'porque sim')
@@ -877,40 +972,8 @@ async def addTempRole(ctx: discord.Interaction, member: discord.Member, role: di
 
 @bot.tree.command(name=f'testes', description=f'teste')
 async def test(ctx: discord.Interaction):
-    guild = bot.get_guild(DISCORD_GUILD_ID)  # Substitua ID_DO_SERVIDOR pelo ID do seu servidor
-    VIPRoles = getVIPConfigurations(guild)['VIPRoles']
-    VIPMembers = getVIPMembers(guild)
-    await ctx.response.send_message(content=f'Carregando...', ephemeral=True)
-    if VIPRoles:
-        #deletar os que não tem config
-        #salvar e deletar os que não tem mais vip/não tem membros com cargo
-        for role in guild.roles:
-            if role.name.__contains__(DISCORD_VIP_CUSTOM_ROLE_PREFIX):
-                if role.color == discord.Color.default() and role.display_icon == None:
-                    await role.delete()
-                else:
-                    member = None
-                    for serverMember in role.members:
-                        if not VIPMembers.__contains__(serverMember):
-                            member = serverMember
-                            await serverMember.remove_roles(role)
-                    if role.members.__len__() == 0:
-                        regex = rf'(?:{DISCORD_VIP_CUSTOM_ROLE_PREFIX} )(.*)'
-                        pattern = re.compile(regex)
-                        MemberName = pattern.search(role.name).group(1)
-                        member = guild.get_member_named(MemberName)
-                        if member == None: 
-                            await role.delete()
-                            continue
-                    hexColor = '#%02x%02x%02x' % (role.color.r, role.color.g, role.color.b)
-                    mydbAndCursor = startConnection()
-                    roleSaved = saveCustomRole(mydbAndCursor[0],guild.id, member, int(str(hexColor).replace('#','0x'),16))
-                    endConnectionWithCommit(mydbAndCursor)
-                    if roleSaved: await role.delete()
-        return
-    mydbAndCursor = startConnection()
-    getAllCustomRoles(mydbAndCursor[0], ctx.guild_id)
-    endConnection(mydbAndCursor)
+    print(datetime.now(tzinfo).hour)
+        
 
 
 #@bot.tree.command(name='mod-calc_idade', description=f'Use esse recurso para calcular a idade de alguém de acordo com a data de nascimento')
