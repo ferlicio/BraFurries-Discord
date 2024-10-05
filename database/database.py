@@ -331,12 +331,25 @@ WHERE locale.locale_abbrev = '{abbrev}';"""
             myresult = [i[0] for i in myresult]
             return myresult
         
-def includeBirthday(mydb, guildId: discord.Guild.id, date:date, user:discord.User, mentionable:bool, userId:int=None):
+def includeBirthday(mydb, guildId: int, date:date, user:discord.User, mentionable:bool, userId:int=None):
     if userId != None:
         user_id = userId
     else:
         user_id = includeUser(mydb, user, guildId)
     cursor = mydb.cursor()
+    query = f"""SELECT user_id FROM user_birthday WHERE user_id = '{user_id}' AND mentionable = 0;"""
+    cursor.execute(query)
+    myresult = cursor.fetchone()
+    if myresult != None:
+        query = f"""SELECT approved_at FROM user_community_status WHERE user_id = '{user_id}';"""
+        cursor.execute(query)
+        approved_at = cursor.fetchone()
+        approved_at = datetime.strptime(f"{approved_at[0]}", '%Y-%m-%d %H:%M:%S')
+        query = f"""UPDATE user_birthday
+SET birth_date = '{date}', mentionable = {mentionable}{f", verified = 1" if (datetime.now() - approved_at).days > 40 else ''}
+WHERE user_id = '{user_id}';"""
+        cursor.execute(query)
+        return True
     try:
         query = f"""INSERT INTO user_birthday (user_id, birth_date, verified, mentionable) VALUES ('{user_id}','{date}',FALSE,{mentionable});"""
         cursor.execute(query)
@@ -406,7 +419,7 @@ WHERE users.id = '{user_id}';"""
     return user
     
 
-def includeEvent(mydb, user: Union[discord.User,str], locale_id:int, city:str, event_name:str, address:str, price:float, starting_datetime: datetime, ending_datetime: datetime, description: str, group_link:str, website:str, max_price:float, event_logo_url:str):
+def includeEvent(mydb, user: Union[discord.Member,str], locale_id:int, city:str, event_name:str, address:str, price:float, starting_datetime: datetime, ending_datetime: datetime, description: str, group_link:str, website:str, max_price:float, event_logo_url:str):
     user_id = includeUser(mydb, user)
     cursor = mydb.cursor()
     creds = getCredentials()
@@ -672,7 +685,7 @@ def updateDateEvent(mydb, myresult, new_starting_datetime:datetime, user:str, is
     except HttpError as error:
         print('An error occurred: %s' % error)
 
-def admConnectTelegramAccount(mydb, discord_user:discord.User, telegram_user:str):
+def admConnectTelegramAccount(mydb, discord_user:discord.Member, telegram_user:str):
     cursor = mydb.cursor()
     #checa se o usuário já está cadastrado no banco de dados
     user_id = includeUser(mydb, discord_user)
@@ -692,7 +705,7 @@ def admConnectTelegramAccount(mydb, discord_user:discord.User, telegram_user:str
         return True
     
 
-def assignTempRole(mydb, guild_id:int, discord_user:discord.User, role_id:str, expiring_date:datetime, reason:str):
+def assignTempRole(mydb, guild_id:int, discord_user:discord.Member, role_id:str, expiring_date:datetime, reason:str):
     cursor = mydb.cursor()
     query = f"""SELECT id FROM discord_servers WHERE guild_id = '{guild_id}';"""
     cursor.execute(query)
@@ -737,7 +750,7 @@ WHERE id = {tempRoleDBId}"""
     cursor.execute(query)
     return True
 
-def warnMember(mydb, guild_id:int, discord_user:discord.User, reason:str):
+def warnMember(mydb, guild_id:int, discord_user:discord.Member, reason:str):
     cursor = mydb.cursor()
     user_id = includeUser(mydb, discord_user, guild_id)
     query = f"""SELECT community_id FROM discord_servers WHERE guild_id = '{guild_id}';"""
@@ -763,7 +776,7 @@ WHERE community_id = '{community_id}';"""
         print(e)
         return False
     
-def getWarnings(mydb, guild_id:int, discord_user:discord.User):
+def getWarnings(mydb, guild_id:int, discord_user:discord.Member):
     cursor = mydb.cursor()
     user_id = includeUser(mydb, discord_user, guild_id)
     query = f"""SELECT community_id FROM discord_servers WHERE guild_id = '{guild_id}';"""
@@ -789,12 +802,12 @@ def getStaffRoles(mydb, guild_id:int):
     myresult = cursor.fetchall()
     return myresult[0][0]
 
-def registerUser(mydb, guild_id:int, discord_user:discord.User, birthday:date, approved_date:date=None):
+def registerUser(mydb, guild_id:int, discord_user:discord.Member, birthday:date, approved_date:date=None):
     userId = includeUser(mydb, discord_user, guild_id, datetime.now() if approved_date==None else approved_date)
     includeBirthday(mydb, guild_id, birthday, discord_user, False, userId)
     return True
 
-def saveCustomRole(mydb, guild_id:int, discord_user:discord.User, color:str=None, iconId:int=None):
+def saveCustomRole(mydb, guild_id:int, discord_user:discord.Member, color:str=None, iconId:int=None):
     if color == None and iconId == None: return False
     try:
         user_id = includeUser(mydb, discord_user, guild_id)
@@ -834,3 +847,35 @@ WHERE user_custom_roles.server_guild_id = '{guild_id}'
     for customRole in myresult:
         customRoles.append(CustomRole(customRole[0],customRole[1],customRole[2]))
     return customRoles
+
+
+def grantNSFWAccess(guild_id:int, discord_user:discord.Member, birthday:date):
+    mydbAndCursor = startConnection()
+    cursor = mydbAndCursor[1]
+    approved = False
+    try:
+        user_id = includeUser(mydbAndCursor[0], discord_user, guild_id)
+        query = f"""SELECT user_id, birth_date FROM user_birthday
+WHERE user_id = {user_id}"""
+        cursor.execute(query)
+        myresult = cursor.fetchone()
+        if myresult != None:
+            databaseBirthday = datetime.strptime(f"{myresult[1]}", '%Y-%m-%d').date()
+            if databaseBirthday == birthday:
+                query = f"""UPDATE user_birthday
+SET verified = 1
+WHERE user_id = {user_id}"""
+                cursor.execute(query)
+                approved = True
+            else:
+                approved = 'dont_match'
+        else:
+            approved = 'not_registered'
+        return approved
+    except Exception as e: 
+        return approved
+    finally:
+        if approved:
+            endConnectionWithCommit(mydbAndCursor)
+        else:
+            endConnection(mydbAndCursor)
