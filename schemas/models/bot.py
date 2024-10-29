@@ -3,7 +3,10 @@ from discord.ext import commands
 class Config:
     def __init__(self, config_dict):
         for key, value in config_dict.items():
-            setattr(self, key, value)
+            if key == 'guildId':
+                self.guildId = value
+            else:
+                setattr(self, key, value)
         self.levels = {}
         self.economy = {}
         self.gptModel = {}
