@@ -8,7 +8,9 @@ from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
-from models.user import User, CustomRole
+from schemas.models.user import User, CustomRole, Warning
+from schemas.enums.server_messages import ServerMessagesEnum
+from schemas.models.user import SimpleUserBirthday
 import os.path
 import dotenv
 
@@ -43,21 +45,14 @@ def connectToDatabase():
     )
     return mydb
 
-def startConnection():
-    mydb = connectToDatabase()
+def endConnection(mydb):
     cursor = mydb.cursor()
-    return [mydb, cursor]
-
-def endConnection(mydbAndCursor:list):
-    mydb = mydbAndCursor[0]
-    cursor = mydbAndCursor[1]
     mydb.close()
     cursor.close()
 
-def endConnectionWithCommit(mydbAndCursor:list):
-    mydb = mydbAndCursor[0]
+def endConnectionWithCommit(mydb):
     mydb.commit()
-    endConnection(mydbAndCursor)
+    endConnection(mydb)
 
 
 def getConfig(guild:discord.Guild):
@@ -199,13 +194,13 @@ def getAllLocals(mydb):
 
 
 
-def includeUser(mydb, user: Union[discord.Member,str], guildId:discord.Guild.id=os.getenv('DISCORD_GUILD_ID'), approvedAt:datetime=None):
+def includeUser(mydb, user: Union[discord.Member,str], guildId:int=os.getenv('DISCORD_GUILD_ID'), approvedAt:datetime=None):
     cursor = mydb.cursor(buffered=True)
     if type(user) != str:
         username = user.name
         displayName = user.display_name
         memberSince = user.joined_at.strftime('%Y-%m-%d %H:%M:%S')
-        approved = 0 if discord.utils.get(user.guild.roles, id=860453882323927060) in user.roles else 1
+        approved = 0 if discord.utils.get(user.guild.roles, id=860453882323927060) in user.roles or approvedAt == None else 1
     else:
         username = user
         displayName = user
@@ -278,33 +273,34 @@ WHERE user_id = '{user_id}';"""
         query = f"""INSERT INTO users (display_name, username)
     VALUES ('{displayName}','{username}');"""
         cursor.execute(query)
-    finally:
-        # Obter o id do usuário na tabela `users`
-        query = f"""SELECT id FROM users WHERE username = '{username}';"""
-        cursor.execute(query)
-        result = cursor.fetchone()
-        user_id = result[0]
-        # Inserir o usuário na tabela `user_community_status`
-        query = f"""SELECT community_id FROM discord_servers WHERE guild_id = '{guildId}';"""
-        cursor.execute(query)
-        result = cursor.fetchone()
-        community_id = result[0]
-        query = f"""INSERT INTO user_community_status (user_id, community_id, member_since, approved, approved_at, is_vip, banned)
-    VALUES ({user_id}, {community_id}, '{memberSince}', {approved}, {"'"+approvedAt+"'" if approvedAt != None else 'NULL'}, false, false);"""
-        cursor.execute(query)
+    except:
+        raise Exception('Nome de usuário inválido. Não é possivel aprovar membros com caracteres especiais.')
+    # Obter o id do usuário na tabela `users`
+    query = f"""SELECT id FROM users WHERE username = '{username}';"""
+    cursor.execute(query)
+    result = cursor.fetchone()
+    user_id = result[0]
+    # Inserir o usuário na tabela `user_community_status`
+    query = f"""SELECT community_id FROM discord_servers WHERE guild_id = '{guildId}';"""
+    cursor.execute(query)
+    result = cursor.fetchone()
+    community_id = result[0]
+    query = f"""INSERT INTO user_community_status (user_id, community_id, member_since, approved, approved_at, is_vip, banned)
+VALUES ({user_id}, {community_id}, '{memberSince}', {approved}, {"'"+approvedAt+"'" if approvedAt != None else 'NULL'}, false, false);"""
+    cursor.execute(query)
 
-        # Inserir o usuário na tabela `discord_user`
-        try:
-            query = f"""INSERT INTO discord_user (user_id, discord_user_id, username, display_name)
-                VALUES ({user_id}, {user.id}, '{username}', '{user.nick}');""" if type(user) != str else f"""
-                INSERT IGNORE INTO telegram_user (user_id, username, display_name)
-                VALUES ({user_id}, '{user}', '{username}';"""
-            cursor.execute(query)
-        except:
-            pass
-        return user_id
+    # Inserir o usuário na tabela `discord_user`
+    try:
+        query = f"""INSERT INTO discord_user (user_id, discord_user_id, username, display_name)
+            VALUES ({user_id}, {user.id}, '{username}', '{user.nick}');""" if type(user) != str else f"""
+            INSERT IGNORE INTO telegram_user (user_id, username, display_name)
+            VALUES ({user_id}, '{user}', '{username}';"""
+        cursor.execute(query)
+    except:
+        raise Exception('Nome de usuário inválido. Não é possivel aprovar membros com caracteres especiais.')
+    return user_id
 
-def includeLocale(mydb, guildId: discord.Guild.id, abbrev:str, user:discord.User, availableLocals:list):
+def includeLocale(mydb, guildId: int, abbrev:str, user:discord.User, availableLocals:list):
     user_id = includeUser(mydb, user, guildId)
     cursor = mydb.cursor()
     for local in availableLocals:
@@ -331,33 +327,34 @@ WHERE locale.locale_abbrev = '{abbrev}';"""
             myresult = [i[0] for i in myresult]
             return myresult
         
-def includeBirthday(mydb, guildId: int, date:date, user:discord.User, mentionable:bool, userId:int=None):
+def includeBirthday(mydb, guildId: int, date:date, user:discord.User, mentionable:bool, userId:int=None, registered:bool=False):
     if userId != None:
         user_id = userId
     else:
         user_id = includeUser(mydb, user, guildId)
     cursor = mydb.cursor()
-    query = f"""SELECT user_id FROM user_birthday WHERE user_id = '{user_id}' AND mentionable = 0;"""
+    query = f"""SELECT user_id, birth_date FROM user_birthday WHERE user_id = '{user_id}' AND registered = 0;"""
     cursor.execute(query)
-    myresult = cursor.fetchone()
-    if myresult != None:
+    birthday = cursor.fetchone()
+    if birthday != None:
         query = f"""SELECT approved_at FROM user_community_status WHERE user_id = '{user_id}';"""
         cursor.execute(query)
         approved_at = cursor.fetchone()
         approved_at = datetime.strptime(f"{approved_at[0]}", '%Y-%m-%d %H:%M:%S')
         query = f"""UPDATE user_birthday
-SET birth_date = '{date}', mentionable = {mentionable}{f", verified = 1" if (datetime.now() - approved_at).days > 40 else ''}
+SET mentionable = {mentionable}, registered = 1{f", verified = 1" if (datetime.now() - approved_at).days > 40 and date == birthday[1] else ''}
 WHERE user_id = '{user_id}';"""
         cursor.execute(query)
         return True
     try:
-        query = f"""INSERT INTO user_birthday (user_id, birth_date, verified, mentionable) VALUES ('{user_id}','{date}',FALSE,{mentionable});"""
+        query = f"""INSERT INTO user_birthday (user_id, birth_date, verified, mentionable, registered) VALUES ('{user_id}','{date}',FALSE,{mentionable},{registered});"""
         cursor.execute(query)
         return True
     except:
         return False
 
-def getAllBirthdays(mydb):
+def getAllBirthdays():
+    mydb = connectToDatabase()
     cursor = mydb.cursor()
     query = f"""SELECT discord_user.discord_user_id, user_birthday.birth_date
 FROM discord_user
@@ -365,12 +362,14 @@ JOIN user_birthday ON discord_user.user_id = user_birthday.user_id
 WHERE user_birthday.mentionable = 1;"""
     cursor.execute(query)
     myresult = cursor.fetchall()
+    endConnection(mydb)
     #convertendo para uma lista de dicionários
     myresult = [{'user_id': i[0], 'birth_date': i[1]} for i in myresult]
     return myresult
 
-def getUserInfo(mydb, user:discord.Member, guildId:int, userId:int=None) -> User:
-    cursor = mydb.cursor()
+def getUserInfo(user:discord.Member, guildId:int, userId:int=None) -> User:
+    mydb = connectToDatabase()
+    cursor = mydb.cursor(buffered=True)
     if userId != None:
         user_id = userId
     else:
@@ -390,17 +389,19 @@ LEFT JOIN warnings ON warnings.user_id = users.id
 LEFT JOIN user_economy ON user_economy.user_id = users.id AND user_economy.server_guild_id = '{guildId}'
 WHERE discord_user.user_id = '{user_id}';"""
     cursor.execute(query)
-    myresult = cursor.fetchone()
-    propriedades = ['discord_user_id', 'display_name', 'member_since', 'approved', 'approved_at', 'is_vip', 'is_partner', 'level', 'birth_date', 'verified_birth_date', 'locale', 'bank_balance']
-    userDict = dict(zip(propriedades, myresult))
-    query = f"""SELECT warnings.reason, warnings.date
+    dbUser = cursor.fetchone()
+    userToReturn = User(id=user_id, discordId=dbUser[0], username=user.name, displayName=user.display_name, 
+                        memberSince=dbUser[2], approved=dbUser[3], approvedAt=dbUser[4], isVip=dbUser[5], 
+                        isPartner=dbUser[6], level=dbUser[7], birthday=dbUser[8], birthdayVerified=dbUser[9], 
+                        locale=dbUser[10], coins=dbUser[11], warnings=[], inventory=[], staffOf=[])
+    query = f"""SELECT warnings.date, warnings.reason, warnings.expired
 FROM warnings
 JOIN users ON warnings.user_id = users.id
 WHERE users.id = '{user_id}';"""
     cursor.execute(query)
     warnings = cursor.fetchall()
-    warnings = [{'reason': i[0], 'date': i[1]} for i in warnings] if warnings != [] else []
-    userDict['warnings'] = warnings
+    warnings = [Warning(i[0], i[1], i[2]) for i in warnings] if warnings != [] else []
+    userToReturn.warnings = warnings
     #query = f"""SELECT items.item, items.description, items.amount
 #FROM items
 #JOIN users ON items.user_id = users.id
@@ -410,13 +411,7 @@ WHERE users.id = '{user_id}';"""
     #inventory = [{'item': i[0], 'description': i[1], 'amount': i[2]} for i in inventory]
     #userDict['inventory'] = inventory
 
-    user = User(name=user.display_name, memberSince=userDict['member_since'], approved=userDict['approved'],
-                approvedAt=userDict['approved_at'], isVip=userDict['is_vip'], 
-                isPartner=userDict['is_partner'], level=userDict['level'], 
-                birthday=userDict['birth_date'], locale=userDict['locale'], 
-                warnings=userDict['warnings'], coins=userDict['bank_balance'], 
-                id=user.id, username=user.name, inventory=[], staffOf=[])
-    return user
+    return userToReturn
     
 
 def includeEvent(mydb, user: Union[discord.Member,str], locale_id:int, city:str, event_name:str, address:str, price:float, starting_datetime: datetime, ending_datetime: datetime, description: str, group_link:str, website:str, max_price:float, event_logo_url:str):
@@ -452,7 +447,8 @@ def includeEvent(mydb, user: Union[discord.Member,str], locale_id:int, city:str,
     except HttpError as error:
         print('An error occurred: %s' % error)
 
-def getAllEvents(mydb):
+def getAllEvents():
+    mydb = connectToDatabase()
     cursor = mydb.cursor()
     query = f"""SELECT events.id, events.event_name, events.address, events.point_name, events.price, events.max_price, events.starting_datetime, events.ending_datetime, events.description, events.group_chat_link, users.username, locale.locale_name, locale.locale_abbrev, events.city, events.website, events.out_of_tickets, events.sales_ended
 FROM events
@@ -461,6 +457,7 @@ JOIN locale ON events.locale_id = locale.id
 WHERE events.approved = 1"""
     cursor.execute(query)
     myresult = cursor.fetchall()
+    endConnection(mydb)
     #convertendo para uma lista de dicionários
     propriedades = ['id','event_name', 'address', 'point_name', 'price', 'max_price', 'starting_datetime', 'ending_datetime', 'description', 'group_chat_link', 'host_user', 'state', 'state_abbrev', 'city', 'website', 'out_of_tickets', 'sales_ended']
     resultados_finais = []
@@ -476,7 +473,8 @@ WHERE events.approved = 1"""
     myresult = [i for i in resultados_finais if i['ending_datetime'] >= datetime.now()]
     return myresult
 
-def getAllPendingApprovalEvents(mydb):
+def getAllPendingApprovalEvents():
+    mydb = connectToDatabase()
     cursor = mydb.cursor()
     query = f"""SELECT events.id, events.event_name, events.address, events.point_name, events.price, events.max_price, events.starting_datetime, events.ending_datetime, events.description, events.group_chat_link, users.username, locale.locale_name, locale.locale_abbrev, events.city, events.website, events.out_of_tickets, events.sales_ended
 FROM events
@@ -485,6 +483,7 @@ JOIN locale ON events.locale_id = locale.id
 WHERE events.approved = 0"""
     cursor.execute(query)
     myresult = cursor.fetchall()
+    endConnection(mydb)
     #convertendo para uma lista de dicionários
     propriedades = ['id','event_name', 'address', 'point_name', 'price', 'max_price', 'starting_datetime', 'ending_datetime', 'description', 'group_chat_link', 'host_user', 'state', 'state_abbrev', 'city', 'website', 'out_of_tickets', 'sales_ended']
     resultados_finais = []
@@ -500,7 +499,8 @@ WHERE events.approved = 0"""
     myresult = resultados_finais
     return myresult
 
-def getEventsByState(mydb, locale_id:int):
+def getEventsByState(locale_id:int):
+    mydb = connectToDatabase()
     cursor = mydb.cursor()
     query = f"""SELECT events.id, events.event_name, events.address, events.point_name, events.price, events.max_price, events.starting_datetime, events.ending_datetime, events.description, events.group_chat_link, users.username, locale.locale_name, locale.locale_abbrev, events.city, events.website, events.out_of_tickets, events.sales_ended
 FROM events
@@ -510,6 +510,7 @@ WHERE events.locale_id = '{locale_id}'
 AND events.approved = 1;"""
     cursor.execute(query)
     myresult = cursor.fetchall()
+    endConnection(mydb)
     #convertendo para uma lista de dicionários
     propriedades = ['id','event_name', 'address', 'point_name', 'price', 'max_price', 'starting_datetime', 'ending_datetime', 'description', 'group_chat_link', 'host_user', 'state', 'state_abbrev', 'city', 'website', 'out_of_tickets', 'sales_ended']
     resultados_finais = []
@@ -525,7 +526,8 @@ AND events.approved = 1;"""
     myresult = [i for i in resultados_finais if i['ending_datetime'] >= datetime.now()]
     return myresult
 
-def getEventByName(mydb, event_name:str):
+def getEventByName(event_name:str):
+    mydb = connectToDatabase()
     cursor = mydb.cursor()
     query = f"""SELECT events.id, events.event_name, events.address, events.point_name, events.price, events.max_price, events.starting_datetime, events.ending_datetime, events.description, events.group_chat_link, users.username, locale.locale_name, locale.locale_abbrev, events.city, events.website, events.event_logo_url, events.max_price, events.out_of_tickets, events.sales_ended
 FROM events
@@ -544,6 +546,7 @@ WHERE events.event_name LIKE '%{event_name}%'
 AND events.approved = 1;"""
         cursor.execute(query)
         myresult = cursor.fetchall()
+        endConnection(mydb)
     #convertendo para uma lista de dicionários
     propriedades = ['id','event_name', 'address', 'point_name', 'price', 'max_price', 'starting_datetime', 'ending_datetime', 'description', 'group_chat_link', 'host_user', 'state', 'state_abbrev', 'city', 'website', 'logo_url', 'max_price', 'out_of_tickets', 'sales_ended']
     resultados_finais = []
@@ -581,25 +584,29 @@ WHERE users.username = '{owner_name}';"""
         resultados_finais.append(evento_dict)
     return resultados_finais
 
-def approveEventById(mydb, event_id:int):
+def approveEventById(event_id:int):
+    mydb = connectToDatabase()
     cursor = mydb.cursor()
     query = f"""SELECT id FROM events WHERE id = {event_id} AND approved = 0;"""
     cursor.execute(query)
     myresult = cursor.fetchall()
     if myresult == []:
+        endConnection(mydb)
         return "não encontrado"
     try:
         query = f"""UPDATE events
     SET approved = 1
     WHERE id = {event_id};"""
         cursor.execute(query)
-        mydb.commit()
+        endConnectionWithCommit(mydb)
         return True
     except:
+        endConnection(mydb)
         return False
 
 
-def scheduleNextEventDate(mydb, event_name:str, new_starting_datetime:datetime, user):
+def scheduleNextEventDate(event_name:str, new_starting_datetime:datetime, user):
+    mydb = connectToDatabase()
     cursor = mydb.cursor()
     #verifica se o evento já está agendado
     query = f"""SELECT events.id, events.event_name, events.starting_datetime, events.ending_datetime, users.username, events.price, events.max_price, events.group_chat_link, events.website, events.address, events.gcal_event_id
@@ -609,13 +616,16 @@ WHERE event_name = '{event_name}';"""
     cursor.execute(query)
     myresult = cursor.fetchall()
     if myresult == []:
+        endConnection(mydb)
         return "não encontrado"
     else:
         myresult = [{'id': i[0], 'event_name': i[1], 'starting_datetime': datetime.strptime(f'{i[2]}', '%Y-%m-%d %H:%M:%S'), 'ending_datetime': datetime.strptime(f'{i[3]}', '%Y-%m-%d %H:%M:%S'), 'host_user': i[4], 'price': i[5], 'max_price': i[6], 'group_chat_link': i[7], 'website': i[8], 'address': i[9], 'gcal_event_id':i[10]
                         } for i in myresult]
         """ if myresult[0]['ending_datetime'] > datetime.now():
             return "não encerrado" """
-        return updateDateEvent(mydb, myresult, new_starting_datetime, user, True)
+        updated = updateDateEvent(mydb, myresult, new_starting_datetime, user, True)
+        endConnectionWithCommit(mydb)
+        return updated
 
 
 def rescheduleEventDate(mydb, event_name:str, new_starting_datetime:datetime, user):
@@ -636,7 +646,9 @@ WHERE event_name = '{event_name}';"""
             return "em andamento"
         if myresult[0]['ending_datetime'] < datetime.now():
             return "encerrado"
-        return updateDateEvent(mydb, myresult, new_starting_datetime, user, False)
+        updated = updateDateEvent(mydb, myresult, new_starting_datetime, user, False)
+        endConnectionWithCommit(mydb)
+        return updated
 
 
 def updateDateEvent(mydb, myresult, new_starting_datetime:datetime, user:str, isNextEvent:bool):
@@ -685,7 +697,8 @@ def updateDateEvent(mydb, myresult, new_starting_datetime:datetime, user:str, is
     except HttpError as error:
         print('An error occurred: %s' % error)
 
-def admConnectTelegramAccount(mydb, discord_user:discord.Member, telegram_user:str):
+def admConnectTelegramAccount(discord_user:discord.Member, telegram_user:str):
+    mydb = connectToDatabase()
     cursor = mydb.cursor()
     #checa se o usuário já está cadastrado no banco de dados
     user_id = includeUser(mydb, discord_user)
@@ -696,12 +709,15 @@ def admConnectTelegramAccount(mydb, discord_user:discord.Member, telegram_user:s
     if myresult == []:
         try:
             query = f"""INSERT INTO telegram_user (user_id, username, display_name, banned)
-        VALUES ('{user_id}', '{telegram_user}', '{discord_user.nick}', {False});"""
+        VALUES ('{user_id}', '{telegram_user}', '{discord_user.nick}', 'FALSE');"""
             cursor.execute(query)
+            endConnectionWithCommit(mydb)
             return True
         except:
+            endConnection(mydb)
             return False
     else:
+        endConnection(mydb)
         return True
     
 
@@ -776,7 +792,8 @@ WHERE community_id = '{community_id}';"""
         print(e)
         return False
     
-def getWarnings(mydb, guild_id:int, discord_user:discord.Member):
+def getMemberWarnings(guild_id:int, discord_user:discord.Member) -> list[Warning]:
+    mydb = connectToDatabase()
     cursor = mydb.cursor()
     user_id = includeUser(mydb, discord_user, guild_id)
     query = f"""SELECT community_id FROM discord_servers WHERE guild_id = '{guild_id}';"""
@@ -787,27 +804,32 @@ WHERE user_id = '{user_id}'
 AND community_id = '{community_id}';"""
     cursor.execute(query)
     myresult = cursor.fetchall()
-    propriedades = ['date', 'reason', 'expired']
-    resultados_finais = []
+    resultados_finais:list[Warning] = []
     for i in myresult:
-        warning_dict = dict(zip(propriedades, i))
-        warning_dict['date'] = datetime.strptime(f"{warning_dict['date']}", '%Y-%m-%d %H:%M:%S')
-        resultados_finais.append(warning_dict)
+        warnings = Warning(i[0], i[1], i[2])
+        resultados_finais.append(warnings)
     return resultados_finais
 
-def getStaffRoles(mydb, guild_id:int):
+def getStaffRoles(guild_id:int):
+    mydb = connectToDatabase()
     cursor = mydb.cursor()
     query = f"""SELECT staff_roles FROM server_settings WHERE server_guild_id = '{guild_id}';"""
     cursor.execute(query)
     myresult = cursor.fetchall()
     return myresult[0][0]
 
-def registerUser(mydb, guild_id:int, discord_user:discord.Member, birthday:date, approved_date:date=None):
+def registerUser(guild_id:int, discord_user:discord.Member, birthday:date, approved_date:date=None):
+    mydb = connectToDatabase()
     userId = includeUser(mydb, discord_user, guild_id, datetime.now() if approved_date==None else approved_date)
-    includeBirthday(mydb, guild_id, birthday, discord_user, False, userId)
-    return True
+    birthdayRegistered = includeBirthday(mydb, guild_id, birthday, discord_user, False, userId)
+    endConnectionWithCommit(mydb)
+    if userId != None and birthdayRegistered:
+        return True
+    return False
 
-def saveCustomRole(mydb, guild_id:int, discord_user:discord.Member, color:str=None, iconId:int=None):
+def saveCustomRole(guild_id:int, discord_user:discord.Member, color:str=None, iconId:int=None):
+    mydb = connectToDatabase()
+    cursor = mydb.cursor()
     if color == None and iconId == None: return False
     try:
         user_id = includeUser(mydb, discord_user, guild_id)
@@ -835,7 +857,8 @@ def saveCustomRole(mydb, guild_id:int, discord_user:discord.Member, color:str=No
         return False
     
 
-def getAllCustomRoles(mydb, guild_id:int):
+def getAllCustomRoles(guild_id:int):
+    mydb = connectToDatabase()
     cursor = mydb.cursor()
     query = f"""SELECT discord_user.discord_user_id, user_custom_roles.color, user_custom_roles.icon_id FROM user_custom_roles
 JOIN discord_user ON user_custom_roles.user_id = discord_user.user_id
@@ -850,11 +873,11 @@ WHERE user_custom_roles.server_guild_id = '{guild_id}'
 
 
 def grantNSFWAccess(guild_id:int, discord_user:discord.Member, birthday:date):
-    mydbAndCursor = startConnection()
-    cursor = mydbAndCursor[1]
+    mydb = connectToDatabase()
+    cursor = mydb.cursor()
     approved = False
     try:
-        user_id = includeUser(mydbAndCursor[0], discord_user, guild_id)
+        user_id = includeUser(mydb, discord_user, guild_id)
         query = f"""SELECT user_id, birth_date FROM user_birthday
 WHERE user_id = {user_id}"""
         cursor.execute(query)
@@ -876,6 +899,59 @@ WHERE user_id = {user_id}"""
         return approved
     finally:
         if approved:
-            endConnectionWithCommit(mydbAndCursor)
+            endConnectionWithCommit(mydb)
         else:
-            endConnection(mydbAndCursor)
+            endConnection(mydb)
+            
+def getServerMessage(messageType:ServerMessagesEnum, guild_id:int):
+    mydb = connectToDatabase()
+    cursor = mydb.cursor()
+    query = f"""SELECT {messageType} 
+    FROM discord_server_messages
+    WHERE server_guild_id = {guild_id}"""
+    cursor.execute(query)
+    myresult = cursor.fetchall()
+    endConnection(mydb)
+    return myresult[0] if myresult != None else None
+
+def setServerMessage(guild_id:int, messageType:ServerMessagesEnum, message:str):
+    mydb = connectToDatabase()
+    cursor = mydb.cursor(buffered=True)
+    query = f"""SELECT * 
+FROM discord_server_messages
+WHERE server_guild_id = {guild_id}"""
+    cursor.execute(query)
+    myresult = cursor.fetchone()
+    try:
+        if myresult == None:
+            query = f"""INSERT INTO discord_server_messages (server_guild_id, {messageType})
+    VALUES ({guild_id}, '{message}')"""
+            cursor.execute(query)
+            return True
+        else:
+            query = f"""UPDATE discord_server_messages
+    SET {messageType} = '{message}'
+    WHERE server_guild_id = {guild_id}"""
+            cursor.execute(query)
+            return True
+    except Exception as e:
+        return False
+    finally:
+        endConnectionWithCommit(mydb)
+
+
+def getTodayBirthdays(guild_id:int):
+    mydb = connectToDatabase()
+    cursor = mydb.cursor()
+    query = f"""SELECT discord_user.discord_user_id, user_birthday.birth_date FROM user_birthday
+JOIN discord_user ON user_birthday.user_id = discord_user.user_id
+WHERE MONTH(birth_date) = MONTH(NOW())
+AND DAY(birth_date) = DAY(NOW())
+AND mentionable = 1;"""
+    cursor.execute(query)
+    myresult = cursor.fetchall()
+    endConnection(mydb)
+    users:list[SimpleUserBirthday] = []
+    for user in myresult:
+        users.append(SimpleUserBirthday(user[0],user[1]))
+    return users

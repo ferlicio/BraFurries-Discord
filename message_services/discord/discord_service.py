@@ -4,8 +4,9 @@ from commands.default_commands import calcular_idade
 from IA_Functions.terceiras.openAI import *
 from verification_functions.verification import *
 from discord.ext import tasks
-from models.bot import *
-from models.locals import *
+from schemas.models.bot import *
+from schemas.models.locals import *
+from schemas.types.server_messages import *
 from database.database import *
 from datetime import datetime, timedelta
 from typing import Literal
@@ -20,7 +21,8 @@ for DISCORD_INTENT in DISCORD_INTENTS:
 bot = MyBot(config=None,command_prefix=DISCORD_BOT_PREFIX, intents=discord.Intents.all())
 levelConfig = None
 timezone_offset = -3.0  # Pacific Standard Time (UTC−08:00)
-tzinfo = timezone(timedelta(hours=timezone_offset))
+def now() -> datetime: return datetime.now(timezone(timedelta(hours=timezone_offset)))
+
 
 
 @bot.event
@@ -39,7 +41,22 @@ async def on_ready():
     cronJobs12h.start()
     cronJobs2h.start()
     cronJobs30m.start()
+    timeSpecificTasks.start()
     configForVips.start()
+    
+@bot.tree.error
+async def on_app_command_error(ctx, error):
+    if isinstance(error, commands.CommandNotFound):
+        return
+    if isinstance(error, commands.MissingRequiredArgument):
+        return await ctx.send('Você não informou todos os argumentos necessários para o comando')
+    if isinstance(error, commands.BadArgument):
+        return await ctx.send('Você informou um argumento inválido para o comando')
+    if isinstance(error, commands.MissingPermissions):
+        return await ctx.send('Você não tem permissão para fazer isso')
+    if isinstance(error, commands.CommandOnCooldown):
+        return await ctx.send(f'Esse comando está em cooldown! Tente novamente em {error.retry_after:.2f} segundos')
+    return requests.post(f"https://api.telegram.org/bot{os.getenv('TELEGRAM_TOKEN')}/sendMessage?chat_id={os.getenv('TELEGRAM_ADMIN')}&text=Coddy apresentou um erro: {error}")
 
 @bot.event
 async def on_message(message: discord.Message):
@@ -77,14 +94,22 @@ async def cronJobs30m():
         print('Configurações de níveis não encontradas')
         pass
     
+@tasks.loop(minutes=1)
+async def timeSpecificTasks():
+    """ if now().hour == 0 and now().minute == 0:
+        mydb = connectToDatabase()
+        resetDailyCoins(mydb.cursor())
+        endConnectionWithCommit(mydb) """
+    if now().hour == 10 and now().minute == 10:
+        await sendBirthdayMessages(bot)
 
 
 
 
 @tasks.loop(hours=2) #0.16   10 minutos
 async def bumpWarning():
-    now = datetime.now().strftime("%H:%M:%S")
-    if int(now[:2])>=DISCORD_BUMP_WARNING_TIME[0] and int(now[:2])<=DISCORD_BUMP_WARNING_TIME[1]:
+    currentTime = now().strftime("%H:%M:%S")
+    if int(currentTime[:2])>=DISCORD_BUMP_WARNING_TIME[0] and int(currentTime[:2])<=DISCORD_BUMP_WARNING_TIME[1]:
         bumpChannel = bot.get_channel(853971735514316880)
         generalChannel = bot.get_channel(753348623844114452)
         async for msg in bumpChannel.history(limit=5):
@@ -92,11 +117,11 @@ async def bumpWarning():
                 lastMessage = msg
                 break
         lastBump = lastMessage.created_at.astimezone(tz.gettz('America/Sao_Paulo'))
-        timeSinceLastBump = datetime.now(tz.gettz('America/Sao_Paulo')) - lastBump
+        timeSinceLastBump = now() - lastBump
         needToWarn = True
         async for msg in generalChannel.history(limit=200):
             if msg.author.id == 1106756281420759051 and msg.content.__contains__('bump'):
-                if datetime.now(tz.gettz('America/Sao_Paulo')) - msg.created_at.astimezone(tz.gettz('America/Sao_Paulo')) < timedelta(hours=2):
+                if now() - msg.created_at.astimezone(tz.gettz('America/Sao_Paulo')) < timedelta(hours=2):
                     needToWarn = False
                 break
         if (timeSinceLastBump.days >= 1 or timeSinceLastBump.total_seconds() >= 7200) and needToWarn:
@@ -104,20 +129,19 @@ async def bumpWarning():
             import random
             await generalChannel.send(f"{bump[int(random.random() * len(bump))]} {lastMessage.jump_url}")
 
-@tasks.loop(hours=24) #0.16   10 minutos
+@tasks.loop(hours=6) #0.16   10 minutos
 async def bumpReward():
-    #esperar até meio dia para dar o cargo
-    waitTime = 12 - datetime.now(tzinfo).hour if datetime.now(tzinfo).hour < 12 else 36 - datetime.now(tzinfo).hour
+    hourToReward = 12
+    waitTime = hourToReward - now().hour if now().hour < hourToReward else 36 - now().hour
     await asyncio.sleep(waitTime*3600)
-    # se for dia de recompensa(dia 1 do mês), dará o cargo para os tres primeiro que deram mais bump no mês(exceto os que já tem o cargo VIP)
-    if datetime.now(tzinfo).day == 1:
+    if now().day == 1:
         #pegas as mensagens do ultimo mês no canal de bump
         channel = bot.get_channel(853971735514316880)
         guild = bot.get_guild(DISCORD_GUILD_ID)
         vipRoles = getVIPConfigurations(guild)['VIPRoles']
         bumpers = {}
         bumpersNames = {}
-        async for msg in channel.history(after=datetime.now()-timedelta(days=30)):
+        async for msg in channel.history(after=now()-timedelta(days=30)):
             # se a mensagem for do bot e for do mês passado, conta como bump
             if msg.author.id == 302050872383242240:
                 # agora vamos criar uma key para cada membro que deu bump
@@ -142,27 +166,27 @@ async def bumpReward():
             if [member for member in topBumpers if member not in alreadyVipMembers].__len__() == 3 or i == (bumpers.__len__()-1):
                 break
         for idx, membro in enumerate([member for member in topBumpers if member not in alreadyVipMembers]):
-            mydbAndCursor = startConnection()
+            mydb = connectToDatabase()
             if idx == 0:
                 await membro.add_roles(guild.get_role(DISCORD_VIP_ROLES_ID[1]))
-                assignTempRole(mydbAndCursor[0], guild.id, membro, DISCORD_VIP_ROLES_ID[1], datetime.now()+timedelta(days=21), "Bump Reward")
+                assignTempRole(mydb, guild.id, membro, DISCORD_VIP_ROLES_ID[1], now()+timedelta(days=21), "Bump Reward")
                 await membro.send(f"""Parabéns! Você foi um dos top 3 bumpers do mês passado no servidor da BraFurries e ganhou o cargo VIP {guild.get_role(DISCORD_VIP_ROLES_ID[1]).name} por 3 semanas!""")
                 (f"""
 Junto com o cargo, você também ganhou 1 nivel de VIP e algumas moedas! (em implementação)""")
             if idx == 1:
                 await membro.add_roles(guild.get_role(DISCORD_VIP_ROLES_ID[1]))
-                assignTempRole(mydbAndCursor[0], guild.id, membro, DISCORD_VIP_ROLES_ID[1], datetime.now()+timedelta(days=14), "Bump Reward")
+                assignTempRole(mydb, guild.id, membro, DISCORD_VIP_ROLES_ID[1], now()+timedelta(days=14), "Bump Reward")
                 await membro.send(f"""Parabéns! Você foi um dos top 3 bumpers do mês passado no servidor da BraFurries e ganhou o cargo VIP {guild.get_role(DISCORD_VIP_ROLES_ID[1]).name} por 2 semanas!""")
                 (f"""
 Junto com o cargo, você também ganhou algumas moedas! (em implementação)""")
             if idx == 2:
                 await membro.add_roles(guild.get_role(DISCORD_VIP_ROLES_ID[1]))
-                assignTempRole(mydbAndCursor[0], guild.id, membro, DISCORD_VIP_ROLES_ID[1], datetime.now()+timedelta(days=7), "Bump Reward")
+                assignTempRole(mydb, guild.id, membro, DISCORD_VIP_ROLES_ID[1], now()+timedelta(days=7), "Bump Reward")
                 await membro.send(f"Parabéns! Você foi um dos top 3 bumpers do mês passado no servidor da BraFurries e ganhou o cargo VIP {guild.get_role(DISCORD_VIP_ROLES_ID[1]).name} por 1 semana!")
-            endConnectionWithCommit(mydbAndCursor)
+            endConnectionWithCommit(mydb)
             
         for idx, membro in enumerate([member for member in topBumpers if member in alreadyVipMembers]):
-            mydbAndCursor = startConnection()
+            mydb = connectToDatabase()
             if idx == 0:
                 if membro == topBumpers[0]:
                     await membro.send(f"""Parabéns! Você foi o membro que mais deu bump no servidor da BraFurries no mês passado! 
@@ -181,7 +205,7 @@ Obrigado de coração por ajudar o servidor a crescer! <3""")
 
 Obrigado de coração por ajudar o servidor a crescer! <3""")
                     "Porém como você ja tem um cargo VIP, apenas iremos adicionar algumas moedas ao seu inventário!(em implementação)"
-            endConnectionWithCommit(mydbAndCursor)
+            endConnectionWithCommit(mydb)
         
         for membroId in otherBumpers:
             membro = guild.get_member(membroId)
@@ -204,7 +228,7 @@ Você pode não ter sido um dos top 3 bumpers, mas saiba que sua ajuda é muito 
 
 
 @tasks.loop(hours=24) #0.16   10 minutos
-async def configForVips(color=discord.Color.default()):
+async def configForVips():
     guild = bot.get_guild(DISCORD_GUILD_ID)  # Substitua ID_DO_SERVIDOR pelo ID do seu servidor
     VIPRoles = getVIPConfigurations(guild)['VIPRoles']
     VIPMembers = getVIPMembers(guild)
@@ -228,17 +252,13 @@ async def configForVips(color=discord.Color.default()):
                             await role.delete()
                             continue
                     hexColor = '#%02x%02x%02x' % (role.color.r, role.color.g, role.color.b)
-                    mydbAndCursor = startConnection()
-                    roleSaved = saveCustomRole(mydbAndCursor[0],guild.id, member, int(str(hexColor).replace('#','0x'),16))
-                    endConnectionWithCommit(mydbAndCursor)
+                    roleSaved = saveCustomRole(guild.id, member, int(str(hexColor).replace('#','0x'),16))
                     if roleSaved: await role.delete()
         VIPMembers = [obj.name for obj in VIPMembers] #transforma a lista de membros em uma lista de nomes
         print('Membros VIPs encontrados:')
         print(VIPMembers)
         
-        mydbAndCursor = startConnection()
-        getAllCustomRoles(mydbAndCursor[0], guild.id)
-        endConnection(mydbAndCursor)
+        getAllCustomRoles(guild.id)
         return
                 
     else:
@@ -265,9 +285,7 @@ Você pode procurar por uma cor em https://htmlcolorcodes.com/color-picker/ e te
         customRole = await addVipRole(ctx)
         await customRole.edit(color=corFormatada)
         await ctx.response.send_message(content=f'Cor do cargo VIP alterada para {cor} com sucesso!', ephemeral=False)
-        mydbAndCursor = startConnection()
-        saveCustomRole(mydbAndCursor[0], ctx.guild_id, ctx.user, color=corFormatada)
-        return endConnectionWithCommit(mydbAndCursor)
+        return saveCustomRole(ctx.guild_id, ctx.user, color=corFormatada)
     return await ctx.response.send_message(content='Você não é vip! você não pode fazer isso', ephemeral=True)
 
 @bot.tree.command(name=f'vip-mudar_icone', description=f'Muda o icone do cargo VIP do membro')
@@ -284,9 +302,7 @@ async def changeVipIcon(ctx: discord.Interaction, icon: str):
                 icon = await emoji.read()
             await customRole.edit(display_icon=icon)
             await ctx.response.send_message(content='Ícone do cargo VIP alterado com sucesso!', ephemeral=False)
-            mydbAndCursor = startConnection()
-            saveCustomRole(mydbAndCursor[0], ctx.guild_id, ctx.user, iconId=emoji.id)
-            return endConnectionWithCommit(mydbAndCursor)
+            return saveCustomRole(ctx.guild_id, ctx.user, iconId=emoji.id)
         except Exception as e:
             print(e)
             return await ctx.response.send_message(content='''Algo deu errado, avise o titio sobre!''', ephemeral=True)
@@ -302,12 +318,12 @@ async def changeVipIcon(ctx: discord.Interaction, icon: str):
 
 @bot.tree.command(name=f'registrar_local', description=f'Registra o seu local')
 async def registerLocal(ctx: discord.Interaction, local: str):
-    mydbAndCursor = startConnection()
-    availableLocals = getAllLocals(mydbAndCursor[0])
+    mydb = connectToDatabase()
+    availableLocals = getAllLocals(mydb)
     if stateLetterCodes[local]:
         await ctx.response.defer()
-        result = includeLocale(mydbAndCursor[0], ctx.guild.id, local.upper(), ctx.user, availableLocals)
-        endConnectionWithCommit(mydbAndCursor)
+        result = includeLocale(mydb, ctx.guild.id, local.upper(), ctx.user, availableLocals)
+        endConnectionWithCommit(mydb)
         if result:
             for locale in availableLocals:
                 if locale['locale_abbrev'] == local.upper():
@@ -319,12 +335,12 @@ async def registerLocal(ctx: discord.Interaction, local: str):
     
 @bot.tree.command(name=f'furros_na_area', description=f'Lista todos os furries registrados em um local')
 async def listFurries(ctx: discord.Interaction, local: str):
-    mydbAndCursor = startConnection()
-    availableLocals = getAllLocals(mydbAndCursor[0])
+    mydb = connectToDatabase()
+    availableLocals = getAllLocals(mydb)
     if stateLetterCodes[local]:
         await ctx.response.defer()
-        result = getByLocale(mydbAndCursor[0],local.upper(), availableLocals)
-        endConnection(mydbAndCursor)
+        result = getByLocale(mydb,local.upper(), availableLocals)
+        endConnection(mydb)
         if result:
             for locale in availableLocals:
                 if locale['locale_abbrev'] == local.upper():
@@ -347,21 +363,19 @@ async def registerBirthday(ctx: discord.Interaction, data: str, mencionavel: Lit
     birthdayAsDate = datetime.strptime(data, '%d/%m/%Y').date()
     mencionavel = True if mencionavel == "sim" else False
     await ctx.response.defer()
-    mydbAndCursor = startConnection()
-    result = includeBirthday(mydbAndCursor[0], ctx.guild.id, birthdayAsDate, ctx.user, mencionavel)
-    endConnectionWithCommit(mydbAndCursor)
+    mydb = connectToDatabase()
+    result = includeBirthday(mydb, ctx.guild.id, birthdayAsDate, ctx.user, mencionavel, True)
+    endConnectionWithCommit(mydb)
     if result:
-        return await ctx.followup.send(content=f'você foi registrado com o aniversário {data}!', ephemeral=False)
+        return await ctx.followup.send(content=f'você foi registrado com o aniversário {birthdayAsDate.day:02}/{birthdayAsDate.month:02}!', ephemeral=False)
     else:
         return await ctx.followup.send(content=f'Você ja está registrado. Yay! :3', ephemeral=True)
     
 
 @bot.tree.command(name=f'aniversarios', description=f'Lista todos os aniversários registrados')
 async def listBirthdays(ctx: discord.Interaction):
-    mydbAndCursor = startConnection()
     await ctx.response.defer()
-    result = getAllBirthdays(mydbAndCursor[0])
-    endConnection(mydbAndCursor)
+    result = getAllBirthdays()
     if result:
         # troca os userIDs por usernames
         for birthday in result:
@@ -399,12 +413,12 @@ async def addEvent(ctx: discord.Interaction, user: any, state:str, city:str, eve
     if starting_datetime > ending_datetime:
         #teste se a data e hora de inicio é maior que a data e hora de encerramento
         return await ctx.response.send_message(content='''A data e hora de início do evento não pode ser maior que a data e hora de encerramento!''', ephemeral=True)
-    mydbAndCursor = startConnection()
-    locale_id = await localeIsAvailable(ctx, mydbAndCursor, state)
+    mydb = connectToDatabase()
+    locale_id = await localeIsAvailable(ctx, mydb, state)
     if locale_id:
         await ctx.response.defer()
-        result = includeEvent(mydbAndCursor[0],user, locale_id, city, event_name, address, price, starting_datetime, ending_datetime, description, group_link, site, max_price, event_logo_url)
-        endConnectionWithCommit(mydbAndCursor)
+        result = includeEvent(mydb,user, locale_id, city, event_name, address, price, starting_datetime, ending_datetime, description, group_link, site, max_price, event_logo_url)
+        endConnectionWithCommit(mydb)
         if result:
             return await ctx.followup.send(content=f'O evento **{event_name}** foi registrado com sucesso!', ephemeral=False)
         
@@ -420,10 +434,8 @@ async def addEventWithTelegramUser(ctx: discord.Interaction, telegram_username: 
 
 @bot.tree.command(name=f'eventos', description=f'Lista todos os eventos registrados')
 async def listEvents(ctx: discord.Interaction):
-    mydbAndCursor = startConnection()
     await ctx.response.defer()
-    result = getAllEvents(mydbAndCursor[0])
-    endConnection(mydbAndCursor)
+    result = getAllEvents()
     if result:
         formattedEvents = formatEventList(result)
         eventsResponse = []
@@ -444,11 +456,11 @@ Adicione tambem a nossa agenda de eventos ao seu google agenda e tenha todos os 
     
 @bot.tree.command(name=f'eventos_por_estado', description=f'Lista todos os eventos registrados em um estado')
 async def listEventsByState(ctx: discord.Interaction, state: str):
-    mydbAndCursor = startConnection()
+    mydb = connectToDatabase()
     await ctx.response.defer()
-    locale_id = await localeIsAvailable(ctx, mydbAndCursor, state)
-    result = getEventsByState(mydbAndCursor[0], locale_id)
-    endConnection(mydbAndCursor)
+    locale_id = await localeIsAvailable(ctx, mydb, state)
+    result = getEventsByState(locale_id)
+    endConnection(mydb)
     if result:
         formattedEvents = formatEventList(result)
         eventsResponse = []
@@ -469,12 +481,10 @@ Adicione tambem a nossa agenda de eventos ao seu google agenda e tenha todos os 
     
 @bot.tree.command(name=f'evento', description=f'Mostra os detalhes de um evento')
 async def showEvent(ctx: discord.Interaction, event_name: str):
-    mydbAndCursor = startConnection()
     if event_name.__len__() < 4:
         return await ctx.response.send_message(content='''Nome do evento inválido! você informou um nome com menos de 4 caracteres? <:catsip:851024825333186560>''', ephemeral=True)
     await ctx.response.defer()
-    event = getEventByName(mydbAndCursor[0], event_name)
-    endConnection(mydbAndCursor)
+    event = getEventByName(event_name)
     if event:
         eventEmbeded = formatSingleEvent(event)
         return await ctx.followup.send(embed=eventEmbeded)
@@ -487,10 +497,8 @@ async def rescheduleEvent(ctx: discord.Interaction, event_name: str, new_date: s
     try: new_date = datetime.strptime(new_date, "%d/%m/%Y")
     except ValueError:
         return await ctx.response.send_message(content='''Data inválida! você informou uma data no formato "dd/mm/aaaa"? <:catsip:851024825333186560>''', ephemeral=True)
-    mydbAndCursor = startConnection()
     await ctx.response.defer()
-    result = rescheduleEventDate(mydbAndCursor[0], event_name, new_date, ctx.user.name)
-    endConnectionWithCommit(mydbAndCursor)
+    result = rescheduleEventDate(event_name, new_date, ctx.user.name)
     if result == True:
         return await ctx.followup.send(content=f'O evento **{event_name}** foi reagendado com sucesso!')
     elif result == "não encontrado":
@@ -508,10 +516,8 @@ async def scheduleNextEvent(ctx: discord.Interaction, nome_do_evento: str, data:
     try: data = datetime.strptime(data, "%d/%m/%Y")
     except ValueError:
         return await ctx.response.send_message(content='''Data inválida! Você informou uma data no formato "dd/mm/aaaa"? <:catsip:851024825333186560>''', ephemeral=True)
-    mydbAndCursor = startConnection()
     await ctx.response.defer()
-    result = scheduleNextEventDate(mydbAndCursor[0], nome_do_evento, data, ctx.user.name)
-    endConnectionWithCommit(mydbAndCursor)
+    result = scheduleNextEventDate(nome_do_evento, data, ctx.user.name)
     if result == True:
         return await ctx.followup.send(content=f'O evento **{nome_do_evento}** foi agendado com sucesso!')
     elif result == "não encontrado":
@@ -524,10 +530,8 @@ async def scheduleNextEvent(ctx: discord.Interaction, nome_do_evento: str, data:
 
 @bot.tree.command(name=f'eventos_pendentes', description=f'Mostra os eventos esperando aprovação')
 async def showPendingEvents(ctx: discord.Interaction):
-    mydbAndCursor = startConnection()
     await ctx.response.defer()
-    result = getAllPendingApprovalEvents(mydbAndCursor[0])
-    endConnection(mydbAndCursor)
+    result = getAllPendingApprovalEvents()
     if result:
         eventsResponse = '\n\n'.join(
     f'''> # {event["event_name"].title()} (id - {event["id"]})
@@ -550,10 +554,8 @@ async def showPendingEvents(ctx: discord.Interaction):
 async def approveEvent(ctx: discord.Interaction, event_id: int):
     if ctx.user.id != 167436511787220992:
         return await ctx.response.send_message(content='Você não tem permissão para fazer isso', ephemeral=True)
-    mydbAndCursor = startConnection()
     await ctx.response.defer()
-    result = approveEventById(mydbAndCursor[0], event_id)
-    endConnectionWithCommit(mydbAndCursor)
+    result = approveEventById(event_id)
     if result == True:
         return await ctx.followup.send(content=f'O evento foi aprovado com sucesso!')
     elif result == "não encontrado":
@@ -574,10 +576,8 @@ async def addStaffToEvent(ctx: discord.Interaction, event_id: int, staff: discor
 
 @bot.tree.command(name=f'adm-conectar_conta', description=f'Conecta sua conta do discord com a do telegram')
 async def connectAccount(ctx: discord.Interaction,user: discord.Member, telegram_username: str):
-    mydbAndCursor = startConnection()
     await ctx.response.defer()
-    result = admConnectTelegramAccount(mydbAndCursor[0], ctx.guild.id, user, telegram_username)
-    endConnectionWithCommit(mydbAndCursor)
+    result = admConnectTelegramAccount(ctx.guild.id, user, telegram_username)
     if result:
         return await ctx.followup.send(content=f'Sua conta foi conectada com sucesso! agora você pode usar os comandos do bot no discord e no telegram', ephemeral=False)
     else:
@@ -657,9 +657,18 @@ async def sellItem(ctx: discord.Interaction, item: str):
 
 ################################################################
 
+@discord.app_commands.checks.cooldown(1, 86400, key=lambda ctx: (ctx.guild_id, ctx.author.id))
 @bot.tree.command(name=f'daily', description=f'Pega sua recompensa diária')
 async def daily(ctx: discord.Interaction):
+    await ctx.response.send_message(content='Recompensa diária pega com sucesso!')
     pass
+
+@daily.error
+async def daily_error(ctx, error):
+    if isinstance(error, commands.CommandOnCooldown):
+        await ctx.send(f'Você já pegou sua recompensa diária! Tente novamente em {error.retry_after:.0f} segundos', ephemeral=True)
+    else:
+        raise error
 
 @bot.tree.command(name=f'rp_banho', description=f'Tomar banho dá xp sabia?')
 async def bath(ctx: discord.Interaction):
@@ -702,9 +711,9 @@ async def mission(ctx: discord.Interaction):
 @bot.tree.command(name=f'relatorio-portaria', description=f'Gera um relatório de atividades na portaria')
 async def test(ctx: discord.Interaction, periodo:Literal['semana', 'mês']):
     if periodo == 'semana':
-        InitialDate = datetime.now() - timedelta(days=7)
+        InitialDate = now() - timedelta(days=7)
     elif periodo == 'mês':
-        InitialDate = datetime.now() - timedelta(days=30)
+        InitialDate = now() - timedelta(days=30)
     await ctx.response.send_message(content='Gerando relatório...')
     try:
         channel = discord.utils.get(ctx.guild.channels, id=1140486877951033375)
@@ -723,7 +732,7 @@ async def test(ctx: discord.Interaction, periodo:Literal['semana', 'mês']):
                 'ticketsAttended': 0
             })
         totalTickets = 0
-        async for message in channel.history(limit=None, after=InitialDate, before=datetime.now()):
+        async for message in channel.history(limit=None, after=InitialDate, before=now()):
             if message.author.id == 557628352828014614:
                 if message.embeds.__len__() >= 1:
                     for field in message.embeds[0].fields:
@@ -754,32 +763,28 @@ async def test(ctx: discord.Interaction, periodo:Literal['semana', 'mês']):
 @bot.tree.command(name=f'perfil', description=f'Mostra o perfil de um membro')
 async def profile(ctx: discord.Interaction, member: discord.Member):
     await ctx.response.defer()
-    mydbAndCursor = startConnection()
-    memberProfile = getUserInfo(mydbAndCursor[0], member, ctx.guild.id)
-    endConnectionWithCommit(mydbAndCursor)
+    memberProfile = getUserInfo(member, ctx.guild.id)
     profileDescription = generateUserDescription(memberProfile)
     embedUserProfile = discord.Embed(
         color=discord.Color.from_str('#febf10'),
-        title='{0} - ID {1:64}'.format(member.name,str(member.id)), 
+        title='{0} - ID {1:64}'.format(member.name, str(member.id)), 
         description=profileDescription)
     embedUserProfile.set_thumbnail(url=member.avatar.url)
     embedUserProfile.set_author(
         name=(member.display_name)+f' (level {memberProfile.level})', 
         icon_url=member.guild_avatar.url if member.guild_avatar != None else member.avatar.url)
-    embedUserProfile.set_footer(text=f'{memberProfile.warnings.__len__()} Warns{"  -  Ultimo warn em "+datetime.now().strftime("%d/%m/%Y") if memberProfile.warnings.__len__() > 0 else f""}{"  -  >> DE CASTIGO <<" if member.is_timed_out() else ""}')
+    embedUserProfile.set_footer(text=f'{memberProfile.warnings.__len__()} Warns{"  -  Ultimo warn em "+now().strftime("%d/%m/%Y") if memberProfile.warnings.__len__() > 0 else f""}{"  -  >> DE CASTIGO <<" if member.is_timed_out() else ""}')
     await ctx.followup.send(embed=embedUserProfile)
 
 
 @bot.tree.command(name=f'registrar_usuario', description=f'Registra um membro')
 async def profile(ctx: discord.Interaction, member: discord.Member, data_aprovacao:str, aniversario:str):
-    mydbAndCursor = startConnection()
     data_aprovacao = verifyDate(data_aprovacao)
     aniversario = verifyDate(aniversario)
-    await ctx.response.send_message(content='Registrando usuário...')
+    await ctx.response.send_message(content='Registrando usuário...',ephemeral=True)
     if not data_aprovacao: return await ctx.edit_original_response(content='Data de aprovação no formato errado! use o formato dd/MM/YYYY')
     if not aniversario: return await ctx.edit_original_response(content='Data de aniversário no formato errado! use o formato dd/MM/YYYY')
-    registered = registerUser(mydbAndCursor[0], ctx.guild.id, member, aniversario, data_aprovacao)
-    endConnectionWithCommit(mydbAndCursor)
+    registered = registerUser(ctx.guild.id, member, aniversario, data_aprovacao)
     if registered:
         return await ctx.edit_original_response(content='Membro registrado com sucesso!')
     else: 
@@ -791,7 +796,7 @@ async def profile(ctx: discord.Interaction, member: discord.Member, data_anivers
     data_aniversario = verifyDate(data_aniversario)
     if data_aniversario == False:
         return await ctx.response.send_message(content='Data de aniversário inválida! use o formato dd/MM/YYYY', ephemeral=True)
-    if (datetime.now().date() - data_aniversario).days < 18*365:
+    if (now().date() - data_aniversario).days < 18*365:
         return await ctx.response.send_message(content='O membro não tem 18 anos ainda! não pode acessar conteúdo NSFW', ephemeral=True)
     await ctx.response.send_message(content='Processando...', ephemeral=True)
     approved = grantNSFWAccess(ctx.guild.id, member, data_aniversario)
@@ -815,12 +820,12 @@ Use o comando /registrar_usuario para registrar o membro e tente novamente''')
 
 @bot.tree.command(name=f'warn', description=f'Aplica um warn em um membro')
 async def warn(ctx: discord.Interaction, membro: discord.Member, motivo: str):
-    mydbAndCursor = startConnection()
+    mydb = connectToDatabase()
     #staffRoles = getStaffRoles(ctx.guild)
     await ctx.response.send_message("Registrando warn...")
     if True: #adicionar verificação de cargo de staff
-        warnings = warnMember(mydbAndCursor[0], ctx.guild.id, membro, motivo)
-        endConnectionWithCommit(mydbAndCursor)
+        warnings = warnMember(mydb, ctx.guild.id, membro, motivo)
+        endConnectionWithCommit(mydb)
         if warnings:
             if warnings['warningsCount'] < (int(warnings['warningsLimit']) - 1):
                 await membro.send(f'Você recebeu um warn por "{motivo}", totalizando {warnings["warningsCount"]}! Cuidado com suas ações no servidor!')
@@ -832,7 +837,16 @@ async def warn(ctx: discord.Interaction, membro: discord.Member, motivo: str):
                 await membro.send(f'Você recebeu um warn por "{motivo}" e atingiu o limite de {warnings["warningsCount"]} warnings do servidor!')
                 return await ctx.edit_original_response(content=f'Warn registrado com sucesso! \nCom esse warn, o membro {membro.mention} atingiu o limite de warns do servidor e deverá ser **Banido**')
         return await ctx.edit_original_response(content=f'Não foi possível aplicar o warn no membro {membro.mention}')
+    endConnection(mydb)
     return await ctx.response.send_message(content='Você não tem permissão para fazer isso', ephemeral=True)
+
+@bot.tree.command(name=f'warnings', description=f'Mostra os warnings de um membro')
+async def showWarnings(ctx: discord.Interaction, member: discord.Member):
+    warnings = getMemberWarnings(ctx.guild.id, member)
+    if warnings:
+        warningsList = '\n'.join([f'**{warn.date.strftime("%d/%m/%Y")}** - {warn.reason}' for warn in warnings])
+        return await ctx.response.send_message(content=f'Warnings do membro {member.mention}:\n{warningsList}')
+    return await ctx.response.send_message(content=f'O membro {member.mention} não possui warnings')
 
 
 @bot.tree.command(name=f'portaria_cargos', description=f'Permite que um membro na portaria pegue seus cargos')
@@ -842,7 +856,7 @@ async def portariaCargos(ctx: discord.Interaction, member: discord.Member):
     carteirinhaDeCargos = ctx.guild.get_role(860492272054829077)
     for channel in portariaCategory.channels+provisoriaCategory.channels:
         if channel.permissions_for(member).send_messages:
-            if (datetime.now().date() - member.created_at.date()).days < 30 and not channel.name.__contains__("provisória"):
+            if (now().date() - member.created_at.date()).days < 30 and not channel.name.__contains__("provisória"):
                 return await ctx.response.send_message(content=f'''<@{member.id}> não pode pegar seus cargos agora! A conta foi criada a menos de 30 dias
         Use o comando "/portaria_aprovar" e apos 15 dias, quando vencer a carteirinha provisória, ele poderá pegar seus cargos''', ephemeral=True)
             if carteirinhaDeCargos in member.roles:
@@ -867,19 +881,19 @@ async def approvePortaria(ctx: discord.Interaction, member: discord.Member, data
         if channel.permissions_for(member).send_messages:
             if (cargoVisitante in member.roles and carteirinhaProvisoria in member.roles) or (cargoVisitante not in member.roles):
                 return await ctx.response.send_message(content=f'O membro <@{member.id}> ja foi aprovado!', ephemeral=True)
-            if (datetime.now().date() - member.created_at.date()).days < 30:
+            if (now().date() - member.created_at.date()).days < 30:
                 await ctx.response.send_message(content=f'Atribuindo carteirinha provisória...', ephemeral=True)
                 await member.add_roles(carteirinhaProvisoria, cargoVisitante)
                 await member.remove_roles(carteirinhaCargos)
-                mydbAndCursor = startConnection()
                 duration = timedelta(days=15)
-                expiration_date = datetime.utcnow() + duration
+                expiration_date = now() + duration
                 await ctx.edit_original_response(content=f'O membro <@{member.id}> entrará no servidor com **carteirinha provisória** e terá acesso restrito ao servidor por sua conta ter **menos de 30 dias**. \nLembre de avisar o membro sobre isso')
-                assignTempRole(mydbAndCursor[0], ctx.guild_id, member, carteirinhaProvisoria.id, expiration_date, 'Carteirinha provisória')
-                endConnectionWithCommit(mydbAndCursor)
+                mydb = connectToDatabase()
+                assignTempRole(mydb, ctx.guild_id, member, carteirinhaProvisoria.id, expiration_date, 'Carteirinha provisória')
+                endConnectionWithCommit(mydb)
                 await channel.edit(name=f'{channel.name}-provisória' if not channel.name.__contains__('provisória') else channel.name, category=provisoriaCategory)
                 return 
-            regex = r'(\d{1,2})(?:\s*(?:d[eo]|\/|\\|\.)\s*|\s*)(\d{1,2}|(?:janeiro|fevereiro|março|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro))(?:\s*(?:d[eo]|\/|\\|\.)\s*|\s*)(\d{2,4})'
+            regex = r'(\d{1,2})(?:\s?(?:d[eo]|\/|\\|\.)\s?|\s?)(\d{1,2}|(?:janeiro|fevereiro|março|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro))(?:\s?(?:d[eo]|\/|\\|\.)\s?|\s?)(\d{4})'
             pattern = re.compile(regex)
             months = ['00','janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro']
             async for message in channel.history(limit=1, oldest_first=True):
@@ -895,16 +909,14 @@ async def approvePortaria(ctx: discord.Interaction, member: discord.Member, data
                         day = int(matchEmbeded.group(1))
                         month = int(matchEmbeded.group(2) if matchEmbeded.group(2).isdigit() else months.index(matchEmbeded.group(2)))
                         year = int(matchEmbeded.group(3))
-                        if str(year).__len__()<=2 :year+=2000 if year < (datetime.now().date().year - 2000) else 1900
+                        if str(year).__len__()<=2 :year+=2000 if year < (now().date().year - 2000) else 1900
                         birthday = datetime(year, month, day)
-                        if birthday.year > 1975 and birthday.year < datetime.now().year:
+                        if birthday.year > 1975 and birthday.year < now().year:
                             age = (datetime.now().date() - birthday.date()).days
                             if not (cargoMaior18 in member.roles or cargoMenor18 in member.roles) and age >= 4745:
                                 return await ctx.edit_original_response(content=f'O membro <@{member.id}> ainda não pegou seus cargos!' if carteirinhaCargos in member.roles 
                                                                         else f'O membro <@{member.id}> ainda não tem a carteirinha de cargos, use o comando "/portaria_cargos" antes')
-                            mydbAndCursor = startConnection()
-                            registerUser(mydbAndCursor[0], ctx.guild.id, member, birthday.date())
-                            endConnectionWithCommit(mydbAndCursor)
+                            registerUser(ctx.guild.id, member, birthday.date(), now().date())
                             if age >= 6570: #18+ anos
                                 await member.add_roles(cargoMaior18)
                                 await member.remove_roles(cargoMenor18, cargoMenor13)
@@ -920,12 +932,29 @@ async def approvePortaria(ctx: discord.Interaction, member: discord.Member, data
                             await channel.edit(name=f'{channel.name}-✅' if not channel.name.__contains__('-✅') else channel.name)
                             return await ctx.edit_original_response(content=f'O membro <@{member.id}> foi aprovado com sucesso!\nLembre de dar boas vindas a ele no <#753348623844114452> :3')
                         else:
-                            return await ctx.edit_original_response(content=f'Data inválida encontrada: {matchEmbeded.group(0)}\nO membro tem {(datetime.now().date() - birthday.date()).year} anos?')
+                            return await ctx.edit_original_response(content=f'Data inválida encontrada: {matchEmbeded.group(0)}\nO membro tem {(now().date() - birthday.date()).year} anos?')
                     except ValueError:
                         return await ctx.edit_original_response(content=f'Data inválida encontrada: {matchEmbeded.group(0)}')
+                    except Exception as e:
+                        return await ctx.edit_original_response(content=f'Erro ao registrar o membro: {e}')
             return await ctx.response.send_message(content=f'Não foi possível encontrar a data de nascimento do membro <@{member.id}> na portaria\nEm ultimo caso, digite a data de nascimento nos argumentos do comando.', ephemeral=True)
     return await ctx.response.send_message(content=f'O membro <@{member.id}> não está na portaria', ephemeral=True)
     
+
+
+####################################################################################################################
+# COMANDOS DE CONFIGURAÇÃO
+####################################################################################################################
+
+@bot.tree.command(name=f'mensagens_servidor', description=f'Altera as mensagens especificas do servidor')
+async def changeMessages(ctx: discord.Interaction, tipo: ServerMessages, mensagem: str):
+    if tipo == "Aniversário":
+        updated = setServerMessage(ctx.guild_id, "birthday", mensagem)
+    elif tipo == "Bump":
+        updated = setServerMessage(ctx.guild_id,"bump",mensagem)
+    if not updated:
+        return await ctx.response.send_message(content=f'Não foi possível alterar a mensagem de {tipo}', ephemeral=True)
+    return await ctx.response.send_message(content=f'Mensagem de {tipo} alterada com sucesso!', ephemeral=True)
 
 
 
@@ -950,7 +979,6 @@ async def callAdmin(ctx: discord.Interaction, message: str):
 
 @bot.tree.command(name=f'temp_role', description=f'Adiciona um cargo temporário a um membro')
 async def addTempRole(ctx: discord.Interaction, member: discord.Member, role: discord.Role, duration: str, reason: str= None):
-    mydbAndCursor = startConnection()
     #duration pode ser dias(d), semanas(s), meses(m). exemplo: 1d, 2s, 3m
     ####### adicionar para aceitar data especifica também
     duration = duration.lower()
@@ -958,6 +986,8 @@ async def addTempRole(ctx: discord.Interaction, member: discord.Member, role: di
         return await ctx.response.send_message(content='''Duração inválida! Você informou uma duração no formato "1d", "2s" ou "3m"?\nSiglas: d=dias, s=semanas, m=meses''', ephemeral=True)
     if int(duration[:-1]) == 0:
         return await ctx.response.send_message(content='''Duração inválida! Você informou uma duração maior que 0?''', ephemeral=True)
+    if reason == None:
+        return await ctx.response.send_message(content='''Você precisa informar um motivo para a adição do cargo''', ephemeral=True)
     #calcula qual vai ser a data de expiração do cargo
     if duration[-1] == 'd':
         duration = timedelta(days=int(duration[:-1]))
@@ -965,17 +995,18 @@ async def addTempRole(ctx: discord.Interaction, member: discord.Member, role: di
         duration = timedelta(weeks=int(duration[:-1]))
     else:
         duration = timedelta(days=int(duration[:-1])*30)
-    expiration_date = datetime.utcnow() + duration
+    expiration_date = now() + duration
     await ctx.response.send_message(content=f'Adicionando o cargo...', ephemeral=True)
-    roleAssignment = assignTempRole(mydbAndCursor[0], ctx.guild_id, member, role.id, expiration_date, 'porque sim')
-    endConnectionWithCommit(mydbAndCursor)
+    mydb = connectToDatabase()
+    roleAssignment = assignTempRole(mydb, ctx.guild_id, member, role.id, expiration_date, reason)
+    endConnectionWithCommit(mydb)
     if roleAssignment:
         await member.add_roles(role)
         return await ctx.edit_original_response(content=f'O membro <@{member.id}> agora tem o cargo {role.name} por {duration}!')
 
 @bot.tree.command(name=f'testes', description=f'teste')
 async def test(ctx: discord.Interaction):
-    print(datetime.now(tzinfo).hour)
+    pass
         
 
 

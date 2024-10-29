@@ -1,10 +1,11 @@
 from datetime import datetime
-from models.event import Event
+from schemas.models.event import Event
 
-class Warnings():
-    def __init__(self, reason, date):
-        self.reason = reason
-        self.date = date
+class Warning():
+    def __init__(self, date:datetime, reason:str, expired:bool = False):
+        self.date:datetime = date
+        self.reason:str = reason
+        self.expired:bool = expired
 
     def __str__(self):
         return f'Reason: {self.reason}'
@@ -28,8 +29,10 @@ class Item():
 
 
 class User():
-    def __init__(self, name, memberSince:datetime, approved = None, approvedAt:datetime = None, id:int = None, username:str = None,isVip:bool=False, isPartner:bool=False, level:int=0, locale=None, birthday:datetime=None, birthdayVerified:bool=False, vipType=None, vipSince=None, warnings:list[Warnings]=[], xp=0, coins=0, inventory:list[Item]=[], staffOf:list[Event]=[]):
-        self.name = name
+    def __init__(self, displayName, discordId:int, memberSince:datetime, approved = None, approvedAt:datetime = None, id:int = None, username:str = None,isVip:bool=False, isPartner:bool=False, level:int=0, locale=None, birthday:datetime=None, birthdayVerified:bool=False, vipType=None, vipSince=None, warnings:list[Warning]=[], xp=0, coins=0, inventory:list[Item]=[], staffOf:list[Event]=[]):
+        self.id = id
+        self.discordId = discordId
+        self.displayName = displayName
         self.isVip = isVip
         self.isPartner = isPartner
         self.vipType = vipType
@@ -47,7 +50,7 @@ class User():
         self.inventory = inventory if inventory else []
         self.staffOf = staffOf
         self.username = username
-        self.id = id
+        self.warnings = warnings
 
     def __str__(self):
         return f'Name: {self.name}'
@@ -58,4 +61,21 @@ class CustomRole():
         self.userId = userId
         self.color = color
         self.iconId = iconId
+        pass
+    
+
+class UserStats():
+    def __init__(self, userId, xp, coins, level):
+        self.userId = userId
+        self.xp = xp
+        self.coins = coins
+        self.level = level
+        pass
+    
+
+class SimpleUserBirthday():
+    def __init__(self, discordUserId, birthday, userId=None):
+        self.DiscordId = discordUserId
+        self.userId = userId
+        self.birthday = birthday
         pass

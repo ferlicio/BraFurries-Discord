@@ -3,11 +3,12 @@ from colormath.color_conversions import convert_color
 from colormath.color_diff import _get_lab_color1_vector, _get_lab_color2_matrix
 from colormath import color_diff_matrix
 from IA_Functions.terceiras.openAI import retornaRespostaGPT
+import discord, asyncio, re, random, pytz, math
 from discord.ext import commands
 from database.database import *
-from models.bot import Config
+from schemas.models.bot import Config
 from settings import *
-import discord, asyncio, re, random, pytz
+from schemas.models.bot import MyBot
 
 def getServerConfigurations(bot):
     guild = bot.get_guild(DISCORD_GUILD_ID)
@@ -47,14 +48,14 @@ async def rearrangeRoleInsideInterval(guild, roleID, start, end):
         newRolePosition = start.position-1
         await guild.edit_role_positions(positions={role: newRolePosition})
 
-async def localeIsAvailable(ctx, mydbAndCursor, locale):
-    availableLocals = getAllLocals(mydbAndCursor[0])
+async def localeIsAvailable(ctx, mydb, locale):
+    availableLocals = getAllLocals(mydb)
     if locale.upper() in [local_dict['locale_abbrev'] for local_dict in availableLocals]:
         #pegaremos o id do local
         locale_id = [local_dict['id'] for local_dict in availableLocals if local_dict['locale_abbrev'] == locale.upper()][0]
         return locale_id
     else:
-        endConnection(mydbAndCursor)
+        endConnection(mydb)
         availableLocalsResponse = ',\n'.join(f'{local["locale_abbrev"]} = {local["locale_name"]}' for local in availableLocals)
         await ctx.response.send_message(content=f'''você precisa fornecer um local existente!
 Você deve usar apenas a sigla do local, sem acentos ou espaços.\n
@@ -151,10 +152,11 @@ else f'R$'+str(f"{event['price']:.0f}").replace('.',',') if (event['max_price']=
     return eventEmbeded
 
 async def removeTempRoles(bot:commands.Bot):
-    mydbAndCursor = startConnection()
-    expiringTempRoles = getExpiringTempRoles(mydbAndCursor[0], DISCORD_GUILD_ID)
+    mydb = connectToDatabase()
+    cursor = mydb.cursor()
+    expiringTempRoles = getExpiringTempRoles(mydb, DISCORD_GUILD_ID)
     if expiringTempRoles == []:
-        endConnection(mydbAndCursor)
+        endConnection(mydb)
         return
     for TempRole in expiringTempRoles:
         guild = bot.get_guild(DISCORD_GUILD_ID)
@@ -166,10 +168,10 @@ async def removeTempRoles(bot:commands.Bot):
                 print(f'{member.name} perdeu o cargo {role.name}')
             else:
                 print(f'{member.name} não tinha o cargo {role.name}')
-            deleteTempRole(mydbAndCursor[1], TempRole['id'])
+            deleteTempRole(cursor, TempRole['id'])
         elif member == None:
-            deleteTempRole(mydbAndCursor[1], TempRole['id'])
-    endConnectionWithCommit(mydbAndCursor)
+            deleteTempRole(cursor, TempRole['id'])
+    endConnectionWithCommit(mydb)
     return
 
 async def mentionArtRoles(bot, message:discord.Message):
@@ -293,13 +295,14 @@ def generateUserDescription(member: User):
         userDescription += f'VIP' if member.isPartner else ''
         userDescription += f' - ' if member.isPartner and member.isVip else ''
         userDescription += f'Parceiro Oficial' if member.isVip else ''
+        userDescription += f'Criador da BraFurries' if member.discordId == 167436511787220992 else ''
     else:
         userDescription += f'Comum'
-    userDescription += f'\n<@{member.id}>'
+    userDescription += f'\n<@{member.discordId}>'
     userDescription += f'\n**Tipo de VIF:** {member.vipType}' if member.isVip else ''
     userDescription += f'\n**Entrou em:** {member.memberSince.strftime("%d/%m/%Y")}'
     userDescription += f'\n**Aprovado em:** {member.approvedAt.strftime("%d/%m/%Y") + (f" (a {(datetime.now()-member.approvedAt).days} dias)" if (datetime.now()-member.approvedAt).days < 45 else "") if member.approvedAt else "Desconhecido" if member.approved==1 else "Não aprovado"}'
-    userDescription += f'\n**Aniversário:** {member.birthday.strftime("%d/%m/%Y")}' if member.birthday != None else ''
+    userDescription += f'\n**Aniversário:** {member.birthday.strftime("%d/%m/%Y")} ({math.floor((datetime.now().date()-member.birthday).days/365.2425)} anos)' if member.birthday != None else ''
     userDescription += f'\n'
     if member.locale or member.coins or member.inventory:
         userDescription += f'\nRegistrado em **{member.locale}**' if member.locale else ''
@@ -314,5 +317,18 @@ def generateUserDescription(member: User):
     return userDescription
 
 
+async def sendBirthdayMessages(bot:MyBot):
+    guild = bot.get_guild(bot.config.guildId)
+    message = getServerMessage(messageType="birthday", guild_id=bot.config.guildId)
+    if message == None:
+        message = 'Hoje é aniversário de {users}! Parabéns!'
+    users = getTodayBirthdays(bot.config.guildId)
+    if users != []:
+        for user in users:
+            await guild.get_member(user.DiscordId).add_roles(guild.get_role(774439314015780926))
+        usersForMessage = [f'<@{user.DiscordId}>' for user in users]
+        messageToSend = message.replace('{users}', ', '.join(usersForMessage[:-1]) + ' e ' + usersForMessage[-1])
+        await bot.get_channel(799761052375449610).send(messageToSend)
+        
 
 
