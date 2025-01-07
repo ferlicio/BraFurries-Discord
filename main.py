@@ -1,6 +1,4 @@
-
-from message_services.discord.discord_service import run_discord_client
-from database.database import *
+from message_services.discord_service import run_discord_client
 import sys, codecs
 
 sys.stdout = codecs.getwriter("utf-8")(sys.stdout.detach())

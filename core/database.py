@@ -1,8 +1,3 @@
-
-from typing import Union
-import mysql.connector
-import discord
-from datetime import date, datetime
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
@@ -11,14 +6,27 @@ from googleapiclient.errors import HttpError
 from schemas.models.user import User, CustomRole, Warning
 from schemas.enums.server_messages import ServerMessagesEnum
 from schemas.models.user import SimpleUserBirthday
+from mysql.connector.cursor import MySQLCursorAbstract
+from mysql.connector import pooling
+import mysql.connector
+from datetime import date, datetime
+from typing import Union
+import discord
 import os.path
 import dotenv
+from contextlib import contextmanager
 
 dotenv_file = dotenv.find_dotenv()
 dotenv.load_dotenv(dotenv_file)
 
 SCOPES = ['https://www.googleapis.com/auth/calendar']
 
+db_config = {
+    "host": os.getenv("BOT_DATABASE_HOST"),
+    "user": os.getenv("BOT_DATABASE_USER"),
+    "password": os.getenv("BOT_DATABASE_PASSWORD"),
+    "database": "coddy",
+}
 
 def getCredentials():
     creds = None
@@ -53,6 +61,23 @@ def endConnection(mydb):
 def endConnectionWithCommit(mydb):
     mydb.commit()
     endConnection(mydb)
+    
+connection_pool = pooling.MySQLConnectionPool(pool_name="mypool", pool_size=5, **db_config)
+
+@contextmanager
+def pooled_connection():
+    connection = connection_pool.get_connection()
+    cursor: MySQLCursorAbstract = connection.cursor(dictionary=True)
+    try:
+        yield cursor
+    except Exception as e:
+        connection.rollback()
+        raise e
+    else:
+        connection.commit()
+    finally:
+        cursor.close()
+        connection.close()
 
 
 def getConfig(guild:discord.Guild):
@@ -194,7 +219,7 @@ def getAllLocals(mydb):
 
 
 
-def includeUser(mydb, user: Union[discord.Member,str], guildId:int=os.getenv('DISCORD_GUILD_ID'), approvedAt:datetime=None):
+def includeUser(mydb, user: Union[discord.Member,str], guildId:int=os.getenv('DISCORD_GUILD_ID'), approvedAt:datetime=None) -> int:
     cursor = mydb.cursor(buffered=True)
     if type(user) != str:
         username = user.name
@@ -298,6 +323,7 @@ VALUES ({user_id}, {community_id}, '{memberSince}', {approved}, {"'"+approvedAt+
         cursor.execute(query)
     except:
         raise Exception('Nome de usuário inválido. Não é possivel aprovar membros com caracteres especiais.')
+    mydb.commit()
     return user_id
 
 def includeLocale(mydb, guildId: int, abbrev:str, user:discord.User, availableLocals:list):
@@ -308,6 +334,7 @@ def includeLocale(mydb, guildId: int, abbrev:str, user:discord.User, availableLo
             try:
                 query = f"""INSERT INTO user_locale (user_id, locale_id) VALUES ('{user_id}','{local['id']}');"""
                 cursor.execute(query)
+                mydb.commit()
                 return True
             except:
                 return False
@@ -333,25 +360,33 @@ def includeBirthday(mydb, guildId: int, date:date, user:discord.User, mentionabl
     else:
         user_id = includeUser(mydb, user, guildId)
     cursor = mydb.cursor()
-    query = f"""SELECT user_id, birth_date FROM user_birthday WHERE user_id = '{user_id}' AND registered = 0;"""
+    query = f"""SELECT birth_date, registered FROM user_birthday WHERE user_id = '{user_id}'"""
     cursor.execute(query)
     birthday = cursor.fetchone()
-    if birthday != None:
-        query = f"""SELECT approved_at FROM user_community_status WHERE user_id = '{user_id}';"""
-        cursor.execute(query)
-        approved_at = cursor.fetchone()
-        approved_at = datetime.strptime(f"{approved_at[0]}", '%Y-%m-%d %H:%M:%S')
-        query = f"""UPDATE user_birthday
-SET mentionable = {mentionable}, registered = 1{f", verified = 1" if (datetime.now() - approved_at).days > 40 and date == birthday[1] else ''}
+    birthday = {'date': birthday[0], 'registered': birthday[1]} if birthday != None else None
+    if birthday:
+        if birthday['registered'] == 0:
+            query = f"""SELECT approved_at FROM user_community_status WHERE user_id = '{user_id}';"""
+            cursor.execute(query)
+            approved_at = cursor.fetchone()
+            approved_at = datetime.strptime(f"{approved_at[0]}", '%Y-%m-%d %H:%M:%S')
+            query = f"""UPDATE user_birthday
+SET mentionable = {mentionable}, registered = 1{f", verified = 1" if (datetime.now() - approved_at).days > 40 and date == birthday['date'] else ''}
 WHERE user_id = '{user_id}';"""
-        cursor.execute(query)
-        return True
-    try:
-        query = f"""INSERT INTO user_birthday (user_id, birth_date, verified, mentionable, registered) VALUES ('{user_id}','{date}',FALSE,{mentionable},{registered});"""
-        cursor.execute(query)
-        return True
-    except:
-        return False
+            cursor.execute(query)
+            mydb.commit()
+            return True
+        else:
+            if birthday['registered'] == 1:
+                raise Exception('Duplicate entry')
+    else:
+        try:
+            query = f"""INSERT INTO user_birthday (user_id, birth_date, verified, mentionable, registered) VALUES ('{user_id}','{date}',FALSE,{mentionable},{registered});"""
+            cursor.execute(query)
+            mydb.commit()
+            return True
+        except:
+            return False
 
 def getAllBirthdays():
     mydb = connectToDatabase()
@@ -443,6 +478,7 @@ def includeEvent(mydb, user: Union[discord.Member,str], locale_id:int, city:str,
     VALUES ({user_id}, {locale_id}, '{event_name}', '{description}', '{city}', '{address}', '{price}', '{max_price if max_price!=None else 0}', '{starting_datetime}', '{ending_datetime}', '{group_link}', '{website}', '{event_logo_url}', '{response['id']}');"""
         query = query.replace("'None'", 'NULL')
         cursor.execute(query)
+        mydb.commit()
         return True
     except HttpError as error:
         print('An error occurred: %s' % error)
@@ -693,6 +729,7 @@ def updateDateEvent(mydb, myresult, new_starting_datetime:datetime, user:str, is
         #altera a data do evento
         query = f"""UPDATE events SET starting_datetime = '{new_starting_datetime}', ending_datetime = '{new_ending_datetime}' WHERE id = {myresult[0]['id']};"""
         cursor.execute(query)
+        mydb.commit()
         return True
     except HttpError as error:
         print('An error occurred: %s' % error)
@@ -735,6 +772,7 @@ def assignTempRole(mydb, guild_id:int, discord_user:discord.Member, role_id:str,
         query = f"""INSERT INTO temp_roles (disc_community_id, disc_user_id, role_id, expiring_date, reason)
         VALUES ('{discord_community_id}', '{discord_user_id}', '{role_id}', '{expiring_date}', '{reason}');"""
         cursor.execute(query)
+        mydb.commit()
         return True
     except Exception as e:
         print(e)
@@ -787,6 +825,7 @@ AND community_id = '{community_id}';"""
 WHERE community_id = '{community_id}';"""
         cursor.execute(query)
         warningsLimit = cursor.fetchall()[0][0]
+        mydb.commit()
         return {'warningsCount': warningsCount, 'warningsLimit': warningsLimit}
     except Exception as e:
         print(e)
@@ -821,7 +860,14 @@ def getStaffRoles(guild_id:int):
 def registerUser(guild_id:int, discord_user:discord.Member, birthday:date, approved_date:date=None):
     mydb = connectToDatabase()
     userId = includeUser(mydb, discord_user, guild_id, datetime.now() if approved_date==None else approved_date)
-    birthdayRegistered = includeBirthday(mydb, guild_id, birthday, discord_user, False, userId)
+    birthdayRegistered = False
+    try:
+        birthdayRegistered = includeBirthday(mydb, guild_id, birthday, discord_user, False, userId)
+    except Exception as e:
+        if not e.args[0].__contains__('Duplicate entry'):
+            print(e)
+        else:
+            birthdayRegistered = True
     endConnectionWithCommit(mydb)
     if userId != None and birthdayRegistered:
         return True
@@ -847,11 +893,13 @@ def saveCustomRole(guild_id:int, discord_user:discord.Member, color:str=None, ic
             WHERE user_id = '{user_id}'
             AND server_guild_id = '{guild_id}';"""
             cursor.execute(query)
+            mydb.commit()
             return True
         else:
             query = f"""INSERT INTO user_custom_roles (server_guild_id, user_id, color, icon_id)
     VALUES ({guild_id}, {user_id}, {f"'{color}'" if color else 'NULL'},{f"{iconId}" if iconId else 'NULL'});"""
             cursor.execute(query)
+            mydb.commit()
             return True
     except:
         return False
@@ -905,12 +953,12 @@ WHERE user_id = {user_id}"""
             
 def getServerMessage(messageType:ServerMessagesEnum, guild_id:int):
     mydb = connectToDatabase()
-    cursor = mydb.cursor()
+    cursor = mydb.cursor(buffered=True)
     query = f"""SELECT {messageType} 
     FROM discord_server_messages
     WHERE server_guild_id = {guild_id}"""
     cursor.execute(query)
-    myresult = cursor.fetchall()
+    myresult = cursor.fetchone()
     endConnection(mydb)
     return myresult[0] if myresult != None else None
 

@@ -1,13 +1,13 @@
-from message_services.discord.routine_functions.routine_functions import *
-from message_services.discord.discord_events import *
 from commands.default_commands import calcular_idade
-from IA_Functions.terceiras.openAI import *
-from verification_functions.verification import *
+from core.AI_Functions.terceiras.openAI import *
+from core.routine_functions import *
+from core.discord_events import *
+from core.verifications import *
+from core.database import *
 from discord.ext import tasks
 from schemas.models.bot import *
 from schemas.models.locals import *
 from schemas.types.server_messages import *
-from database.database import *
 from datetime import datetime, timedelta
 from typing import Literal
 from dateutil import tz
@@ -21,7 +21,7 @@ for DISCORD_INTENT in DISCORD_INTENTS:
 bot = MyBot(config=None,command_prefix=DISCORD_BOT_PREFIX, intents=discord.Intents.all())
 levelConfig = None
 timezone_offset = -3.0  # Pacific Standard Time (UTC−08:00)
-def now() -> datetime: return datetime.now(timezone(timedelta(hours=timezone_offset)))
+def now() -> datetime: return (datetime.now(timezone(timedelta(hours=timezone_offset)))).replace(tzinfo=None)
 
 
 
@@ -116,16 +116,16 @@ async def bumpWarning():
             if msg.author.id == 302050872383242240:
                 lastMessage = msg
                 break
-        lastBump = lastMessage.created_at.astimezone(tz.gettz('America/Sao_Paulo'))
+        lastBump = lastMessage.created_at.astimezone(tz.gettz('America/Sao_Paulo')).replace(tzinfo=None)
         timeSinceLastBump = now() - lastBump
         needToWarn = True
         async for msg in generalChannel.history(limit=200):
             if msg.author.id == 1106756281420759051 and msg.content.__contains__('bump'):
-                if now() - msg.created_at.astimezone(tz.gettz('America/Sao_Paulo')) < timedelta(hours=2):
+                if now() - msg.created_at.astimezone(tz.gettz('America/Sao_Paulo')).replace(tzinfo=None) < timedelta(hours=2):
                     needToWarn = False
                 break
         if (timeSinceLastBump.days >= 1 or timeSinceLastBump.total_seconds() >= 7200) and needToWarn:
-            from message_services.discord.routine_functions.messages import bump
+            from core.messages import bump
             import random
             await generalChannel.send(f"{bump[int(random.random() * len(bump))]} {lastMessage.jump_url}")
 
@@ -145,6 +145,9 @@ async def bumpReward():
             # se a mensagem for do bot e for do mês passado, conta como bump
             if msg.author.id == 302050872383242240:
                 # agora vamos criar uma key para cada membro que deu bump
+                bumper = guild.get_member(msg.interaction.user.id)
+                if bumper == None:
+                    continue
                 if not bumpers.__contains__(msg.interaction.user.id):
                     bumpers[msg.interaction.user.id] = 0
                     bumpersNames[msg.interaction.user.name] = 0
@@ -169,19 +172,19 @@ async def bumpReward():
             mydb = connectToDatabase()
             if idx == 0:
                 await membro.add_roles(guild.get_role(DISCORD_VIP_ROLES_ID[1]))
-                assignTempRole(mydb, guild.id, membro, DISCORD_VIP_ROLES_ID[1], now()+timedelta(days=21), "Bump Reward")
+                assignTempRole(mydb, guild.id, membro, DISCORD_VIP_ROLES_ID[1], (now()+timedelta(days=21)).replace(tzinfo=None), "Bump Reward")
                 await membro.send(f"""Parabéns! Você foi um dos top 3 bumpers do mês passado no servidor da BraFurries e ganhou o cargo VIP {guild.get_role(DISCORD_VIP_ROLES_ID[1]).name} por 3 semanas!""")
                 (f"""
 Junto com o cargo, você também ganhou 1 nivel de VIP e algumas moedas! (em implementação)""")
             if idx == 1:
                 await membro.add_roles(guild.get_role(DISCORD_VIP_ROLES_ID[1]))
-                assignTempRole(mydb, guild.id, membro, DISCORD_VIP_ROLES_ID[1], now()+timedelta(days=14), "Bump Reward")
+                assignTempRole(mydb, guild.id, membro, DISCORD_VIP_ROLES_ID[1], (now()+timedelta(days=14)).replace(tzinfo=None), "Bump Reward")
                 await membro.send(f"""Parabéns! Você foi um dos top 3 bumpers do mês passado no servidor da BraFurries e ganhou o cargo VIP {guild.get_role(DISCORD_VIP_ROLES_ID[1]).name} por 2 semanas!""")
                 (f"""
 Junto com o cargo, você também ganhou algumas moedas! (em implementação)""")
             if idx == 2:
                 await membro.add_roles(guild.get_role(DISCORD_VIP_ROLES_ID[1]))
-                assignTempRole(mydb, guild.id, membro, DISCORD_VIP_ROLES_ID[1], now()+timedelta(days=7), "Bump Reward")
+                assignTempRole(mydb, guild.id, membro, DISCORD_VIP_ROLES_ID[1], (now()+timedelta(days=7)).replace(tzinfo=None), "Bump Reward")
                 await membro.send(f"Parabéns! Você foi um dos top 3 bumpers do mês passado no servidor da BraFurries e ganhou o cargo VIP {guild.get_role(DISCORD_VIP_ROLES_ID[1]).name} por 1 semana!")
             endConnectionWithCommit(mydb)
             
@@ -209,12 +212,15 @@ Obrigado de coração por ajudar o servidor a crescer! <3""")
         
         for membroId in otherBumpers:
             membro = guild.get_member(membroId)
+            if membro == None:
+                print(f"membro não encontrado: ${membroId}")
+                continue
             try:
                 print("agradecer bump: "+membro.name)
                 await membro.send(f"""Oiê! Só passando para agradecer por ter dado bump no servidor da BraFurries no mês passado!
 Você pode não ter sido um dos top 3 bumpers, mas saiba que sua ajuda é muito importante para o nosso servidor crescer! <3""")
-            except:
-                print(f"membro não encontrado: ${membroId}")
+            except Exception as e:
+                print(f"ocorreu um erro ao enviar a mensagem: ${e}")
             
         # agora vamos mandar uma mensagem privada para o titio derg com os membros que deram mais bump
         titio = guild.get_member(167436511787220992)
@@ -364,12 +370,18 @@ async def registerBirthday(ctx: discord.Interaction, data: str, mencionavel: Lit
     mencionavel = True if mencionavel == "sim" else False
     await ctx.response.defer()
     mydb = connectToDatabase()
-    result = includeBirthday(mydb, ctx.guild.id, birthdayAsDate, ctx.user, mencionavel, True)
-    endConnectionWithCommit(mydb)
-    if result:
-        return await ctx.followup.send(content=f'você foi registrado com o aniversário {birthdayAsDate.day:02}/{birthdayAsDate.month:02}!', ephemeral=False)
-    else:
-        return await ctx.followup.send(content=f'Você ja está registrado. Yay! :3', ephemeral=True)
+    try:
+        registered = includeBirthday(mydb, ctx.guild.id, birthdayAsDate, ctx.user, mencionavel, None, True)
+        if registered:
+            return await ctx.followup.send(content=f'você foi registrado com o aniversário {birthdayAsDate.day:02}/{birthdayAsDate.month:02}!', ephemeral=False)
+        else:
+            return await ctx.followup.send(content=f'Algo deu errado... Avise o titio!', ephemeral=False)
+    except Exception as e:
+        if str(e).__contains__('Duplicate entry'):
+            return await ctx.response.send_message(content=f'Você ja está registrado. Yay! :3', ephemeral=True)
+        return await ctx.followup.send(content=f'Algo deu errado... Avise o titio!', ephemeral=False)
+    finally:
+        endConnectionWithCommit(mydb)
     
 
 @bot.tree.command(name=f'aniversarios', description=f'Lista todos os aniversários registrados')

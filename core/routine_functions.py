@@ -2,13 +2,17 @@ from colormath.color_objects import sRGBColor, LabColor
 from colormath.color_conversions import convert_color
 from colormath.color_diff import _get_lab_color1_vector, _get_lab_color2_matrix
 from colormath import color_diff_matrix
-from IA_Functions.terceiras.openAI import retornaRespostaGPT
+from core.AI_Functions.terceiras.openAI import retornaRespostaGPT
 import discord, asyncio, re, random, pytz, math
 from discord.ext import commands
-from database.database import *
+from core.database import *
 from schemas.models.bot import Config
 from settings import *
 from schemas.models.bot import MyBot
+from datetime import datetime, timedelta, timezone
+
+timezone_offset = -3.0  # Pacific Standard Time (UTC−08:00)
+def now() -> datetime: return (datetime.now(timezone(timedelta(hours=timezone_offset)))).replace(tzinfo=None)
 
 def getServerConfigurations(bot):
     guild = bot.get_guild(DISCORD_GUILD_ID)
@@ -232,10 +236,10 @@ async def botAnswerOnMention(bot, message:discord.Message):
         return
     
     #se não menciona o bot ou se é uma DM, ou se é uma mensagem aleatória, não responde
-    if (not message.content.lower().__contains__(bot.chatBot['name'].lower()) and  
+    if (#not message.content.lower().__contains__(bot.chatBot['name'].lower()) and  
         not bot.user in message.mentions and 
         not isinstance(message.channel, discord.channel.DMChannel)) or (
-        random.random() > 0.7 and datetime.now(pytz.timezone('America/Sao_Paulo')).hour < 8):
+        random.random() > 0.7 and now().hour < 8):
             return 
 
     #se for os canais não permitidos, não responde
@@ -244,7 +248,7 @@ async def botAnswerOnMention(bot, message:discord.Message):
         return
     
     #se for horario de dormir, responde que está dormindo
-    if datetime.now(pytz.timezone('America/Sao_Paulo')).hour < 8:
+    if now().hour < 8:
             response = '''coddy está a mimir, às 8 horas eu volto 😴'''
     
     if not response:
@@ -325,9 +329,13 @@ async def sendBirthdayMessages(bot:MyBot):
     users = getTodayBirthdays(bot.config.guildId)
     if users != []:
         for user in users:
-            await guild.get_member(user.DiscordId).add_roles(guild.get_role(774439314015780926))
+            member = guild.get_member(user.DiscordId)
+            await member.add_roles(guild.get_role(774439314015780926))
+            mydb = connectToDatabase()
+            assignTempRole(mydb, guild.id, member, 774439314015780926, now() + timedelta(days=3), "Aniversário")
+            endConnectionWithCommit(mydb)
         usersForMessage = [f'<@{user.DiscordId}>' for user in users]
-        messageToSend = message.replace('{users}', ', '.join(usersForMessage[:-1]) + ' e ' + usersForMessage[-1])
+        messageToSend = message.replace('{users}', ', '.join(usersForMessage[:-1]) + ' e ' if usersForMessage.__len__()> 1 else '' + usersForMessage[-1])
         await bot.get_channel(799761052375449610).send(messageToSend)
         
 
