@@ -14,6 +14,7 @@ from dateutil import tz
 import requests
 import discord
 import re
+import os
 
 intents = discord.Intents.default()
 for DISCORD_INTENT in DISCORD_INTENTS:
@@ -56,7 +57,12 @@ async def on_app_command_error(ctx, error):
         return await ctx.send('Você não tem permissão para fazer isso')
     if isinstance(error, commands.CommandOnCooldown):
         return await ctx.send(f'Esse comando está em cooldown! Tente novamente em {error.retry_after:.2f} segundos')
-    return requests.post(f"https://api.telegram.org/bot{os.getenv('TELEGRAM_TOKEN')}/sendMessage?chat_id={os.getenv('TELEGRAM_ADMIN')}&text=Coddy apresentou um erro: {error}")
+    channel_name = getattr(ctx.channel, 'name', str(ctx.channel))
+    user_name = getattr(ctx.user, 'display_name', str(ctx.user))
+    text = f'Coddy apresentou um erro: {error}\nCanal: {channel_name}\nUsuário: {user_name}'
+    return requests.post(
+        f"https://api.telegram.org/bot{os.getenv('TELEGRAM_TOKEN')}/sendMessage?chat_id={os.getenv('TELEGRAM_ADMIN')}&text={text}"
+    )
 
 @bot.event
 async def on_message(message: discord.Message):
