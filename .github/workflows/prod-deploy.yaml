@@ -51,7 +51,7 @@ jobs:
       - name: Set Instances
         run: |
           cp pipeline/1 BraFurries-Discord.pm2.json
-          rm -Rf i
+          rm -Rf pipeline
         shell: bash
 
       - name: Start Application with PM2
