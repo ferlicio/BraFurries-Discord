@@ -43,12 +43,14 @@ jobs:
 
       - name: Install Python dependencies
         run: |
-          pip install -r requirements.txt
+          rm requirements.txt
+          pip3 freeze > requirements.txt
+          pip3 install -r requirements.txt
         shell: bash
 
       - name: Set Instances
         run: |
-          cp i/1 BraFurries-Discord.pm2.json
+          cp pipeline/1 BraFurries-Discord.pm2.json
           rm -Rf i
         shell: bash
 
