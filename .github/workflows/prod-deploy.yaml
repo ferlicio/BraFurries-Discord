@@ -25,6 +25,9 @@ jobs:
         with:
           node-version: '22.16.0'
 
+      - name: Set up production .env
+        run: echo "${{ secrets.PROD_ENV_FILE }}" > ./src/main/resources/.env
+        
       - name: Stop Application
         run: |
           pm2 stop BraFurries-Discord || true
@@ -45,13 +48,13 @@ jobs:
 
       - name: Set Instances
         run: |
-          cp i/1 Optimage.pm2.json
+          cp i/1 BraFurries-Discord.pm2.json
           rm -Rf i
         shell: bash
 
       - name: Start Application with PM2
         run: |
-          pm2 start Optimage.pm2.json
+          pm2 start BraFurries-Discord.pm2.json
           pm2 save
           pm2 list
         shell: bash
