@@ -3,6 +3,7 @@
     "name": "BraFurries-Discord",
     "script": "python3",
     "args": ["main.py"],
+    "cwd": ".", 
     "interpreter": "./.venv/bin/python",
     "log_file": "BraFurries-Discord.log",
     "out_file": "BraFurries-Discord.out",
@@ -10,6 +11,7 @@
     "max_memory_restart": "1G",
     "env": {
       "PORT": 8666
+      "NODE_ENV": "production"
     }
   }
 ]
