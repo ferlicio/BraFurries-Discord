@@ -225,7 +225,7 @@ def includeUser(mydb, user: Union[discord.Member,str], guildId:int=os.getenv('DI
         username = user.name
         displayName = user.display_name
         memberSince = user.joined_at.strftime('%Y-%m-%d %H:%M:%S')
-        approved = 0 if discord.utils.get(user.guild.roles, id=860453882323927060) in user.roles or approvedAt == None else 1
+        approved = 0 if discord.utils.get(user.guild.roles, id=860453882323927060) in user.roles else 1
     else:
         username = user
         displayName = user
@@ -360,12 +360,12 @@ def includeBirthday(mydb, guildId: int, date:date, user:discord.User, mentionabl
     else:
         user_id = includeUser(mydb, user, guildId)
     cursor = mydb.cursor()
-    query = f"""SELECT birth_date, registered FROM user_birthday WHERE user_id = '{user_id}'"""
+    query = f"""SELECT birth_date, mentionable, registered FROM user_birthday WHERE user_id = '{user_id}'"""
     cursor.execute(query)
     birthday = cursor.fetchone()
-    birthday = {'date': birthday[0], 'registered': birthday[1]} if birthday != None else None
+    birthday = {'date': birthday[0], 'mentionable': birthday[1], 'registered': birthday[2]} if birthday != None else None
     if birthday:
-        if birthday['registered'] == 0:
+        if birthday['registered'] == 0 or birthday['mentionable'] != mentionable:
             query = f"""SELECT approved_at FROM user_community_status WHERE user_id = '{user_id}';"""
             cursor.execute(query)
             approved_at = cursor.fetchone()
@@ -375,6 +375,8 @@ SET mentionable = {mentionable}, registered = 1{f", verified = 1" if (datetime.n
 WHERE user_id = '{user_id}';"""
             cursor.execute(query)
             mydb.commit()
+            if birthday['registered'] == 1:
+                raise Exception('Changed Entry')
             return True
         else:
             if birthday['registered'] == 1:
