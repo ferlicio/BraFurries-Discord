@@ -63,7 +63,10 @@ jobs:
         run: |
           cd $GITHUB_WORKSPACE
           source .venv/bin/activate
-          pm2 start BraFurries-Discord.pm2.json --env production
+          pm2 start main.py \
+            --name "BraFurries-Discord" \
+            --interpreter "$(pwd)/.venv/bin/python" \
+            --cwd "$(pwd)"
           pm2 save
           pm2 list
         shell: bash
