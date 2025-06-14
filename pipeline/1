@@ -3,6 +3,7 @@
     "name": "BraFurries-Discord",
     "script": "python3",
     "args": ["main.py"],
+    "interpreter": "./.venv/bin/python",
     "log_file": "BraFurries-Discord.log",
     "out_file": "BraFurries-Discord.out",
     "err_file": "BraFurries-Discord.err",
