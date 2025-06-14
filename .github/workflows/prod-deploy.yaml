@@ -53,6 +53,13 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Verificar libs no venv
+        shell: bash
+        run: |
+          source .venv/bin/activate
+          echo ">>> PYTHON: $(which python)"
+          pip list
+
       - name: Set Instances
         run: |
           cp pipeline/1 BraFurries-Discord.pm2.json
