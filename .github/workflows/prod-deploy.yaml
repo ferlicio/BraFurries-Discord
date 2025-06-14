@@ -44,15 +44,6 @@ jobs:
           pm2 update || true
         shell: bash
 
-      - name: Create and activate virtualenv && install Python dependencies
-        shell: bash
-        run: |
-          python -m venv .venv
-          source .venv/bin/activate
-          echo "${{ github.workspace }}/.venv/bin" >> $GITHUB_PATH
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-
       - name: Set Instances
         run: |
           cp pipeline/1 BraFurries-Discord.pm2.json
@@ -61,8 +52,10 @@ jobs:
 
       - name: Start Application with PM2
         run: |
-          cd $GITHUB_WORKSPACE
+          python -m venv .venv
           source .venv/bin/activate
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
           pm2 start main.py \
             --name "BraFurries-Discord" \
             --interpreter "$(pwd)/.venv/bin/python" \
