@@ -384,7 +384,12 @@ async def registerBirthday(ctx: discord.Interaction, data: str, mencionavel: Lit
             return await ctx.followup.send(content=f'Algo deu errado... Avise o titio!', ephemeral=False)
     except Exception as e:
         if str(e).__contains__('Duplicate entry'):
-            return await ctx.response.send_message(content=f'Você ja está registrado. Yay! :3', ephemeral=True)
+            return await ctx.followup.send(content=f'Você ja está registrado. Caso o seu aniversário não esteja aparecendo na lista, tente usar /{ctx.command} com mencionável = Sim', ephemeral=True)
+        if str(e).__contains__('Changed Entry'):
+            if mencionavel:
+                return await ctx.followup.send(content=f'Seu aniversário foi atualizado para ser mencionável!', ephemeral=False)
+            else:
+                return await ctx.followup.send(content=f'Seu aniversário foi atualizado para não ser mencionável!', ephemeral=False)
         return await ctx.followup.send(content=f'Algo deu errado... Avise o titio!', ephemeral=False)
     finally:
         endConnectionWithCommit(mydb)
