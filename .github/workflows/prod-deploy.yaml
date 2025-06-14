@@ -44,9 +44,16 @@ jobs:
           pm2 update || true
         shell: bash
 
+      - name: Create and activate virtualenv
+        shell: bash
+        run: |
+          python -m venv .venv
+          source .venv/bin/activate
+          
       - name: Install Python dependencies
         run: |
-          pip3 install -r requirements.txt
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
         shell: bash
 
       - name: Set Instances
