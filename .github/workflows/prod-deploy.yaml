@@ -41,6 +41,12 @@ jobs:
         run: printf '%s\n' "${{ secrets.PROD_ENV_FILE }}" > .env
         shell: bash
 
+      - name: Set Instances
+        run: |
+          cp pipeline/1 BraFurries-Discord.pm2.json
+          rm -Rf pipeline
+        shell: bash
+
       - name: Build Python virtualenv & install dependencies
         shell: bash
         run: |
