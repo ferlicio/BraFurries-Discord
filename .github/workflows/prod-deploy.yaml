@@ -55,6 +55,13 @@ jobs:
           pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Stop Application
+        run: |
+          pm2 stop BraFurries-Discord || true
+          pm2 flush BraFurries-Discord || true
+          pm2 delete BraFurries-Discord || true
+        shell: bash
+
       - name: Deploy with PM2
         shell: bash
         run: |
