@@ -16,6 +16,9 @@ import discord
 import re
 import os
 
+BIRTHDAY_REGEX = re.compile(r'(\d{1,2})(?:\s?(?:d[eo]|\/|\\|\.)\s?|\s?)(\d{1,2}|(?:janeiro|fevereiro|março|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro))(?:\s?(?:d[eo]|\/|\\|\.)\s?|\s?)(\d{4})')
+MONTHS = ['00','janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro']
+
 intents = discord.Intents.default()
 for DISCORD_INTENT in DISCORD_INTENTS:
     setattr(intents, DISCORD_INTENT, True)
@@ -893,75 +896,76 @@ async def portariaCargos(ctx: discord.Interaction, member: discord.Member):
 @bot.tree.command(name=f'portaria_aprovar', description=f'Aprova um membro que está esperando aprovação na portaria')
 async def approvePortaria(ctx: discord.Interaction, member: discord.Member, data_nascimento: str=None):
     provisoriaCategory = discord.utils.get(ctx.guild.categories, id=1178531112042111016)
-    portariaCategory = discord.utils.get(ctx.guild.categories, id=753342674576211999)
+    portariaCategory = discord.utils.get(ctx.guild.categories, id=753342674576219999)
     carteirinhaProvisoria = ctx.guild.get_role(923523251852955668)
     cargoVisitante = ctx.guild.get_role(860453882323927060)
     cargoMaior18 = ctx.guild.get_role(753711082656497875)
     cargoMenor18 = ctx.guild.get_role(753711433224814662)
     cargoMenor13 = ctx.guild.get_role(938399264231534632)
     carteirinhaCargos = ctx.guild.get_role(860492272054829077)
-    for channel in (portariaCategory.channels+provisoriaCategory.channels):
-        if channel.permissions_for(member).send_messages:
-            if (cargoVisitante in member.roles and carteirinhaProvisoria in member.roles) or (cargoVisitante not in member.roles):
-                return await ctx.response.send_message(content=f'O membro <@{member.id}> ja foi aprovado!', ephemeral=True)
-            if (now().date() - member.created_at.date()).days < 30:
-                await ctx.response.send_message(content=f'Atribuindo carteirinha provisória...', ephemeral=True)
-                await member.add_roles(carteirinhaProvisoria, cargoVisitante)
-                await member.remove_roles(carteirinhaCargos)
-                duration = timedelta(days=15)
-                expiration_date = now() + duration
-                await ctx.edit_original_response(content=f'O membro <@{member.id}> entrará no servidor com **carteirinha provisória** e terá acesso restrito ao servidor por sua conta ter **menos de 30 dias**. \nLembre de avisar o membro sobre isso')
-                mydb = connectToDatabase()
-                assignTempRole(mydb, ctx.guild_id, member, carteirinhaProvisoria.id, expiration_date, 'Carteirinha provisória')
-                endConnectionWithCommit(mydb)
-                await channel.edit(name=f'{channel.name}-provisória' if not channel.name.__contains__('provisória') else channel.name, category=provisoriaCategory)
-                return 
-            regex = r'(\d{1,2})(?:\s?(?:d[eo]|\/|\\|\.)\s?|\s?)(\d{1,2}|(?:janeiro|fevereiro|março|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro))(?:\s?(?:d[eo]|\/|\\|\.)\s?|\s?)(\d{4})'
-            pattern = re.compile(regex)
-            months = ['00','janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro']
-            async for message in channel.history(limit=1, oldest_first=True):
-                if data_nascimento:
-                    matchEmbeded = pattern.search(data_nascimento)
-                    if not matchEmbeded:
-                        return await ctx.response.send_message(content=f'Você digitou uma data inválida: {data_nascimento}', ephemeral=True)
+
+    channels = portariaCategory.channels + provisoriaCategory.channels
+    channel = next((c for c in channels if c.permissions_for(member).send_messages), None)
+    if not channel:
+        return await ctx.response.send_message(content=f'O membro <@{member.id}> não está na portaria', ephemeral=True)
+
+    if (cargoVisitante in member.roles and carteirinhaProvisoria in member.roles) or (cargoVisitante not in member.roles):
+        return await ctx.response.send_message(content=f'O membro <@{member.id}> ja foi aprovado!', ephemeral=True)
+
+    if (now().date() - member.created_at.date()).days < 30:
+        await ctx.response.send_message(content=f'Atribuindo carteirinha provisória...', ephemeral=True)
+        await member.add_roles(carteirinhaProvisoria, cargoVisitante)
+        await member.remove_roles(carteirinhaCargos)
+        expiration_date = now() + timedelta(days=15)
+        await ctx.edit_original_response(content=f'O membro <@{member.id}> entrará no servidor com **carteirinha provisória** e terá acesso restrito ao servidor por sua conta ter **menos de 30 dias**. \nLembre de avisar o membro sobre isso')
+        with pooled_connection() as cursor:
+            assignTempRole(cursor.connection, ctx.guild_id, member, carteirinhaProvisoria.id, expiration_date, 'Carteirinha provisória')
+        await channel.edit(name=f'{channel.name}-provisória' if not channel.name.__contains__('provisória') else channel.name, category=provisoriaCategory)
+        return
+
+    async for message in channel.history(limit=1, oldest_first=True):
+        if data_nascimento:
+            matchEmbeded = BIRTHDAY_REGEX.search(data_nascimento)
+            if not matchEmbeded:
+                return await ctx.response.send_message(content=f'Você digitou uma data inválida: {data_nascimento}', ephemeral=True)
+        else:
+            matchEmbeded = BIRTHDAY_REGEX.search(message.embeds[1].description) if isinstance(message.embeds[1].description, str) else None
+
+        if matchEmbeded:
+            await ctx.response.send_message(content='registrando usuario...', ephemeral=True)
+            try:
+                day = int(matchEmbeded.group(1))
+                month = int(matchEmbeded.group(2) if matchEmbeded.group(2).isdigit() else MONTHS.index(matchEmbeded.group(2)))
+                year = int(matchEmbeded.group(3))
+                if str(year).__len__()<=2:
+                    year += 2000 if year < (now().date().year - 2000) else 1900
+                birthday = datetime(year, month, day)
+                if birthday.year > 1975 and birthday.year < now().year:
+                    age = (datetime.now().date() - birthday.date()).days
+                    if not (cargoMaior18 in member.roles or cargoMenor18 in member.roles) and age >= 4745:
+                        return await ctx.edit_original_response(content=f'O membro <@{member.id}> ainda não pegou seus cargos!' if carteirinhaCargos in member.roles else f'O membro <@{member.id}> ainda não tem a carteirinha de cargos, use o comando "/portaria_cargos" antes')
+                    registerUser(ctx.guild.id, member, birthday.date(), now().date())
+                    if age >= 6570:  # 18+ anos
+                        await member.add_roles(cargoMaior18)
+                        await member.remove_roles(cargoMenor18, cargoMenor13)
+                    elif age >= 4745:  # 13+ anos
+                        await member.add_roles(cargoMenor18)
+                        await member.remove_roles(cargoMaior18, cargoMenor13)
+                    else:
+                        await member.remove_roles(cargoMaior18, cargoMenor18)
+                        await member.add_roles(carteirinhaProvisoria, cargoVisitante, cargoMenor13)
+                        await channel.edit(name=f'{channel.name}-provisória' if not channel.name.__contains__('provisória') else channel.name, category=provisoriaCategory)
+                        return await ctx.edit_original_response(content=f'Por ser menor de 13 anos, o membro <@{member.id}> entrará no servidor com carteirinha provisória e terá acesso restrito ao servidor. Lembre de avisar o membro sobre isso.')
+                    await member.remove_roles(carteirinhaCargos, cargoVisitante)
+                    await channel.edit(name=f'{channel.name}-✅' if not channel.name.__contains__('-✅') else channel.name)
+                    return await ctx.edit_original_response(content=f'O membro <@{member.id}> foi aprovado com sucesso!\nLembre de dar boas vindas a ele no <#753348623844114452> :3')
                 else:
-                    matchEmbeded = pattern.search(message.embeds[1].description) if isinstance(message.embeds[1].description, str) else None
-                if matchEmbeded:
-                    await ctx.response.send_message(content=f'registrando usuario...', ephemeral=True)
-                    try:
-                        day = int(matchEmbeded.group(1))
-                        month = int(matchEmbeded.group(2) if matchEmbeded.group(2).isdigit() else months.index(matchEmbeded.group(2)))
-                        year = int(matchEmbeded.group(3))
-                        if str(year).__len__()<=2 :year+=2000 if year < (now().date().year - 2000) else 1900
-                        birthday = datetime(year, month, day)
-                        if birthday.year > 1975 and birthday.year < now().year:
-                            age = (datetime.now().date() - birthday.date()).days
-                            if not (cargoMaior18 in member.roles or cargoMenor18 in member.roles) and age >= 4745:
-                                return await ctx.edit_original_response(content=f'O membro <@{member.id}> ainda não pegou seus cargos!' if carteirinhaCargos in member.roles 
-                                                                        else f'O membro <@{member.id}> ainda não tem a carteirinha de cargos, use o comando "/portaria_cargos" antes')
-                            registerUser(ctx.guild.id, member, birthday.date(), now().date())
-                            if age >= 6570: #18+ anos
-                                await member.add_roles(cargoMaior18)
-                                await member.remove_roles(cargoMenor18, cargoMenor13)
-                            elif age >= 4745: #13+ anos
-                                await member.add_roles(cargoMenor18)
-                                await member.remove_roles(cargoMaior18, cargoMenor13)
-                            else:
-                                await member.remove_roles(cargoMaior18, cargoMenor18)
-                                await member.add_roles(carteirinhaProvisoria, cargoVisitante, cargoMenor13)
-                                await channel.edit(name=f'{channel.name}-provisória' if not channel.name.__contains__('provisória') else channel.name,category=provisoriaCategory)
-                                return await ctx.edit_original_response(content=f'Por ser menor de 13 anos, o membro <@{member.id}> entrará no servidor com carteirinha provisória e terá acesso restrito ao servidor. Lembre de avisar o membro sobre isso.')
-                            await member.remove_roles(carteirinhaCargos, cargoVisitante)
-                            await channel.edit(name=f'{channel.name}-✅' if not channel.name.__contains__('-✅') else channel.name)
-                            return await ctx.edit_original_response(content=f'O membro <@{member.id}> foi aprovado com sucesso!\nLembre de dar boas vindas a ele no <#753348623844114452> :3')
-                        else:
-                            return await ctx.edit_original_response(content=f'Data inválida encontrada: {matchEmbeded.group(0)}\nO membro tem {(now().date() - birthday.date()).year} anos?')
-                    except ValueError:
-                        return await ctx.edit_original_response(content=f'Data inválida encontrada: {matchEmbeded.group(0)}')
-                    except Exception as e:
-                        return await ctx.edit_original_response(content=f'Erro ao registrar o membro: {e}')
-            return await ctx.response.send_message(content=f'Não foi possível encontrar a data de nascimento do membro <@{member.id}> na portaria\nEm ultimo caso, digite a data de nascimento nos argumentos do comando.', ephemeral=True)
-    return await ctx.response.send_message(content=f'O membro <@{member.id}> não está na portaria', ephemeral=True)
+                    return await ctx.edit_original_response(content=f'Data inválida encontrada: {matchEmbeded.group(0)}\nO membro tem {(now().date() - birthday.date()).year} anos?')
+            except ValueError:
+                return await ctx.edit_original_response(content=f'Data inválida encontrada: {matchEmbeded.group(0)}')
+            except Exception as e:
+                return await ctx.edit_original_response(content=f'Erro ao registrar o membro: {e}')
+    return await ctx.response.send_message(content=f'Não foi possível encontrar a data de nascimento do membro <@{member.id}> na portaria\nEm ultimo caso, digite a data de nascimento nos argumentos do comando.', ephemeral=True)
     
 
 
