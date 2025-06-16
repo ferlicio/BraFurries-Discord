@@ -2,63 +2,63 @@ name: Deploy em Produção
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
 
 jobs:
-  deploy-on-BRFD-134:
-    runs-on: BRFD
+  deploy:
+    # ou ubuntu-latest, ou [self-hosted,BRFD] se for runner em prod
+    runs-on: [self-hosted, BRFD]
 
     environment:
       name: Produção
 
     steps:
-      - name: Check out repository code
+      - name: Check out repository
         uses: actions/checkout@v3
 
-      - name: Set up Python
+      - name: Cache Python packages
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+
+      - name: Set up Python 3.10
         uses: actions/setup-python@v5
         with:
-          python-version: '3.10' 
+          python-version: 3.10
 
-      - name: Install Node.js LTS Version
+      - name: Cache Node modules
+        uses: actions/cache@v3
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-npm-${{ hashFiles('package-lock.json') }}
+
+      - name: Set up Node.js LTS
         uses: actions/setup-node@v3
         with:
-          node-version: '22.16.0'
+          node-version: 22.16.0
+          cache: 'npm'
 
-      - name: Set up production .env
-        env:
-          PROD_ENV_FILE: ${{ secrets.PROD_ENV_FILE }}
-        run: |
-          printf '%s' "$PROD_ENV_FILE" > .env
-        
-      - name: Stop Application
-        run: |
-          pm2 stop BraFurries-Discord || true
-          pm2 flush BraFurries-Discord || true
-          pm2 delete BraFurries-Discord || true
+      - name: Install PM2 globally
+        run: npm install pm2@latest -g
         shell: bash
 
-      - name: Install PM2
-        run: |
-          npm install pm2@latest -g --registry=https://registry.npmmirror.com || npm install pm2@latest -g
-          pm2 update || true
+      - name: Create .env file
+        run: printf '%s\n' "${{ secrets.PROD_ENV_FILE }}" > .env
         shell: bash
 
-      - name: Set Instances
-        run: |
-          cp pipeline/1 BraFurries-Discord.pm2.json
-          rm -Rf pipeline
+      - name: Build Python virtualenv & install dependencies
         shell: bash
-
-      - name: Start Application with PM2
         run: |
           python -m venv .venv
           source .venv/bin/activate
           pip install --upgrade pip
           pip install -r requirements.txt
-          pm2 start main.py \
-            --name "BraFurries-Discord" \
-            --interpreter ".venv/bin/python"
-          pm2 save
-          pm2 list
+
+      - name: Deploy with PM2
         shell: bash
+        run: |
+          pm2 startOrReload BraFurries-Discord.pm2.json --env production
+          pm2 save
+          pm2 status
