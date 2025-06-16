@@ -8,7 +8,7 @@ on:
 jobs:
   deploy:
     # ou ubuntu-latest, ou [self-hosted,BRFD] se for runner em prod
-    runs-on: [self-hosted, BRFD]
+    runs-on: BRFD
 
     environment:
       name: Produção
