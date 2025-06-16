@@ -896,7 +896,7 @@ async def portariaCargos(ctx: discord.Interaction, member: discord.Member):
 @bot.tree.command(name=f'portaria_aprovar', description=f'Aprova um membro que está esperando aprovação na portaria')
 async def approvePortaria(ctx: discord.Interaction, member: discord.Member, data_nascimento: str=None):
     provisoriaCategory = discord.utils.get(ctx.guild.categories, id=1178531112042111016)
-    portariaCategory = discord.utils.get(ctx.guild.categories, id=753342674576219999)
+    portariaCategory = discord.utils.get(ctx.guild.categories, id=753342674576211999)
     carteirinhaProvisoria = ctx.guild.get_role(923523251852955668)
     cargoVisitante = ctx.guild.get_role(860453882323927060)
     cargoMaior18 = ctx.guild.get_role(753711082656497875)
