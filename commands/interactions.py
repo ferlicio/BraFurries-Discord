@@ -20,5 +20,5 @@ def setup(bot: commands.Bot):
             resp = await ctx.response.send_message(content=f'{BOT_NAME} está com o status de "{message}"', ephemeral=True)
         else:
             await bot.change_presence(activity=discord.Activity(type=getattr(discord.ActivityType, moodDiscord), name=message))
-            resp = await ctx.response.send_message(content=f'{BOT_NAME} está {mood}{message}!', ephemeral=True)
+            resp = await ctx.response.send_message(content=f'{BOT_NAME} está {mood} {message}!', ephemeral=True)
         return resp
