@@ -1,7 +1,8 @@
 from datetime import timedelta, datetime
 import os
 import discord
-from discord import Interaction, Member, Role, commands
+from discord import Interaction, Member, Role
+from discord.ext import commands
 from core.database import connectToDatabase, assignTempRole, endConnectionWithCommit
 from settings import BOT_NAME
 import requests

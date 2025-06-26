@@ -1,5 +1,6 @@
 from core.database import connectToDatabase, assignTempRole, endConnectionWithCommit
-from discord import Interaction, Member, Role, commands
+from discord import Interaction, Member, Role
+from discord.ext import commands
 from datetime import timedelta, datetime
 from core.common.timeFunctions import now
 from core.database import getUserInfo

@@ -1,4 +1,5 @@
-from discord import Interaction, commands
+from discord import Interaction
+from discord.ext import commands
 from schemas.types.server_messages import ServerMessages
 from core.database import setServerMessage
 
