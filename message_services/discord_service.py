@@ -7,6 +7,7 @@ from discord.ext import tasks
 from schemas.models.bot import *
 from schemas.models.locals import *
 from schemas.types.server_messages import *
+from core.common.timeFunctions import now
 from datetime import datetime, timedelta
 from dateutil import tz, relativedelta
 from typing import Literal
@@ -24,8 +25,6 @@ for DISCORD_INTENT in DISCORD_INTENTS:
     setattr(intents, DISCORD_INTENT, True)
 bot = MyBot(config=None,command_prefix=DISCORD_BOT_PREFIX, intents=discord.Intents.all())
 levelConfig = None
-timezone_offset = -3.0  # Pacific Standard Time (UTC−08:00)
-def now() -> datetime: return (datetime.now(timezone(timedelta(hours=timezone_offset)))).replace(tzinfo=None)
 
 
 for module in [vip, info, account, interactions, xp, config, utils, events, moderation]:

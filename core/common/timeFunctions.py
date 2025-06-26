@@ -1,5 +1,8 @@
-from datetime import date
+from datetime import datetime, timedelta, date
 import re
+
+timezone_offset = -3.0  # Pacific Standard Time (UTC−08:00)
+def now() -> datetime: return (datetime.now(timezone(timedelta(hours=timezone_offset)))).replace(tzinfo=None)
 
 """ def calcular_idade (message):
     if (re.search(r'\b(\d{2}\s+de\s+\w+\s+de\s+\d{4})\b',message)):

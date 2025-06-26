@@ -1,7 +1,9 @@
 from core.database import connectToDatabase, assignTempRole, endConnectionWithCommit
 from discord import Interaction, Member, Role
 from datetime import timedelta, datetime
+from core.common.timeFunctions import now
 import discord
+import re
 
 def setup(bot: commands.Bot):
     @bot.tree.command(name=f'relatorio-portaria', description=f'Gera um relatório de atividades na portaria')
