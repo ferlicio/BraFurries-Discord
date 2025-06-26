@@ -925,18 +925,18 @@ async def approvePortaria(ctx: discord.Interaction, member: discord.Member, data
 
     async for message in channel.history(limit=1, oldest_first=True):
         if data_nascimento:
-            matchEmbeded = BIRTHDAY_REGEX.search(data_nascimento)
-            if not matchEmbeded:
+            matchEmbedded = BIRTHDAY_REGEX.search(data_nascimento)
+            if not matchEmbedded:
                 return await ctx.response.send_message(content=f'Você digitou uma data inválida: {data_nascimento}', ephemeral=True)
         else:
-            matchEmbeded = BIRTHDAY_REGEX.search(message.embeds[1].description) if isinstance(message.embeds[1].description, str) else None
+            matchEmbedded = BIRTHDAY_REGEX.search(message.embeds[1].description) if isinstance(message.embeds[1].description, str) else None
 
-        if matchEmbeded:
+        if matchEmbedded:
             await ctx.response.send_message(content='registrando usuario...', ephemeral=True)
             try:
-                day = int(matchEmbeded.group(1))
-                month = int(matchEmbeded.group(2) if matchEmbeded.group(2).isdigit() else MONTHS.index(matchEmbeded.group(2)))
-                year = int(matchEmbeded.group(3))
+                day = int(matchEmbedded.group(1))
+                month = int(matchEmbedded.group(2) if matchEmbedded.group(2).isdigit() else MONTHS.index(matchEmbedded.group(2)))
+                year = int(matchEmbedded.group(3))
                 if len(str(year)) <= 2:
                     year += 2000 if year < (now().date().year - 2000) else 1900
                 birthday = datetime(year, month, day)
@@ -960,9 +960,9 @@ async def approvePortaria(ctx: discord.Interaction, member: discord.Member, data
                     await channel.edit(name=f'{channel.name}-✅' if not channel.name.__contains__('-✅') else channel.name)
                     return await ctx.edit_original_response(content=f'O membro <@{member.id}> foi aprovado com sucesso!\nLembre de dar boas vindas a ele no <#753348623844114452> :3')
                 else:
-                    return await ctx.edit_original_response(content=f'Data inválida encontrada: {matchEmbeded.group(0)}\nO membro tem {(now().date() - birthday.date()).year} anos?')
+                    return await ctx.edit_original_response(content=f'Data inválida encontrada: {matchEmbedded.group(0)}\nO membro tem {(now().date() - birthday.date()).year} anos?')
             except ValueError:
-                return await ctx.edit_original_response(content=f'Data inválida encontrada: {matchEmbeded.group(0)}')
+                return await ctx.edit_original_response(content=f'Data inválida encontrada: {matchEmbedded.group(0)}')
             except Exception as e:
                 return await ctx.edit_original_response(content=f'Erro ao registrar o membro: {e}')
     return await ctx.response.send_message(content=f'Não foi possível encontrar a data de nascimento do membro <@{member.id}> na portaria\nEm ultimo caso, digite a data de nascimento nos argumentos do comando.', ephemeral=True)
