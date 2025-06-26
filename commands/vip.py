@@ -25,10 +25,10 @@ def setup(bot: commands.Bot):
     @bot.tree.command(name='vip-mudar_icone', description='Muda o icone do cargo VIP do membro')
     async def changeVipIcon(ctx: discord.Interaction, icon: str):
         userVipRoles = [role.id for role in ctx.user.roles if DISCORD_VIP_ROLES_ID.__contains__(role.id)]
-        if userVipRoles.__len__() != 0:
+        if userVipRoles:
             try:
                 customRole = await addVipRole(ctx)
-                if icon.__contains__('<') or icon.__contains__('>') or icon.__contains__(':'):
+                if '<' in icon or '>' in icon or ':' in icon:
                     try:
                         emoji = ctx.guild.get_emoji(int(icon.replace('<','').replace('>','').split(':')[2]))
                     except:
