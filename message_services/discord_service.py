@@ -26,12 +26,11 @@ for DISCORD_INTENT in DISCORD_INTENTS:
 bot = MyBot(config=None,command_prefix=DISCORD_BOT_PREFIX, intents=discord.Intents.all())
 levelConfig = None
 
-
 for module in [vip, info, account, interactions, xp, config, utils, events, moderation]:
     try:
         module.setup(bot)
     except Exception as e:
-        print(f"Error loading module {module.__name__}: {e}")
+        logging.error(f"Error loading module {module.__name__}: {e}")
 
 @bot.event
 async def on_ready():
