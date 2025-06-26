@@ -15,7 +15,7 @@ import requests
 import discord
 import re
 import os
-from commands import vip, info, account, interactions, xp, config, utils, events
+from commands import vip, info, account, interactions, xp, config, utils, events, moderation
 
 BIRTHDAY_REGEX = re.compile(r'(\d{1,2})(?:\s?(?:d[eo]|\/|\\|\.)\s?|\s?)(\d{1,2}|(?:janeiro|fevereiro|março|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro))(?:\s?(?:d[eo]|\/|\\|\.)\s?|\s?)(\d{4})')
 MONTHS = ['00','janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro']
@@ -29,7 +29,7 @@ timezone_offset = -3.0  # Pacific Standard Time (UTC−08:00)
 def now() -> datetime: return (datetime.now(timezone(timedelta(hours=timezone_offset)))).replace(tzinfo=None)
 
 
-for module in [vip, info, account, interactions, xp, config, utils, events]:
+for module in [vip, info, account, interactions, xp, config, utils, events, moderation]:
     module.setup(bot)
 
 @bot.event
