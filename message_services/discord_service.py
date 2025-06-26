@@ -920,7 +920,7 @@ async def approvePortaria(ctx: discord.Interaction, member: discord.Member, data
         await ctx.edit_original_response(content=f'O membro <@{member.id}> entrará no servidor com **carteirinha provisória** e terá acesso restrito ao servidor por sua conta ter **menos de 30 dias**. \nLembre de avisar o membro sobre isso')
         with pooled_connection() as cursor:
             assignTempRole(cursor.connection, ctx.guild_id, member, carteirinhaProvisoria.id, expiration_date, 'Carteirinha provisória')
-        await channel.edit(name=f'{channel.name}-provisória' if not channel.name.__contains__('provisória') else channel.name, category=provisoriaCategory)
+        await channel.edit(name=f'{channel.name}-provisória' if 'provisória' not in channel.name else channel.name, category=provisoriaCategory)
         return
 
     async for message in channel.history(limit=1, oldest_first=True):
