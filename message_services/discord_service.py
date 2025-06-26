@@ -929,7 +929,9 @@ async def approvePortaria(ctx: discord.Interaction, member: discord.Member, data
             if not matchEmbedded:
                 return await ctx.response.send_message(content=f'Você digitou uma data inválida: {data_nascimento}', ephemeral=True)
         else:
-            matchEmbedded = BIRTHDAY_REGEX.search(message.embeds[1].description) if isinstance(message.embeds[1].description, str) else None
+            matchEmbedded = None
+            if len(message.embeds) > 1 and isinstance(message.embeds[1].description, str):
+                matchEmbedded = BIRTHDAY_REGEX.search(message.embeds[1].description)
 
         if matchEmbedded:
             await ctx.response.send_message(content='registrando usuario...', ephemeral=True)
