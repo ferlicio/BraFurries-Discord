@@ -28,7 +28,10 @@ levelConfig = None
 
 
 for module in [vip, info, account, interactions, xp, config, utils, events, moderation]:
-    module.setup(bot)
+    try:
+        module.setup(bot)
+    except Exception as e:
+        print(f"Error loading module {module.__name__}: {e}")
 
 @bot.event
 async def on_ready():
