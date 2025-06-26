@@ -2,6 +2,7 @@ from core.database import connectToDatabase, assignTempRole, endConnectionWithCo
 from discord import Interaction, Member, Role, commands
 from datetime import timedelta, datetime
 from core.common.timeFunctions import now
+from typing import Literal
 import discord
 import re
 
