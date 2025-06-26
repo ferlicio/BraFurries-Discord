@@ -949,10 +949,10 @@ async def approvePortaria(ctx: discord.Interaction, member: discord.Member, data
                     registerUser(ctx.guild.id, member, birthday.date(), now().date())
                     eighteen_years_in_days = 6570
                     thirteen_years_in_days = 4745
-                    if age >= eighteenYearsInDays:  # 18+ anos
+                    if age >= eighteen_years_in_days:  # 18+ anos
                         await member.add_roles(cargoMaior18)
                         await member.remove_roles(cargoMenor18, cargoMenor13)
-                    elif age >= thirteenYearsInDays:  # 13+ anos
+                    elif age >= thirteen_years_in_days:  # 13+ anos
                         await member.add_roles(cargoMenor18)
                         await member.remove_roles(cargoMaior18, cargoMenor13)
                     else:
