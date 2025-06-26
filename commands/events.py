@@ -4,7 +4,7 @@ import os
 from datetime import datetime
 from core.database import connectToDatabase, endConnectionWithCommit, endConnection
 from core.database import includeEvent, getAllEvents, getEventsByState, getAllPendingApprovalEvents, approveEventById
-from core.verifications import localeIsAvailable, scheduleEvent, scheduleNextEventDate
+from core.verifications import localeIsAvailable, scheduleNextEventDate
 from core.database import admConnectTelegramAccount
 from core.discord_events import formatEventList
 
