@@ -9,8 +9,8 @@ from schemas.models.bot import *
 from schemas.models.locals import *
 from schemas.types.server_messages import *
 from datetime import datetime, timedelta
+from dateutil import tz, relativedelta
 from typing import Literal
-from dateutil import tz
 import requests
 import discord
 import re
@@ -947,8 +947,8 @@ async def approvePortaria(ctx: discord.Interaction, member: discord.Member, data
                     if not (cargoMaior18 in member.roles or cargoMenor18 in member.roles) and age >= 4745:
                         return await ctx.edit_original_response(content=f'O membro <@{member.id}> ainda não pegou seus cargos!' if carteirinhaCargos in member.roles else f'O membro <@{member.id}> ainda não tem a carteirinha de cargos, use o comando "/portaria_cargos" antes')
                     registerUser(ctx.guild.id, member, birthday.date(), now().date())
-                    eighteenYearsInDays = 6570
-                    thirteenYearsInDays = 4745
+                    eighteen_years_in_days = 6570
+                    thirteen_years_in_days = 4745
                     if age >= eighteenYearsInDays:  # 18+ anos
                         await member.add_roles(cargoMaior18)
                         await member.remove_roles(cargoMenor18, cargoMenor13)
