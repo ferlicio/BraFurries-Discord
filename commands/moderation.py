@@ -76,7 +76,7 @@ def setup(bot: commands.Bot):
 
 
     @bot.tree.command(name=f'registrar_usuario', description=f'Registra um membro')
-    async def profile(ctx: discord.Interaction, member: discord.Member, data_aprovacao:str, aniversario:str):
+    async def registerUser(ctx: discord.Interaction, member: discord.Member, data_aprovacao:str, aniversario:str):
         data_aprovacao = verifyDate(data_aprovacao)
         aniversario = verifyDate(aniversario)
         await ctx.response.send_message(content='Registrando usuário...',ephemeral=True)
@@ -90,7 +90,7 @@ def setup(bot: commands.Bot):
         
         
     @bot.tree.command(name=f'liberar_acesso_nsfw', description=f'Libera o acesso NSFW para o membro')
-    async def profile(ctx: discord.Interaction, member: discord.Member, data_aniversario:str):
+    async def grantNSFWAccess(ctx: discord.Interaction, member: discord.Member, data_aniversario:str):
         data_aniversario = verifyDate(data_aniversario)
         if data_aniversario == False:
             return await ctx.response.send_message(content='Data de aniversário inválida! use o formato dd/MM/YYYY', ephemeral=True)
