@@ -42,7 +42,7 @@ def setup(bot: commands.Bot):
         await addEvent(ctx, user, estado, cidade, event_name, address, price, starting_date, starting_time, ending_date, ending_time, description, group_link, site, max_price, event_logo_url)
 
     @bot.tree.command(name='novo_evento_por_usuario', description='Adiciona um evento ao calendário usando um usuário do telegram')
-    async def addEventWithTelegramUser(ctx: discord.Interaction, telegram_username: str, estado: str, cidade: str, event_name: str, address: str, price: float, starting_date: str, starting_time: str, ending_time: str, ending_date: str = None, description: str = None, group_link: str = None, site: str = None, max_price: float = None, event_logo_url: str = None):
+    async def addEventWithTelegramUser(ctx: discord.Interaction, telegram_username: str, estado: str, cidade: str, event_name: str, address: str, price: float, starting_date: str, starting_time: str, ending_date: str, ending_time: str, description: str = None, group_link: str = None, site: str = None, max_price: float = None, event_logo_url: str = None):
         await addEvent(ctx, telegram_username, estado, cidade, event_name, address, price, starting_date, starting_time, ending_date, ending_time, description, group_link, site, max_price, event_logo_url)
 
     @bot.tree.command(name='eventos', description='Lista todos os eventos registrados')
