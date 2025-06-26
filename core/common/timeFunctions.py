@@ -1,7 +1,7 @@
 from datetime import date
 import re
 
-def calcular_idade (message):
+""" def calcular_idade (message):
     if (re.search(r'\b(\d{2}\s+de\s+\w+\s+de\s+\d{4})\b',message)):
         data = re.search(r'\b(\d{2})\s+de\s+(\w+)\s+de\s+(\d{4})\b',message)
         message = data.group(1) + '/' + str(meses.index(data.group(2).lower())+1) + '/' + data.group(3)
@@ -17,4 +17,4 @@ def calcular_idade (message):
         if data_atual.month < data_nascimento.month or (data_atual.month == data_nascimento.month and data_atual.day < data_nascimento.day):
             idade -= 1
         return idade
-    return invalid
+    return invalid """

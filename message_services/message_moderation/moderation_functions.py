@@ -1,9 +1,8 @@
-from core.common.timeFunctions import calcular_idade
 from datetime import datetime
 import asyncio
 import re
 
-async def moderate(bot, message):
+""" async def moderate(bot, message):
     if await portaria(bot, message): return True
     return False
 
@@ -44,4 +43,4 @@ async def check_age(bot, message):
         await asyncio.sleep(1)
         await message.channel.send('segue esse exemplo: 20 anos, nascido em 01/01/2000')
         return True
-    return False
+    return False """
