@@ -937,7 +937,7 @@ async def approvePortaria(ctx: discord.Interaction, member: discord.Member, data
                 day = int(matchEmbeded.group(1))
                 month = int(matchEmbeded.group(2) if matchEmbeded.group(2).isdigit() else MONTHS.index(matchEmbeded.group(2)))
                 year = int(matchEmbeded.group(3))
-                if str(year).__len__()<=2:
+                if len(str(year)) <= 2:
                     year += 2000 if year < (now().date().year - 2000) else 1900
                 birthday = datetime(year, month, day)
                 if birthday.year > 1975 and birthday.year < now().year:
