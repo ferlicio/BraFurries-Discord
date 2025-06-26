@@ -945,10 +945,12 @@ async def approvePortaria(ctx: discord.Interaction, member: discord.Member, data
                     if not (cargoMaior18 in member.roles or cargoMenor18 in member.roles) and age >= 4745:
                         return await ctx.edit_original_response(content=f'O membro <@{member.id}> ainda não pegou seus cargos!' if carteirinhaCargos in member.roles else f'O membro <@{member.id}> ainda não tem a carteirinha de cargos, use o comando "/portaria_cargos" antes')
                     registerUser(ctx.guild.id, member, birthday.date(), now().date())
-                    if age >= 6570:  # 18+ anos
+                    eighteenYearsInDays = 6570
+                    thirteenYearsInDays = 4745
+                    if age >= eighteenYearsInDays:  # 18+ anos
                         await member.add_roles(cargoMaior18)
                         await member.remove_roles(cargoMenor18, cargoMenor13)
-                    elif age >= 4745:  # 13+ anos
+                    elif age >= thirteenYearsInDays:  # 13+ anos
                         await member.add_roles(cargoMenor18)
                         await member.remove_roles(cargoMaior18, cargoMenor13)
                     else:
