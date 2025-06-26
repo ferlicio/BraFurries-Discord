@@ -960,7 +960,7 @@ async def approvePortaria(ctx: discord.Interaction, member: discord.Member, data
                     await channel.edit(name=f'{channel.name}-✅' if not channel.name.__contains__('-✅') else channel.name)
                     return await ctx.edit_original_response(content=f'O membro <@{member.id}> foi aprovado com sucesso!\nLembre de dar boas vindas a ele no <#753348623844114452> :3')
                 else:
-                    return await ctx.edit_original_response(content=f'Data inválida encontrada: {matchEmbedded.group(0)}\nO membro tem {(now().date() - birthday.date()).year} anos?')
+                    return await ctx.edit_original_response(content=f'Data inválida encontrada: {matchEmbedded.group(0)}\nO membro tem {relativedelta(now().date(), birthday.date()).years} anos?')
             except ValueError:
                 return await ctx.edit_original_response(content=f'Data inválida encontrada: {matchEmbedded.group(0)}')
             except Exception as e:
