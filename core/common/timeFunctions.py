@@ -1,10 +1,10 @@
-from datetime import date
+from datetime import datetime, timedelta, date, timezone
 import re
 
-meses = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"]
-invalid = "Entrada inválida"
+timezone_offset = -3.0  # Pacific Standard Time (UTC−08:00)
+def now() -> datetime: return (datetime.now(timezone(timedelta(hours=timezone_offset)))).replace(tzinfo=None)
 
-def calcular_idade (message):
+""" def calcular_idade (message):
     if (re.search(r'\b(\d{2}\s+de\s+\w+\s+de\s+\d{4})\b',message)):
         data = re.search(r'\b(\d{2})\s+de\s+(\w+)\s+de\s+(\d{4})\b',message)
         message = data.group(1) + '/' + str(meses.index(data.group(2).lower())+1) + '/' + data.group(3)
@@ -20,4 +20,4 @@ def calcular_idade (message):
         if data_atual.month < data_nascimento.month or (data_atual.month == data_nascimento.month and data_atual.day < data_nascimento.day):
             idade -= 1
         return idade
-    return invalid
+    return invalid """
