@@ -7,7 +7,7 @@ import re
 
 def setup(bot: commands.Bot):
     @bot.tree.command(name=f'relatorio-portaria', description=f'Gera um relatório de atividades na portaria')
-    async def test(ctx: discord.Interaction, periodo:Literal['semana', 'mês']):
+    async def portariaReport(ctx: discord.Interaction, periodo:Literal['semana', 'mês']):
         if periodo == 'semana':
             InitialDate = now() - timedelta(days=7)
         elif periodo == 'mês':
