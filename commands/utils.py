@@ -1,13 +1,13 @@
 from datetime import timedelta, datetime
 import os
 import discord
-from discord import Interaction, Member, Role
+from discord import Interaction, Member, Role, commands
 from core.database import connectToDatabase, assignTempRole, endConnectionWithCommit
 from settings import BOT_NAME
 import requests
 
 
-def setup(bot):
+def setup(bot: commands.Bot):
     @bot.tree.command(name='call_titio', description=f'Faz {BOT_NAME} chamar o titio')
     async def callAdmin(ctx: Interaction, message: str):
         requests.post(f"https://api.telegram.org/bot{os.getenv('TELEGRAM_TOKEN')}/sendMessage?chat_id={os.getenv('TELEGRAM_ADMIN')}&text={ctx.user.name}: {message}")

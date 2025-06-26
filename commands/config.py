@@ -1,9 +1,9 @@
-from discord import Interaction
+from discord import Interaction, commands
 from schemas.types.server_messages import ServerMessages
 from core.database import setServerMessage
 
 
-def setup(bot):
+def setup(bot: commands.Bot):
     @bot.tree.command(name='mensagens_servidor', description='Configure as mensagens especificas do servidor')
     async def changeMessages(ctx: Interaction, tipo: ServerMessages, mensagem: str):
         if tipo == 'Aniversário':

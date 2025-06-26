@@ -1,8 +1,8 @@
-from discord import Interaction, Member
+from discord import Interaction, Member, commands
 from core.database import admConnectTelegramAccount
 
 
-def setup(bot):
+def setup(bot: commands.Bot):
     @bot.tree.command(name='adm-conectar_conta', description='Conecta sua conta do discord com a do telegram')
     async def connectAccount(ctx: Interaction, user: Member, telegram_username: str):
         await ctx.response.defer()
