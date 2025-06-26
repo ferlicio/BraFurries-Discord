@@ -1,4 +1,4 @@
-from commands.default_commands import calcular_idade
+from core.common.timeFunctions import calcular_idade
 from datetime import datetime
 import asyncio
 import re

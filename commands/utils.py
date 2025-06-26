@@ -1,0 +1,44 @@
+from datetime import timedelta, datetime
+import os
+import discord
+from discord import Interaction, Member, Role
+from core.database import connectToDatabase, assignTempRole, endConnectionWithCommit
+from settings import BOT_NAME
+import requests
+
+
+def setup(bot):
+    @bot.tree.command(name='call_titio', description=f'Faz {BOT_NAME} chamar o titio')
+    async def callAdmin(ctx: Interaction, message: str):
+        requests.post(f"https://api.telegram.org/bot{os.getenv('TELEGRAM_TOKEN')}/sendMessage?chat_id={os.getenv('TELEGRAM_ADMIN')}&text={ctx.user.name}: {message}")
+        try:
+            resp = await ctx.response.send_message(content='O titio foi avisado! agora é só esperar :3', ephemeral=True)
+            return resp
+        except Exception:
+            if resp:
+                channel = await ctx.user.create_dm()
+                await channel.send(content='O titio foi avisado! agora é só esperar :3')
+
+    @bot.tree.command(name='temp_role', description='Adiciona um cargo temporário a um membro')
+    async def addTempRole(ctx: Interaction, member: Member, role: Role, duration: str, reason: str = None):
+        duration = duration.lower()
+        if duration[-1] not in ['d', 's', 'm'] or not duration[:-1].isdigit() or len(duration) < 2:
+            return await ctx.response.send_message(content='''Duração inválida! Você informou uma duração no formato "1d", "2s" ou "3m"?\nSiglas: d=dias, s=semanas, m=meses''', ephemeral=True)
+        if int(duration[:-1]) == 0:
+            return await ctx.response.send_message(content='''Duração inválida! Você informou uma duração maior que 0?''', ephemeral=True)
+        if reason is None:
+            return await ctx.response.send_message(content='''Você precisa informar um motivo para a adição do cargo''', ephemeral=True)
+        if duration[-1] == 'd':
+            duration = timedelta(days=int(duration[:-1]))
+        elif duration[-1] == 's':
+            duration = timedelta(weeks=int(duration[:-1]))
+        else:
+            duration = timedelta(days=int(duration[:-1]) * 30)
+        expiration_date = datetime.utcnow() + duration
+        await ctx.response.send_message(content='Adicionando o cargo...', ephemeral=True)
+        mydb = connectToDatabase()
+        roleAssignment = assignTempRole(mydb, ctx.guild_id, member, role.id, expiration_date, reason)
+        endConnectionWithCommit(mydb)
+        if roleAssignment:
+            await member.add_roles(role)
+            await ctx.edit_original_response(content=f'O membro <@{member.id}> agora tem o cargo {role.name} por {duration}!')

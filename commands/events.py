@@ -139,12 +139,3 @@ def setup(bot: commands.Bot):
     @bot.tree.command(name='evento_add_staff', description='Adiciona um membro da staff como organizador de um evento')
     async def addStaffToEvent(ctx: discord.Interaction, event_id: int, staff: discord.Member):
         pass
-
-    @bot.tree.command(name='adm-conectar_conta', description='Conecta sua conta do discord com a do telegram')
-    async def connectAccount(ctx: discord.Interaction, user: discord.Member, telegram_username: str):
-        await ctx.response.defer()
-        result = admConnectTelegramAccount(ctx.guild.id, user, telegram_username)
-        if result:
-            return await ctx.followup.send(content=f'Sua conta foi conectada com sucesso! agora você pode usar os comandos do bot no discord e no telegram', ephemeral=False)
-        else:
-            return await ctx.followup.send(content=f'Não foi possível conectar sua conta! você já está conectado?', ephemeral=True)
