@@ -36,7 +36,9 @@ def setup(bot: commands.Bot):
                     icon = await emoji.read()
                 await customRole.edit(display_icon=icon)
                 await ctx.response.send_message(content='Ícone do cargo VIP alterado com sucesso!', ephemeral=False)
-                return saveCustomRole(ctx.guild_id, ctx.user, iconId=emoji.id)
+                if 'emoji' in locals() and emoji is not None:
+                    return saveCustomRole(ctx.guild_id, ctx.user, iconId=emoji.id)
+                return saveCustomRole(ctx.guild_id, ctx.user, iconId=None)
             except Exception as e:
                 print(e)
                 return await ctx.response.send_message(content='''Algo deu errado, avise o titio sobre!''', ephemeral=True)
