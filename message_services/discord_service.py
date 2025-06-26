@@ -13,6 +13,7 @@ from dateutil import tz, relativedelta
 from typing import Literal
 import requests
 import discord
+import logging
 import re
 import os
 from commands import vip, info, account, interactions, xp, config, utils, events, moderation
