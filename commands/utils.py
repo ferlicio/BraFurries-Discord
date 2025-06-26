@@ -4,6 +4,7 @@ import discord
 from discord import Interaction, Member, Role
 from discord.ext import commands
 from core.database import connectToDatabase, assignTempRole, endConnectionWithCommit
+from core.common.timeFunctions import now
 from settings import BOT_NAME
 import requests
 
@@ -36,7 +37,7 @@ def setup(bot: commands.Bot):
             duration = timedelta(weeks=int(duration[:-1]))
         else:
             duration = timedelta(days=int(duration[:-1]) * 30)
-        expiration_date = datetime.utcnow() + duration
+        expiration_date = now() + duration
         await ctx.response.send_message(content='Adicionando o cargo...', ephemeral=True)
         mydb = connectToDatabase()
         roleAssignment = assignTempRole(mydb, ctx.guild_id, member, role.id, expiration_date, reason)
