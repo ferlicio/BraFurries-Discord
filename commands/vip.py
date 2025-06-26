@@ -10,7 +10,7 @@ def setup(bot: commands.Bot):
     @bot.tree.command(name='vip-mudar_cor', description='Muda a cor do cargo VIP do membro')
     async def changeVipColor(ctx: discord.Interaction, cor: str):
         userVipRoles = [role.id for role in ctx.user.roles if DISCORD_VIP_ROLES_ID.__contains__(role.id)]
-        if userVipRoles.__len__() != 0:
+        if userVipRoles:
             if not re.match(r'^#(?:[a-fA-F0-9]{3}){1,2}$', cor):
                 return await ctx.response.send_message(content='''# Cor invalida!\nVocê precisa informar uma cor no formato Hex (#000000).\nVocê pode procurar por uma cor em https://htmlcolorcodes.com/color-picker/ e testa-la usando o comando "?color #000000"''', ephemeral=False)
             if not await colorIsAvailable(cor):
