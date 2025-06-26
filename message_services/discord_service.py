@@ -961,7 +961,7 @@ async def approvePortaria(ctx: discord.Interaction, member: discord.Member, data
                         await channel.edit(name=f'{channel.name}-provisória' if not channel.name.__contains__('provisória') else channel.name, category=provisoriaCategory)
                         return await ctx.edit_original_response(content=f'Por ser menor de 13 anos, o membro <@{member.id}> entrará no servidor com carteirinha provisória e terá acesso restrito ao servidor. Lembre de avisar o membro sobre isso.')
                     await member.remove_roles(carteirinhaCargos, cargoVisitante)
-                    await channel.edit(name=f'{channel.name}-✅' if not channel.name.__contains__('-✅') else channel.name)
+                    await channel.edit(name=f'{channel.name}-✅' if not '-✅' in channel.name else channel.name)
                     return await ctx.edit_original_response(content=f'O membro <@{member.id}> foi aprovado com sucesso!\nLembre de dar boas vindas a ele no <#753348623844114452> :3')
                 else:
                     return await ctx.edit_original_response(content=f'Data inválida encontrada: {matchEmbedded.group(0)}\nO membro tem {relativedelta(now().date(), birthday.date()).years} anos?')
