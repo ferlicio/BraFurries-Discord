@@ -11,6 +11,7 @@ def setup(bot):
     @bot.tree.command(name='call_titio', description=f'Faz {BOT_NAME} chamar o titio')
     async def callAdmin(ctx: Interaction, message: str):
         requests.post(f"https://api.telegram.org/bot{os.getenv('TELEGRAM_TOKEN')}/sendMessage?chat_id={os.getenv('TELEGRAM_ADMIN')}&text={ctx.user.name}: {message}")
+        resp = None
         try:
             resp = await ctx.response.send_message(content='O titio foi avisado! agora é só esperar :3', ephemeral=True)
             return resp
