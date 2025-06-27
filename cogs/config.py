@@ -9,7 +9,7 @@ class ConfigCog(commands.Cog):
         super().__init__()
 
     @commands.command(name='mensagens_servidor', description='Configure as mensagens especificas do servidor')
-    async def changeMessages(ctx: Interaction, tipo: ServerMessages, mensagem: str):
+    async def changeMessages(self, ctx: Interaction, tipo: ServerMessages, mensagem: str):
         if tipo == 'Aniversário':
             updated = setServerMessage(ctx.guild_id, 'birthday', mensagem)
         elif tipo == 'Bump':
