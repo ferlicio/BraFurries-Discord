@@ -1,3 +1,4 @@
+from commands.default_commands import calcular_idade
 from core.AI_Functions.terceiras.openAI import *
 from core.routine_functions import *
 from core.discord_events import *
@@ -7,16 +8,13 @@ from discord.ext import tasks
 from schemas.models.bot import *
 from schemas.models.locals import *
 from schemas.types.server_messages import *
-from core.common.timeFunctions import now
 from datetime import datetime, timedelta
 from dateutil import tz, relativedelta
 from typing import Literal
 import requests
 import discord
-import logging
 import re
 import os
-from cogs import vip, info, account, interactions, xp, config, utils, events, moderation
 
 BIRTHDAY_REGEX = re.compile(r'(\d{1,2})(?:\s?(?:d[eo]|\/|\\|\.)\s?|\s?)(\d{1,2}|(?:janeiro|fevereiro|março|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro))(?:\s?(?:d[eo]|\/|\\|\.)\s?|\s?)(\d{4})')
 MONTHS = ['00','janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro']
@@ -26,12 +24,10 @@ for DISCORD_INTENT in DISCORD_INTENTS:
     setattr(intents, DISCORD_INTENT, True)
 bot = MyBot(config=None,command_prefix=DISCORD_BOT_PREFIX, intents=discord.Intents.all())
 levelConfig = None
+timezone_offset = -3.0  # Pacific Standard Time (UTC−08:00)
+def now() -> datetime: return (datetime.now(timezone(timedelta(hours=timezone_offset)))).replace(tzinfo=None)
 
-for module in [vip, info, account, interactions, xp, config, utils, events, moderation]:
-    try:
-        module.setup(bot)
-    except Exception as e:
-        logging.error(f"Error loading module {module.__name__}: {e}")
+
 
 @bot.event
 async def on_ready():
@@ -284,7 +280,6 @@ async def configForVips():
         print(f'Não foi possível encontrar um cargo VIP no servidor {guild.name}')
 
 
-
 @bot.tree.command(name=f'testes', description=f'teste')
 async def test(ctx: discord.Interaction):
     pass
@@ -297,7 +292,6 @@ async def load_cogs():
                 print(f'Cog {filename} carregada com sucesso!')
             except Exception as e:
                 print(f'Erro ao carregar cog {filename}: {e}')
-
 
 def run_discord_client(chatBot):
     

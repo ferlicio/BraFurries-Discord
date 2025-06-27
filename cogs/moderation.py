@@ -4,11 +4,11 @@ from discord import Interaction, Member, Role
 from discord.ext import commands
 from datetime import timedelta, datetime
 from dateutil import relativedelta
-from core.common.timeFunctions import now
+from core.time_functions import now
 from core.database import getUserInfo
 from core.verifications import verifyDate
 from core.database import *
-from core.common.timeFunctions import MONTHS
+from core.time_functions import MONTHS
 from settings import *
 
 from typing import Literal

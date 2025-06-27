@@ -1,12 +1,12 @@
+from core.database import connectToDatabase, assignTempRole, endConnectionWithCommit
 from datetime import timedelta, datetime
-import os
-import discord
+from core.time_functions import now
 from discord import Interaction, Member, Role
 from discord.ext import commands
-from core.database import connectToDatabase, assignTempRole, endConnectionWithCommit
-from core.common.timeFunctions import now
+import discord
 from settings import BOT_NAME
 import requests
+import os
 
 
 class UtilsCog(commands.Cog):
