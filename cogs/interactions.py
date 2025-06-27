@@ -1,5 +1,6 @@
 from discord.ext import commands
 import discord
+from discord import app_commands
 from typing import Literal
 from settings import BOT_NAME
 

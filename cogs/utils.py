@@ -1,7 +1,7 @@
 from core.database import connectToDatabase, assignTempRole, endConnectionWithCommit
 from datetime import timedelta, datetime
 from core.time_functions import now
-from discord import Interaction, Member, Role
+from discord import Interaction, Member, Role, app_commands
 from discord.ext import commands
 import discord
 from settings import BOT_NAME

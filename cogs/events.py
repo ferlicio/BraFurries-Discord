@@ -1,6 +1,7 @@
 from discord.ext import commands
 import discord
 import os
+from discord import app_commands
 from datetime import datetime
 from core.database import connectToDatabase, endConnectionWithCommit, endConnection
 from core.database import includeEvent, getAllEvents, getEventsByState, getAllPendingApprovalEvents, approveEventById

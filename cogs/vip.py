@@ -1,4 +1,5 @@
 from discord.ext import commands
+from discord import app_commands
 import discord
 import re
 from core.verifications import colorIsAvailable, addVipRole

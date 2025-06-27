@@ -1,6 +1,5 @@
 from message_services.discord_service import run_discord_client
 import sys, codecs
-import asyncio
 
 sys.stdout = codecs.getwriter("utf-8")(sys.stdout.detach())
 chatBot = {

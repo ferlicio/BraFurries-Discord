@@ -1,4 +1,4 @@
-from discord import Interaction, Member
+from discord import Interaction, Member, app_commands
 from discord.ext import commands
 from core.database import admConnectTelegramAccount
 

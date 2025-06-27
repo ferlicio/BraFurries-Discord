@@ -1,5 +1,6 @@
 from discord.ext import commands
 import discord
+from discord import app_commands
 from typing import Literal
 from datetime import datetime
 from core.database import connectToDatabase, endConnectionWithCommit, endConnection
