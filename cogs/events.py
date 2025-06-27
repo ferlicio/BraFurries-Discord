@@ -4,8 +4,8 @@ import os
 from datetime import datetime
 from core.database import connectToDatabase, endConnectionWithCommit, endConnection
 from core.database import includeEvent, getAllEvents, getEventsByState, getAllPendingApprovalEvents, approveEventById
-from core.verifications import localeIsAvailable, scheduleNextEventDate
-from core.database import admConnectTelegramAccount
+from core.verifications import localeIsAvailable, scheduleNextEventDate, rescheduleEventDate
+from core.database import admConnectTelegramAccount, getEventByName, formatSingleEvent
 from core.discord_events import formatEventList
 
 
@@ -91,6 +91,37 @@ class EventCog(commands.Cog):
                 await ctx.followup.send(content=message) if message != eventsResponse[-1] else await ctx.channel.send(content=message)
         else:
             return await ctx.followup.send(content=f'Não há eventos registrados em {state}... que tal ser o primeiro? :3')
+
+    @bot.tree.command(name=f'evento', description=f'Mostra os detalhes de um evento')
+    async def showEvent(self, ctx: discord.Interaction, event_name: str):
+        if event_name.__len__() < 4:
+            return await ctx.response.send_message(content='''Nome do evento inválido! você informou um nome com menos de 4 caracteres? <:catsip:851024825333186560>''', ephemeral=True)
+        await ctx.response.defer()
+        event = getEventByName(event_name)
+        if event:
+            eventEmbeded = formatSingleEvent(event)
+            return await ctx.followup.send(embed=eventEmbeded)
+        else:
+            return await ctx.followup.send(content=f'Não há eventos registrados com esse nome. Tem certeza que digitou o nome certo?')
+
+    @app_commands.command(name=f'evento_reagendar', description=f'Reagenda um evento pendente')
+    async def rescheduleEvent(self, ctx: discord.Interaction, event_name: str, new_date: str):
+        try: new_date = datetime.strptime(new_date, "%d/%m/%Y")
+        except ValueError:
+            return await ctx.response.send_message(content='''Data inválida! você informou uma data no formato "dd/mm/aaaa"? <:catsip:851024825333186560>''', ephemeral=True)
+        await ctx.response.defer()
+        result = rescheduleEventDate(event_name, new_date, ctx.user.name)
+        if result == True:
+            return await ctx.followup.send(content=f'O evento **{event_name}** foi reagendado com sucesso!')
+        elif result == "não encontrado":
+            return await ctx.followup.send(content=f'Não foi possível encontrar um evento com esse nome! tem certeza que digitou o nome certo?')
+        elif result == "não é o dono":
+            return await ctx.followup.send(content=f'Você não é o dono desse evento! apenas o dono pode reagendar o evento')
+        elif result == "em andamento":
+            return await ctx.followup.send(content=f'Não é possível reagendar um evento que já está em andamento')
+        elif result == "encerrado":
+            return await ctx.followup.send(content=f'Não é possível reagendar um evento que já foi realizado')
+
 
     @app_commands.command(name='evento_agendar_prox', description='Agenda no calendario a próxima data do evento')
     async def scheduleNextEvent(self, ctx: discord.Interaction, nome_do_evento: str, data: str):

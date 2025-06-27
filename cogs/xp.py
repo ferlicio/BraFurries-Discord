@@ -30,6 +30,8 @@ class XpCog(commands.Cog):
     @app_commands.command(name='xp_remover', description='Remove xp de um membro')
     async def removeXp(self, ctx: discord.Interaction, member: discord.Member, xp: int):
         pass
+    
+###############################################################################################################
 
     @app_commands.command(name='loja', description='Compre itens com seu dinheiro')
     async def shop(self, ctx: discord.Interaction):
@@ -59,6 +61,8 @@ class XpCog(commands.Cog):
             await ctx.send(f'Você já pegou sua recompensa diária! Tente novamente em {error.retry_after:.0f} segundos', ephemeral=True)
         else:
             raise error
+        
+##############################################################################################################
 
     @app_commands.command(name='rp_banho', description='Tomar banho dá xp sabia?')
     async def bath(self, ctx: discord.Interaction):
@@ -79,6 +83,10 @@ class XpCog(commands.Cog):
     @app_commands.command(name='rp_escrever', description='Escreva uma história')
     async def write(self, ctx: discord.Interaction):
         pass
+    
+    """ @bot.tree.command(name=f'rp_missao', description=f'Complete missões para ganhar xp e dinheiro')
+    async def mission(ctx: discord.Interaction):
+        pass """
     
     
 async def setup(bot: commands.Bot):
