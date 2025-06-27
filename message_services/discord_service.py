@@ -284,7 +284,7 @@ async def test(ctx: discord.Interaction):
     pass
         
 async def load_cogs():
-    for filename in os.listdir('../../cogs'):
+    for filename in os.listdir('../cogs'):
         if filename.endswith('.py'):
             try:
                 await bot.load_extension(f'cogs.{filename[:-3]}')
