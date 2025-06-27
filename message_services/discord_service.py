@@ -292,7 +292,7 @@ async def load_cogs():
             except Exception as e:
                 print(f'Erro ao carregar cog {filename}: {e}')
 
-def run_discord_client(chatBot):
-    load_cogs()
+async def run_discord_client(chatBot):
+    await load_cogs()
     bot.chatBot = chatBot
     bot.run(os.getenv('DISCORD_TOKEN'))
