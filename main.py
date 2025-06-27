@@ -6,11 +6,11 @@ chatBot = {
     "name": "Coddy",
 }
 
-async def main():
-    await run_discord_client(chatBot)
+def main():
+    run_discord_client(chatBot)
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()
 
 
 
