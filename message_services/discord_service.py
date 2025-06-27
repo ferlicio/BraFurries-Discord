@@ -1,4 +1,3 @@
-from commands.default_commands import calcular_idade
 from core.AI_Functions.terceiras.openAI import *
 from core.routine_functions import *
 from core.discord_events import *
