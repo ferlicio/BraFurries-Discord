@@ -8,9 +8,13 @@ from core.database import includeBirthday, getAllBirthdays
 from schemas.models.locals import stateLetterCodes
 
 
-def setup(bot: commands.Bot):
-    @bot.tree.command(name='registrar_local', description='Registra o seu local')
-    async def registerLocal(ctx: discord.Interaction, local: str):
+class InfoCog(commands.Cog):
+    def __init__(self, bot: commands.Bot):
+        self.bot = bot
+        super().__init__()
+
+    @commands.command(name='registrar_local', description='Registra o seu local')
+    async def registerLocal(self, ctx: discord.Interaction, local: str):
         mydb = connectToDatabase()
         availableLocals = getAllLocals(mydb)
         if stateLetterCodes[local]:
@@ -27,8 +31,8 @@ def setup(bot: commands.Bot):
             endConnection(mydb)
             return await ctx.response.send_message(content='''Local inválido! Você deve informar uma sigla de Estado válido''', ephemeral=True)
 
-    @bot.tree.command(name='furros_na_area', description='Lista todos os furries registrados em um local')
-    async def listFurries(ctx: discord.Interaction, local: str):
+    @commands.command(name='furros_na_area', description='Lista todos os furries registrados em um local')
+    async def listFurries(self, ctx: discord.Interaction, local: str):
         mydb = connectToDatabase()
         availableLocals = getAllLocals(mydb)
         if stateLetterCodes[local]:
@@ -47,8 +51,8 @@ def setup(bot: commands.Bot):
         else:
             return await ctx.response.send_message(content='''Local inválido! Você deve informar uma sigla de Estado válido''', ephemeral=True)
 
-    @bot.tree.command(name='registrar_aniversario', description='Registra seu aniversário')
-    async def registerBirthday(ctx: discord.Interaction, data: str, mencionavel: Literal["sim", "não"]):
+    @commands.command(name='registrar_aniversario', description='Registra seu aniversário')
+    async def registerBirthday(self, ctx: discord.Interaction, data: str, mencionavel: Literal["sim", "não"]):
         try:
             datetime.strptime(data, "%d/%m/%Y")
         except ValueError:
@@ -75,8 +79,8 @@ def setup(bot: commands.Bot):
         finally:
             endConnectionWithCommit(mydb)
 
-    @bot.tree.command(name='aniversarios', description='Lista todos os aniversários registrados')
-    async def listBirthdays(ctx: discord.Interaction):
+    @commands.command(name='aniversarios', description='Lista todos os aniversários registrados')
+    async def listBirthdays(self, ctx: discord.Interaction):
         await ctx.response.defer()
         result = getAllBirthdays()
         if result:
@@ -88,3 +92,6 @@ def setup(bot: commands.Bot):
             return await ctx.followup.send(content=f'Aqui estão os aniversários registrados:```{birthdaysResponse}```')
         else:
             return await ctx.followup.send(content=f'Não há aniversários registrados... que tal ser o primeiro? :3')
+
+async def setup(bot: commands.Bot):
+    await bot.add_cog(InfoCog(bot))

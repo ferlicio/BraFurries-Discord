@@ -16,7 +16,7 @@ import discord
 import logging
 import re
 import os
-from commands import vip, info, account, interactions, xp, config, utils, events, moderation
+from cogs import vip, info, account, interactions, xp, config, utils, events, moderation
 
 BIRTHDAY_REGEX = re.compile(r'(\d{1,2})(?:\s?(?:d[eo]|\/|\\|\.)\s?|\s?)(\d{1,2}|(?:janeiro|fevereiro|março|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro))(?:\s?(?:d[eo]|\/|\\|\.)\s?|\s?)(\d{4})')
 MONTHS = ['00','janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro']
@@ -289,7 +289,17 @@ async def configForVips():
 async def test(ctx: discord.Interaction):
     pass
         
+async def load_cogs():
+    for filename in os.listdir('../../cogs'):
+        if filename.endswith('.py'):
+            try:
+                await bot.load_extension(f'cogs.{filename[:-3]}')
+                print(f'Cog {filename} carregada com sucesso!')
+            except Exception as e:
+                print(f'Erro ao carregar cog {filename}: {e}')
+
 
 def run_discord_client(chatBot):
+    
     bot.chatBot = chatBot
     bot.run(os.getenv('DISCORD_TOKEN'))

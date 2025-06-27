@@ -6,9 +6,13 @@ from core.database import saveCustomRole
 from settings import DISCORD_VIP_ROLES_ID
 
 
-def setup(bot: commands.Bot):
-    @bot.tree.command(name='vip-mudar_cor', description='Muda a cor do cargo VIP do membro')
-    async def changeVipColor(ctx: discord.Interaction, cor: str):
+class VipCog(commands.Cog):
+    def __init__(self, bot: commands.Bot):
+        self.bot = bot
+        super().__init__()
+        
+    @commands.command(name='vip-mudar_cor', description='Muda a cor do cargo VIP do membro')
+    async def changeVipColor(self, ctx: discord.Interaction, cor: str):
         userVipRoles = [role.id for role in ctx.user.roles if DISCORD_VIP_ROLES_ID.__contains__(role.id)]
         if userVipRoles:
             if not re.match(r'^#(?:[a-fA-F0-9]{3}){1,2}$', cor):
@@ -22,8 +26,8 @@ def setup(bot: commands.Bot):
             return saveCustomRole(ctx.guild_id, ctx.user, color=corFormatada)
         return await ctx.response.send_message(content='Você não é vip! você não pode fazer isso', ephemeral=True)
 
-    @bot.tree.command(name='vip-mudar_icone', description='Muda o icone do cargo VIP do membro')
-    async def changeVipIcon(ctx: discord.Interaction, icon: str):
+    @commands.command(name='vip-mudar_icone', description='Muda o icone do cargo VIP do membro')
+    async def changeVipIcon(self, ctx: discord.Interaction, icon: str):
         userVipRoles = [role.id for role in ctx.user.roles if DISCORD_VIP_ROLES_ID.__contains__(role.id)]
         if userVipRoles:
             try:
@@ -43,3 +47,7 @@ def setup(bot: commands.Bot):
                 print(e)
                 return await ctx.response.send_message(content='''Algo deu errado, avise o titio sobre!''', ephemeral=True)
         return await ctx.response.send_message(content='Você não é vip! você não pode fazer isso', ephemeral=True)
+
+
+async def setup(bot: commands.Bot):
+    await bot.add_cog(VipCog(bot))

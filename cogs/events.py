@@ -9,8 +9,12 @@ from core.database import admConnectTelegramAccount
 from core.discord_events import formatEventList
 
 
-def setup(bot: commands.Bot):
-    async def addEvent(ctx: discord.Interaction, user, state: str, city: str, event_name: str, address: str, price: float, starting_date: str, starting_time: str, ending_date: str, ending_time: str, description: str = None, group_link: str = None, site: str = None, max_price: float = None, event_logo_url: str = None):
+class EventCog(commands.Cog):
+    def __init__(self, bot: commands.Bot):
+        self.bot = bot
+        super().__init__()
+
+    async def addEvent(self, ctx: discord.Interaction, user, state: str, city: str, event_name: str, address: str, price: float, starting_date: str, starting_time: str, ending_date: str, ending_time: str, description: str = None, group_link: str = None, site: str = None, max_price: float = None, event_logo_url: str = None):
         try:
             datetime.strptime(starting_date, "%d/%m/%Y")
             if ending_date is None:
@@ -37,16 +41,16 @@ def setup(bot: commands.Bot):
             if result:
                 return await ctx.followup.send(content=f'O evento **{event_name}** foi registrado com sucesso!', ephemeral=False)
 
-    @bot.tree.command(name='novo_evento', description='Adiciona um evento ao calendário')
-    async def addEventWithDiscordUser(ctx: discord.Interaction, user: discord.Member, estado: str, cidade: str, event_name: str, address: str, price: float, starting_date: str, starting_time: str, ending_date: str, ending_time: str, description: str = None, group_link: str = None, site: str = None, max_price: float = None, event_logo_url: str = None):
-        await addEvent(ctx, user, estado, cidade, event_name, address, price, starting_date, starting_time, ending_date, ending_time, description, group_link, site, max_price, event_logo_url)
+    @commands.command(name='novo_evento', description='Adiciona um evento ao calendário')
+    async def addEventWithDiscordUser(self, ctx: discord.Interaction, user: discord.Member, estado: str, cidade: str, event_name: str, address: str, price: float, starting_date: str, starting_time: str, ending_date: str, ending_time: str, description: str = None, group_link: str = None, site: str = None, max_price: float = None, event_logo_url: str = None):
+        await EventCog.addEvent(self, ctx, user, estado, cidade, event_name, address, price, starting_date, starting_time, ending_date, ending_time, description, group_link, site, max_price, event_logo_url)
 
-    @bot.tree.command(name='novo_evento_por_usuario', description='Adiciona um evento ao calendário usando um usuário do telegram')
-    async def addEventWithTelegramUser(ctx: discord.Interaction, telegram_username: str, estado: str, cidade: str, event_name: str, address: str, price: float, starting_date: str, starting_time: str, ending_date: str, ending_time: str, description: str = None, group_link: str = None, site: str = None, max_price: float = None, event_logo_url: str = None):
-        await addEvent(ctx, telegram_username, estado, cidade, event_name, address, price, starting_date, starting_time, ending_date, ending_time, description, group_link, site, max_price, event_logo_url)
+    @commands.command(name='novo_evento_por_usuario', description='Adiciona um evento ao calendário usando um usuário do telegram')
+    async def addEventWithTelegramUser(self, ctx: discord.Interaction, telegram_username: str, estado: str, cidade: str, event_name: str, address: str, price: float, starting_date: str, starting_time: str, ending_date: str, ending_time: str, description: str = None, group_link: str = None, site: str = None, max_price: float = None, event_logo_url: str = None):
+        await EventCog.addEvent(self, ctx, telegram_username, estado, cidade, event_name, address, price, starting_date, starting_time, ending_date, ending_time, description, group_link, site, max_price, event_logo_url)
 
-    @bot.tree.command(name='eventos', description='Lista todos os eventos registrados')
-    async def listEvents(ctx: discord.Interaction):
+    @commands.command(name='eventos', description='Lista todos os eventos registrados')
+    async def listEvents(self, ctx: discord.Interaction):
         await ctx.response.defer()
         result = getAllEvents()
         if result:
@@ -65,8 +69,8 @@ def setup(bot: commands.Bot):
         else:
             return await ctx.followup.send(content=f'Não há eventos registrados... que tal ser o primeiro? :3')
 
-    @bot.tree.command(name='eventos_por_estado', description='Lista todos os eventos registrados em um estado')
-    async def listEventsByState(ctx: discord.Interaction, state: str):
+    @commands.command(name='eventos_por_estado', description='Lista todos os eventos registrados em um estado')
+    async def listEventsByState(self, ctx: discord.Interaction, state: str):
         mydb = connectToDatabase()
         await ctx.response.defer()
         locale_id = await localeIsAvailable(ctx, mydb, state)
@@ -88,8 +92,8 @@ def setup(bot: commands.Bot):
         else:
             return await ctx.followup.send(content=f'Não há eventos registrados em {state}... que tal ser o primeiro? :3')
 
-    @bot.tree.command(name='evento_agendar_prox', description='Agenda no calendario a próxima data do evento')
-    async def scheduleNextEvent(ctx: discord.Interaction, nome_do_evento: str, data: str):
+    @commands.command(name='evento_agendar_prox', description='Agenda no calendario a próxima data do evento')
+    async def scheduleNextEvent(self, ctx: discord.Interaction, nome_do_evento: str, data: str):
         try:
             data = datetime.strptime(data, "%d/%m/%Y")
         except ValueError:
@@ -105,8 +109,8 @@ def setup(bot: commands.Bot):
         elif result == "não é o dono":
             return await ctx.followup.send(content=f'Você não é o dono desse evento! apenas o dono pode agendar o evento')
 
-    @bot.tree.command(name='eventos_pendentes', description='Mostra os eventos esperando aprovação')
-    async def showPendingEvents(ctx: discord.Interaction):
+    @commands.command(name='eventos_pendentes', description='Mostra os eventos esperando aprovação')
+    async def showPendingEvents(self, ctx: discord.Interaction):
         await ctx.response.defer()
         result = getAllPendingApprovalEvents()
         if result:
@@ -123,8 +127,8 @@ def setup(bot: commands.Bot):
         else:
             return await ctx.followup.send(content=f'Não há eventos a serem aprovados... talvez seja a hora de buscar novos eventos!')
 
-    @bot.tree.command(name='evento_aprovar', description='Aprova um evento pendente')
-    async def approveEvent(ctx: discord.Interaction, event_id: int):
+    @commands.command(name='evento_aprovar', description='Aprova um evento pendente')
+    async def approveEvent(self, ctx: discord.Interaction, event_id: int):
         if ctx.user.id != 167436511787220992:
             return await ctx.response.send_message(content='Você não tem permissão para fazer isso', ephemeral=True)
         await ctx.response.defer()
@@ -136,6 +140,10 @@ def setup(bot: commands.Bot):
         elif result == False:
             return await ctx.followup.send(content=f'Não foi possível aprovar o evento')
 
-    @bot.tree.command(name='evento_add_staff', description='Adiciona um membro da staff como organizador de um evento')
-    async def addStaffToEvent(ctx: discord.Interaction, event_id: int, staff: discord.Member):
+    @commands.command(name='evento_add_staff', description='Adiciona um membro da staff como organizador de um evento')
+    async def addStaffToEvent(self, ctx: discord.Interaction, event_id: int, staff: discord.Member):
         pass
+
+
+async def setup(bot: commands.Bot):
+    bot.add_cog(EventCog(bot))

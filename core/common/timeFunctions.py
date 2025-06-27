@@ -4,6 +4,8 @@ import re
 timezone_offset = -3.0  # Pacific Standard Time (UTC−08:00)
 def now() -> datetime: return (datetime.now(timezone(timedelta(hours=timezone_offset)))).replace(tzinfo=None)
 
+MONTHS = ['00','janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro']
+
 """ def calcular_idade (message):
     if (re.search(r'\b(\d{2}\s+de\s+\w+\s+de\s+\d{4})\b',message)):
         data = re.search(r'\b(\d{2})\s+de\s+(\w+)\s+de\s+(\d{4})\b',message)
