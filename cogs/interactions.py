@@ -9,14 +9,14 @@ class InteractionsCog(commands.Cog):
         self.bot = bot
         super().__init__()
 
-    @commands.command(name=f'{BOT_NAME.lower()}_diz', description=f'Faz {BOT_NAME} falar em um canal de texto')
+    @app_commands.command(name=f'{BOT_NAME.lower()}_diz', description=f'Faz {BOT_NAME} falar em um canal de texto')
     async def sayAsCoddy(self, ctx: discord.Interaction, channel: discord.TextChannel, message: str):
         channelId = discord.utils.get(ctx.guild.channels, name=channel.name)
         await channelId.send(message)
         resp = await ctx.response.send_message(content='mensagem enviada!', ephemeral=True)
         return resp
 
-    @commands.command(name=f'{BOT_NAME.lower()}_status', description=f'Muda o status do {BOT_NAME}')
+    @app_commands.command(name=f'{BOT_NAME.lower()}_status', description=f'Muda o status do {BOT_NAME}')
     async def changeMood(self, ctx: discord.Interaction, mood: Literal['jogando','ouvindo','assistindo','mensagem'], message: str):
         moodDiscord = 'playing' if mood == 'jogando' else 'listening' if mood == 'ouvindo' else 'watching'
         if mood == 'mensagem':

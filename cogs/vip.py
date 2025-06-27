@@ -11,7 +11,7 @@ class VipCog(commands.Cog):
         self.bot = bot
         super().__init__()
         
-    @commands.command(name='vip-mudar_cor', description='Muda a cor do cargo VIP do membro')
+    @app_commands.command(name='vip-mudar_cor', description='Muda a cor do cargo VIP do membro')
     async def changeVipColor(self, ctx: discord.Interaction, cor: str):
         userVipRoles = [role.id for role in ctx.user.roles if DISCORD_VIP_ROLES_ID.__contains__(role.id)]
         if userVipRoles:
@@ -26,7 +26,7 @@ class VipCog(commands.Cog):
             return saveCustomRole(ctx.guild_id, ctx.user, color=corFormatada)
         return await ctx.response.send_message(content='Você não é vip! você não pode fazer isso', ephemeral=True)
 
-    @commands.command(name='vip-mudar_icone', description='Muda o icone do cargo VIP do membro')
+    @app_commands.command(name='vip-mudar_icone', description='Muda o icone do cargo VIP do membro')
     async def changeVipIcon(self, ctx: discord.Interaction, icon: str):
         userVipRoles = [role.id for role in ctx.user.roles if DISCORD_VIP_ROLES_ID.__contains__(role.id)]
         if userVipRoles:

@@ -24,7 +24,7 @@ class ModerationCog(commands.Cog):
         super().__init__()
 
 
-    @commands.command(name=f'relatorio-portaria', description=f'Gera um relatório de atividades na portaria')
+    @app_commands.command(name=f'relatorio-portaria', description=f'Gera um relatório de atividades na portaria')
     async def portariaReport(self, ctx: discord.Interaction, periodo:Literal['semana', 'mês']):
         if periodo == 'semana':
             InitialDate = now() - timedelta(days=7)
@@ -76,7 +76,7 @@ class ModerationCog(commands.Cog):
         pass
 
 
-    @commands.command(name=f'perfil', description=f'Mostra o perfil de um membro')
+    @app_commands.command(name=f'perfil', description=f'Mostra o perfil de um membro')
     async def profile(self, ctx: discord.Interaction, member: discord.Member):
         await ctx.response.defer()
         memberProfile = getUserInfo(member, ctx.guild.id)
@@ -93,7 +93,7 @@ class ModerationCog(commands.Cog):
         await ctx.followup.send(embed=embedUserProfile)
 
 
-    @commands.command(name=f'registrar_usuario', description=f'Registra um membro')
+    @app_commands.command(name=f'registrar_usuario', description=f'Registra um membro')
     async def registerUser(self, ctx: discord.Interaction, member: discord.Member, data_aprovacao:str, aniversario:str):
         data_aprovacao = verifyDate(data_aprovacao)
         aniversario = verifyDate(aniversario)
@@ -107,7 +107,7 @@ class ModerationCog(commands.Cog):
             return await ctx.edit_original_response(content='Não foi possível registrar o usuário')
         
         
-    @commands.command(name=f'liberar_acesso_nsfw', description=f'Libera o acesso NSFW para o membro')
+    @app_commands.command(name=f'liberar_acesso_nsfw', description=f'Libera o acesso NSFW para o membro')
     async def grantNSFWAccess(self, ctx: discord.Interaction, member: discord.Member, data_aniversario:str):
         data_aniversario = verifyDate(data_aniversario)
         if data_aniversario == False:
@@ -134,7 +134,7 @@ class ModerationCog(commands.Cog):
 
 
 
-    @commands.command(name=f'warn', description=f'Aplica um warn em um membro')
+    @app_commands.command(name=f'warn', description=f'Aplica um warn em um membro')
     async def warn(self, ctx: discord.Interaction, membro: discord.Member, motivo: str):
         mydb = connectToDatabase()
         #staffRoles = getStaffRoles(ctx.guild)
@@ -156,7 +156,7 @@ class ModerationCog(commands.Cog):
         endConnection(mydb)
         return await ctx.response.send_message(content='Você não tem permissão para fazer isso', ephemeral=True)
 
-    @commands.command(name=f'warnings', description=f'Mostra os warnings de um membro')
+    @app_commands.command(name=f'warnings', description=f'Mostra os warnings de um membro')
     async def showWarnings(self, ctx: discord.Interaction, member: discord.Member):
         warnings = getMemberWarnings(ctx.guild.id, member)
         if warnings:
@@ -165,7 +165,7 @@ class ModerationCog(commands.Cog):
         return await ctx.response.send_message(content=f'O membro {member.mention} não possui warnings')
 
 
-    @commands.command(name=f'portaria_cargos', description=f'Permite que um membro na portaria pegue seus cargos')
+    @app_commands.command(name=f'portaria_cargos', description=f'Permite que um membro na portaria pegue seus cargos')
     async def portariaCargos(self, ctx: discord.Interaction, member: discord.Member):
         portariaCategory = discord.utils.get(ctx.guild.categories, id=753342674576211999)
         provisoriaCategory = discord.utils.get(ctx.guild.categories, id=1178531112042111016)
@@ -183,7 +183,7 @@ class ModerationCog(commands.Cog):
         return await ctx.response.send_message(content=f'O membro <@{member.id}> não está na portaria', ephemeral=True)
 
 
-    @commands.command(name=f'portaria_aprovar', description=f'Aprova um membro que está esperando aprovação na portaria')
+    @app_commands.command(name=f'portaria_aprovar', description=f'Aprova um membro que está esperando aprovação na portaria')
     async def approvePortaria(self, ctx: discord.Interaction, member: discord.Member, data_nascimento: str=None):
         provisoriaCategory = discord.utils.get(ctx.guild.categories, id=1178531112042111016)
         portariaCategory = discord.utils.get(ctx.guild.categories, id=753342674576211999)

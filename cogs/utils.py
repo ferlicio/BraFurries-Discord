@@ -14,7 +14,7 @@ class UtilsCog(commands.Cog):
         self.bot = bot
         super().__init__()
         
-    @commands.command(name='call_titio', description=f'Faz {BOT_NAME} chamar o titio')
+    @app_commands.command(name='call_titio', description=f'Faz {BOT_NAME} chamar o titio')
     async def callAdmin(self, ctx: Interaction, message: str):
         requests.post(f"https://api.telegram.org/bot{os.getenv('TELEGRAM_TOKEN')}/sendMessage?chat_id={os.getenv('TELEGRAM_ADMIN')}&text={ctx.user.name}: {message}")
         resp = None
@@ -26,7 +26,7 @@ class UtilsCog(commands.Cog):
                 channel = await ctx.user.create_dm()
                 await channel.send(content='O titio foi avisado! agora é só esperar :3')
 
-    @commands.command(name='temp_role', description='Adiciona um cargo temporário a um membro')
+    @app_commands.command(name='temp_role', description='Adiciona um cargo temporário a um membro')
     async def addTempRole(self, ctx: Interaction, member: Member, role: Role, duration: str, reason: str = None):
         duration = duration.lower()
         if duration[-1] not in ['d', 's', 'm'] or not duration[:-1].isdigit() or len(duration) < 2:

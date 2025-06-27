@@ -7,7 +7,7 @@ class AccountCog(commands.Cog):
         self.bot = bot
         super().__init__()
     
-    @commands.command(name='adm-conectar_conta', description='Conecta sua conta do discord com a do telegram')
+    @app_commands.command(name='adm-conectar_conta', description='Conecta sua conta do discord com a do telegram')
     async def connectAccount(self, ctx: Interaction, user: Member, telegram_username: str):
         await ctx.response.defer()
         result = admConnectTelegramAccount(ctx.guild.id, user, telegram_username)

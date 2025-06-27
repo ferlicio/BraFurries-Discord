@@ -41,15 +41,15 @@ class EventCog(commands.Cog):
             if result:
                 return await ctx.followup.send(content=f'O evento **{event_name}** foi registrado com sucesso!', ephemeral=False)
 
-    @commands.command(name='novo_evento', description='Adiciona um evento ao calendário')
+    @app_commands.command(name='novo_evento', description='Adiciona um evento ao calendário')
     async def addEventWithDiscordUser(self, ctx: discord.Interaction, user: discord.Member, estado: str, cidade: str, event_name: str, address: str, price: float, starting_date: str, starting_time: str, ending_date: str, ending_time: str, description: str = None, group_link: str = None, site: str = None, max_price: float = None, event_logo_url: str = None):
         await EventCog.addEvent(self, ctx, user, estado, cidade, event_name, address, price, starting_date, starting_time, ending_date, ending_time, description, group_link, site, max_price, event_logo_url)
 
-    @commands.command(name='novo_evento_por_usuario', description='Adiciona um evento ao calendário usando um usuário do telegram')
+    @app_commands.command(name='novo_evento_por_usuario', description='Adiciona um evento ao calendário usando um usuário do telegram')
     async def addEventWithTelegramUser(self, ctx: discord.Interaction, telegram_username: str, estado: str, cidade: str, event_name: str, address: str, price: float, starting_date: str, starting_time: str, ending_date: str, ending_time: str, description: str = None, group_link: str = None, site: str = None, max_price: float = None, event_logo_url: str = None):
         await EventCog.addEvent(self, ctx, telegram_username, estado, cidade, event_name, address, price, starting_date, starting_time, ending_date, ending_time, description, group_link, site, max_price, event_logo_url)
 
-    @commands.command(name='eventos', description='Lista todos os eventos registrados')
+    @app_commands.command(name='eventos', description='Lista todos os eventos registrados')
     async def listEvents(self, ctx: discord.Interaction):
         await ctx.response.defer()
         result = getAllEvents()
@@ -69,7 +69,7 @@ class EventCog(commands.Cog):
         else:
             return await ctx.followup.send(content=f'Não há eventos registrados... que tal ser o primeiro? :3')
 
-    @commands.command(name='eventos_por_estado', description='Lista todos os eventos registrados em um estado')
+    @app_commands.command(name='eventos_por_estado', description='Lista todos os eventos registrados em um estado')
     async def listEventsByState(self, ctx: discord.Interaction, state: str):
         mydb = connectToDatabase()
         await ctx.response.defer()
@@ -92,7 +92,7 @@ class EventCog(commands.Cog):
         else:
             return await ctx.followup.send(content=f'Não há eventos registrados em {state}... que tal ser o primeiro? :3')
 
-    @commands.command(name='evento_agendar_prox', description='Agenda no calendario a próxima data do evento')
+    @app_commands.command(name='evento_agendar_prox', description='Agenda no calendario a próxima data do evento')
     async def scheduleNextEvent(self, ctx: discord.Interaction, nome_do_evento: str, data: str):
         try:
             data = datetime.strptime(data, "%d/%m/%Y")
@@ -109,7 +109,7 @@ class EventCog(commands.Cog):
         elif result == "não é o dono":
             return await ctx.followup.send(content=f'Você não é o dono desse evento! apenas o dono pode agendar o evento')
 
-    @commands.command(name='eventos_pendentes', description='Mostra os eventos esperando aprovação')
+    @app_commands.command(name='eventos_pendentes', description='Mostra os eventos esperando aprovação')
     async def showPendingEvents(self, ctx: discord.Interaction):
         await ctx.response.defer()
         result = getAllPendingApprovalEvents()
@@ -127,7 +127,7 @@ class EventCog(commands.Cog):
         else:
             return await ctx.followup.send(content=f'Não há eventos a serem aprovados... talvez seja a hora de buscar novos eventos!')
 
-    @commands.command(name='evento_aprovar', description='Aprova um evento pendente')
+    @app_commands.command(name='evento_aprovar', description='Aprova um evento pendente')
     async def approveEvent(self, ctx: discord.Interaction, event_id: int):
         if ctx.user.id != 167436511787220992:
             return await ctx.response.send_message(content='Você não tem permissão para fazer isso', ephemeral=True)
@@ -140,7 +140,7 @@ class EventCog(commands.Cog):
         elif result == False:
             return await ctx.followup.send(content=f'Não foi possível aprovar o evento')
 
-    @commands.command(name='evento_add_staff', description='Adiciona um membro da staff como organizador de um evento')
+    @app_commands.command(name='evento_add_staff', description='Adiciona um membro da staff como organizador de um evento')
     async def addStaffToEvent(self, ctx: discord.Interaction, event_id: int, staff: discord.Member):
         pass
 

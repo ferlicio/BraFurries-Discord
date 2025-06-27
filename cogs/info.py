@@ -13,7 +13,7 @@ class InfoCog(commands.Cog):
         self.bot = bot
         super().__init__()
 
-    @commands.command(name='registrar_local', description='Registra o seu local')
+    @app_commands.command(name='registrar_local', description='Registra o seu local')
     async def registerLocal(self, ctx: discord.Interaction, local: str):
         mydb = connectToDatabase()
         availableLocals = getAllLocals(mydb)
@@ -31,7 +31,7 @@ class InfoCog(commands.Cog):
             endConnection(mydb)
             return await ctx.response.send_message(content='''Local inválido! Você deve informar uma sigla de Estado válido''', ephemeral=True)
 
-    @commands.command(name='furros_na_area', description='Lista todos os furries registrados em um local')
+    @app_commands.command(name='furros_na_area', description='Lista todos os furries registrados em um local')
     async def listFurries(self, ctx: discord.Interaction, local: str):
         mydb = connectToDatabase()
         availableLocals = getAllLocals(mydb)
@@ -51,7 +51,7 @@ class InfoCog(commands.Cog):
         else:
             return await ctx.response.send_message(content='''Local inválido! Você deve informar uma sigla de Estado válido''', ephemeral=True)
 
-    @commands.command(name='registrar_aniversario', description='Registra seu aniversário')
+    @app_commands.command(name='registrar_aniversario', description='Registra seu aniversário')
     async def registerBirthday(self, ctx: discord.Interaction, data: str, mencionavel: Literal["sim", "não"]):
         try:
             datetime.strptime(data, "%d/%m/%Y")
@@ -79,7 +79,7 @@ class InfoCog(commands.Cog):
         finally:
             endConnectionWithCommit(mydb)
 
-    @commands.command(name='aniversarios', description='Lista todos os aniversários registrados')
+    @app_commands.command(name='aniversarios', description='Lista todos os aniversários registrados')
     async def listBirthdays(self, ctx: discord.Interaction):
         await ctx.response.defer()
         result = getAllBirthdays()
