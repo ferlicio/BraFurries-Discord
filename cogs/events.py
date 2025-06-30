@@ -178,4 +178,4 @@ class EventCog(commands.Cog):
 
 
 async def setup(bot: commands.Bot):
-    bot.add_cog(EventCog(bot))
+    await bot.add_cog(EventCog(bot))
