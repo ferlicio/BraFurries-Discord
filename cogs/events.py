@@ -6,9 +6,8 @@ from datetime import datetime
 from core.database import connectToDatabase, endConnectionWithCommit, endConnection
 from core.database import includeEvent, getAllEvents, getEventsByState, getAllPendingApprovalEvents, approveEventById
 from core.database import admConnectTelegramAccount, getEventByName, scheduleNextEventDate, rescheduleEventDate
-from core.routine_functions import formatSingleEvent
+from core.routine_functions import formatSingleEvent, formatEventList
 from core.verifications import localeIsAvailable
-from core.discord_events import formatEventList
 
 
 class EventCog(commands.Cog):
