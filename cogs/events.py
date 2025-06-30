@@ -93,7 +93,7 @@ class EventCog(commands.Cog):
         else:
             return await ctx.followup.send(content=f'Não há eventos registrados em {state}... que tal ser o primeiro? :3')
 
-    @bot.tree.command(name=f'evento', description=f'Mostra os detalhes de um evento')
+    @app_commands.command(name=f'evento', description=f'Mostra os detalhes de um evento')
     async def showEvent(self, ctx: discord.Interaction, event_name: str):
         if event_name.__len__() < 4:
             return await ctx.response.send_message(content='''Nome do evento inválido! você informou um nome com menos de 4 caracteres? <:catsip:851024825333186560>''', ephemeral=True)
