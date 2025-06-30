@@ -2,7 +2,7 @@ from discord.ext import commands
 from discord import app_commands
 import discord
 import re
-from core.verifications import colorIsAvailable, addVipRole
+from core.routine_functions import colorIsAvailable, addVipRole
 from core.database import saveCustomRole
 from settings import DISCORD_VIP_ROLES_ID
 

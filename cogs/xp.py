@@ -50,7 +50,7 @@ class XpCog(commands.Cog):
     async def sellItem(self, ctx: discord.Interaction, item: str):
         pass
 
-    @app_commands.cooldown(1, 86400, key=lambda self, ctx: (self, ctx.guild_id, self, ctx.author.id))
+    """ @app_commands.cooldown(1, 86400, key=lambda self, ctx: (self, ctx.guild_id, self, ctx.author.id)) """
     @app_commands.command(name='daily', description='Pega sua recompensa diária')
     async def daily(self, ctx: discord.Interaction):
         await ctx.response.send_message(content='Recompensa diária pega com sucesso!')
