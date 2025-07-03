@@ -413,7 +413,7 @@ def getUserInfo(user:discord.Member, guildId:int, userId:int=None) -> User:
         user_id = includeUser(mydb, user, guildId)
     query = f"""SELECT discord_user.discord_user_id, discord_user.display_name, 
 user_community_status.member_since, user_community_status.approved, user_community_status.approved_at, 
-user_community_status.is_vip, user_community_status.is_partner, user_level.level,
+user_community_status.is_vip, user_community_status.is_partner, user_level.current_level,
 user_birthday.birth_date, user_birthday.verified, locale.locale_name, user_economy.bank_balance
 FROM users
 LEFT JOIN discord_user ON users.id = discord_user.user_id

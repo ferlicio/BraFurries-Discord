@@ -19,5 +19,5 @@ class ConfigCog(commands.Cog):
         return await ctx.response.send_message(content=f'Mensagem de {tipo} alterada com sucesso!', ephemeral=True)
     
     
-def setup(bot: commands.Bot):
-    bot.add_cog(ConfigCog(bot))
+async def setup(bot: commands.Bot):
+    await bot.add_cog(ConfigCog(bot))

@@ -5,9 +5,9 @@ from discord import app_commands
 from datetime import datetime
 from core.database import connectToDatabase, endConnectionWithCommit, endConnection
 from core.database import includeEvent, getAllEvents, getEventsByState, getAllPendingApprovalEvents, approveEventById
-from core.verifications import localeIsAvailable, scheduleNextEventDate, rescheduleEventDate
-from core.database import admConnectTelegramAccount, getEventByName, formatSingleEvent
-from core.discord_events import formatEventList
+from core.database import admConnectTelegramAccount, getEventByName, scheduleNextEventDate, rescheduleEventDate
+from core.routine_functions import formatSingleEvent, formatEventList
+from core.verifications import localeIsAvailable
 
 
 class EventCog(commands.Cog):
@@ -93,7 +93,7 @@ class EventCog(commands.Cog):
         else:
             return await ctx.followup.send(content=f'Não há eventos registrados em {state}... que tal ser o primeiro? :3')
 
-    @bot.tree.command(name=f'evento', description=f'Mostra os detalhes de um evento')
+    @app_commands.command(name=f'evento', description=f'Mostra os detalhes de um evento')
     async def showEvent(self, ctx: discord.Interaction, event_name: str):
         if event_name.__len__() < 4:
             return await ctx.response.send_message(content='''Nome do evento inválido! você informou um nome com menos de 4 caracteres? <:catsip:851024825333186560>''', ephemeral=True)
@@ -178,4 +178,4 @@ class EventCog(commands.Cog):
 
 
 async def setup(bot: commands.Bot):
-    bot.add_cog(EventCog(bot))
+    await bot.add_cog(EventCog(bot))
