@@ -1014,7 +1014,7 @@ def updateVoiceRecord(mydb, guild_id:int, discord_user:discord.Member, seconds:i
     try:
         query = f"""INSERT INTO user_records (user_id, server_guild_id, voice_time)
 VALUES ({user_id}, {guild_id}, {seconds})
-ON DUPLICATE KEY UPDATE voice_time = IF({seconds} > seconds, {seconds}, seconds);"""
+ON DUPLICATE KEY UPDATE voice_time = IF({seconds} > voice_time, {seconds}, voice_time);"""
         cursor.execute(query)
         mydb.commit()
         return True
