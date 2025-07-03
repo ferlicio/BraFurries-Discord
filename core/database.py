@@ -1033,3 +1033,18 @@ WHERE user_id = {user_id} AND server_guild_id = {guild_id};"""
     myresult = cursor.fetchone()
     endConnection(mydb)
     return myresult[0] if myresult else 0
+
+
+def getAllVoiceRecords(guild_id: int):
+    """Retrieve all voice call records for a guild sorted by duration"""
+    mydb = connectToDatabase()
+    cursor = mydb.cursor()
+    query = f"""SELECT discord_user.discord_user_id, user_voice_time.seconds
+FROM user_voice_time
+JOIN discord_user ON discord_user.user_id = user_voice_time.user_id
+WHERE user_voice_time.server_guild_id = {guild_id}
+ORDER BY user_voice_time.seconds DESC;"""
+    cursor.execute(query)
+    myresult = cursor.fetchall()
+    endConnection(mydb)
+    return [{'user_id': row[0], 'seconds': row[1]} for row in myresult]

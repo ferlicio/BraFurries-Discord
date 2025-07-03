@@ -1,8 +1,15 @@
 from discord.ext import commands, tasks
 import discord
-from datetime import datetime
+from discord import app_commands
+from datetime import datetime, timedelta
 from core.time_functions import now
-from core.database import connectToDatabase, endConnectionWithCommit, updateVoiceRecord
+from core.database import (
+    connectToDatabase,
+    endConnectionWithCommit,
+    updateVoiceRecord,
+    getAllVoiceRecords,
+)
+from schemas.types.record_types import RecordTypes
 from settings import DISCORD_GUILD_ID
 
 
@@ -15,6 +22,25 @@ class VoiceRecordCog(commands.Cog):
 
     def cog_unload(self):
         self.save_call_time.cancel()
+
+    @app_commands.command(name='recordes', description='Mostra os recordes do servidor')
+    async def showRecords(self, ctx: discord.Interaction, tipo: RecordTypes | None = None):
+        await ctx.response.defer()
+        if tipo is None or tipo == "Tempo em call":
+            records = getAllVoiceRecords(ctx.guild.id)
+            if not records:
+                await ctx.followup.send(content='Nenhum recorde registrado.')
+                return
+            lines = []
+            for record in records:
+                member = ctx.guild.get_member(record['user_id'])
+                if member is None:
+                    continue
+                duration = str(timedelta(seconds=record['seconds']))
+                lines.append(f'{member.display_name} - {duration}')
+            await ctx.followup.send(content='Recordes de tempo em call:\n' + '\n'.join(lines))
+        else:
+            await ctx.followup.send(content='Tipo de recorde desconhecido.', ephemeral=True)
 
     @commands.Cog.listener()
     async def on_voice_state_update(self, member: discord.Member, before: discord.VoiceState, after: discord.VoiceState):
