@@ -24,7 +24,7 @@ class RecordsCog(commands.Cog):
         self.save_call_time.cancel()
 
     @app_commands.command(name='recordes', description='Mostra os recordes do servidor')
-    async def showRecords(self, ctx: discord.Interaction, tipo: RecordTypes | None = None):
+    async def showRecords(self, ctx: discord.Interaction, tipo: RecordTypes = None):
         await ctx.response.defer()
         if tipo is None or tipo == "Tempo em call":
             records = getAllVoiceRecords(ctx.guild.id)
