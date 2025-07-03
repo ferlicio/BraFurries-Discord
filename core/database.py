@@ -1012,9 +1012,9 @@ def updateVoiceRecord(mydb, guild_id:int, discord_user:discord.Member, seconds:i
     cursor = mydb.cursor()
     user_id = includeUser(mydb, discord_user, guild_id)
     try:
-        query = f"""INSERT INTO user_voice_time (user_id, server_guild_id, seconds)
+        query = f"""INSERT INTO user_records (user_id, server_guild_id, voice_time)
 VALUES ({user_id}, {guild_id}, {seconds})
-ON DUPLICATE KEY UPDATE seconds = IF({seconds} > seconds, {seconds}, seconds);"""
+ON DUPLICATE KEY UPDATE voice_time = IF({seconds} > seconds, {seconds}, seconds);"""
         cursor.execute(query)
         mydb.commit()
         return True
@@ -1027,7 +1027,7 @@ def getVoiceTime(guild_id:int, discord_user:discord.Member) -> int:
     mydb = connectToDatabase()
     cursor = mydb.cursor()
     user_id = includeUser(mydb, discord_user, guild_id)
-    query = f"""SELECT seconds FROM user_voice_time
+    query = f"""SELECT voice_time FROM user_records
 WHERE user_id = {user_id} AND server_guild_id = {guild_id};"""
     cursor.execute(query)
     myresult = cursor.fetchone()
@@ -1039,11 +1039,11 @@ def getAllVoiceRecords(guild_id: int):
     """Retrieve all voice call records for a guild sorted by duration"""
     mydb = connectToDatabase()
     cursor = mydb.cursor()
-    query = f"""SELECT discord_user.discord_user_id, user_voice_time.seconds
-FROM user_voice_time
-JOIN discord_user ON discord_user.user_id = user_voice_time.user_id
-WHERE user_voice_time.server_guild_id = {guild_id}
-ORDER BY user_voice_time.seconds DESC;"""
+    query = f"""SELECT discord_user.discord_user_id, user_records.voice_time
+FROM user_records
+JOIN discord_user ON discord_user.user_id = user_records.user_id
+WHERE user_records.server_guild_id = {guild_id}
+ORDER BY user_records.voice_time DESC;"""
     cursor.execute(query)
     myresult = cursor.fetchall()
     endConnection(mydb)

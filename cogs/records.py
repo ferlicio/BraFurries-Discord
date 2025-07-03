@@ -13,7 +13,7 @@ from schemas.types.record_types import RecordTypes
 from settings import DISCORD_GUILD_ID
 
 
-class VoiceRecordCog(commands.Cog):
+class RecordsCog(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
         self.voice_sessions: dict[int, datetime] = {}
@@ -83,5 +83,5 @@ class VoiceRecordCog(commands.Cog):
 
 
 async def setup(bot: commands.Bot):
-    await bot.add_cog(VoiceRecordCog(bot))
+    await bot.add_cog(RecordsCog(bot))
 
