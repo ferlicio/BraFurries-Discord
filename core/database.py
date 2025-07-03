@@ -1005,3 +1005,47 @@ AND mentionable = 1;"""
     for user in myresult:
         users.append(SimpleUserBirthday(user[0],user[1]))
     return users
+
+
+def updateVoiceRecord(mydb, guild_id:int, discord_user:discord.Member, seconds:int):
+    """Update the longest continuous voice call time for a member"""
+    cursor = mydb.cursor()
+    user_id = includeUser(mydb, discord_user, guild_id)
+    try:
+        query = f"""INSERT INTO user_records (user_id, server_guild_id, voice_time)
+VALUES ({user_id}, {guild_id}, {seconds})
+ON DUPLICATE KEY UPDATE voice_time = IF({seconds} > voice_time, {seconds}, voice_time);"""
+        cursor.execute(query)
+        mydb.commit()
+        return True
+    except mysql.connector.Error as err:
+        logging.error(f"Database error occurred: {err}")
+        return False
+
+
+def getVoiceTime(guild_id:int, discord_user:discord.Member) -> int:
+    """Retrieve the total recorded voice time in seconds for a member"""
+    mydb = connectToDatabase()
+    cursor = mydb.cursor()
+    user_id = includeUser(mydb, discord_user, guild_id)
+    query = f"""SELECT voice_time FROM user_records
+WHERE user_id = {user_id} AND server_guild_id = {guild_id};"""
+    cursor.execute(query)
+    myresult = cursor.fetchone()
+    endConnection(mydb)
+    return myresult[0] if myresult else 0
+
+
+def getAllVoiceRecords(guild_id: int):
+    """Retrieve all voice call records for a guild sorted by duration"""
+    mydb = connectToDatabase()
+    cursor = mydb.cursor()
+    query = f"""SELECT discord_user.discord_user_id, user_records.voice_time
+FROM user_records
+JOIN discord_user ON discord_user.user_id = user_records.user_id
+WHERE user_records.server_guild_id = {guild_id}
+ORDER BY user_records.voice_time DESC;"""
+    cursor.execute(query)
+    myresult = cursor.fetchall()
+    endConnection(mydb)
+    return [{'user_id': row[0], 'seconds': row[1]} for row in myresult]
