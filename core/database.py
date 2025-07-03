@@ -1005,3 +1005,31 @@ AND mentionable = 1;"""
     for user in myresult:
         users.append(SimpleUserBirthday(user[0],user[1]))
     return users
+
+
+def addVoiceTime(mydb, guild_id:int, discord_user:discord.Member, seconds:int):
+    """Add voice call time for a member"""
+    cursor = mydb.cursor()
+    user_id = includeUser(mydb, discord_user, guild_id)
+    try:
+        query = f"""INSERT INTO user_voice_time (user_id, server_guild_id, seconds)
+VALUES ({user_id}, {guild_id}, {seconds})
+ON DUPLICATE KEY UPDATE seconds = seconds + {seconds};"""
+        cursor.execute(query)
+        mydb.commit()
+        return True
+    except Exception:
+        return False
+
+
+def getVoiceTime(guild_id:int, discord_user:discord.Member) -> int:
+    """Retrieve the total recorded voice time in seconds for a member"""
+    mydb = connectToDatabase()
+    cursor = mydb.cursor()
+    user_id = includeUser(mydb, discord_user, guild_id)
+    query = f"""SELECT seconds FROM user_voice_time
+WHERE user_id = {user_id} AND server_guild_id = {guild_id};"""
+    cursor.execute(query)
+    myresult = cursor.fetchone()
+    endConnection(mydb)
+    return myresult[0] if myresult else 0
