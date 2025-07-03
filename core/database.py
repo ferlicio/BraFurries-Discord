@@ -1018,7 +1018,8 @@ ON DUPLICATE KEY UPDATE voice_time = IF({seconds} > voice_time, {seconds}, voice
         cursor.execute(query)
         mydb.commit()
         return True
-    except Exception:
+    except mysql.connector.Error as err:
+        logging.error(f"Database error occurred: {err}")
         return False
 
 
