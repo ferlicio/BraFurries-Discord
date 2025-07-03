@@ -1007,14 +1007,14 @@ AND mentionable = 1;"""
     return users
 
 
-def addVoiceTime(mydb, guild_id:int, discord_user:discord.Member, seconds:int):
-    """Add voice call time for a member"""
+def updateVoiceRecord(mydb, guild_id:int, discord_user:discord.Member, seconds:int):
+    """Update the longest continuous voice call time for a member"""
     cursor = mydb.cursor()
     user_id = includeUser(mydb, discord_user, guild_id)
     try:
         query = f"""INSERT INTO user_voice_time (user_id, server_guild_id, seconds)
 VALUES ({user_id}, {guild_id}, {seconds})
-ON DUPLICATE KEY UPDATE seconds = seconds + {seconds};"""
+ON DUPLICATE KEY UPDATE seconds = IF({seconds} > seconds, {seconds}, seconds);"""
         cursor.execute(query)
         mydb.commit()
         return True

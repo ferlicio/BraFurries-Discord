@@ -2,7 +2,7 @@ from discord.ext import commands, tasks
 import discord
 from datetime import datetime
 from core.time_functions import now
-from core.database import connectToDatabase, endConnectionWithCommit, addVoiceTime
+from core.database import connectToDatabase, endConnectionWithCommit, updateVoiceRecord
 from settings import DISCORD_GUILD_ID
 
 
@@ -27,7 +27,7 @@ class VoiceRecordCog(commands.Cog):
             if start:
                 seconds = int((now() - start).total_seconds())
                 mydb = connectToDatabase()
-                addVoiceTime(mydb, member.guild.id, member, seconds)
+                updateVoiceRecord(mydb, member.guild.id, member, seconds)
                 endConnectionWithCommit(mydb)
         # Member switched channels
         elif before.channel != after.channel:
@@ -35,9 +35,8 @@ class VoiceRecordCog(commands.Cog):
             if start:
                 seconds = int((now() - start).total_seconds())
                 mydb = connectToDatabase()
-                addVoiceTime(mydb, member.guild.id, member, seconds)
+                updateVoiceRecord(mydb, member.guild.id, member, seconds)
                 endConnectionWithCommit(mydb)
-            self.voice_sessions[member.id] = now()
 
     @tasks.loop(minutes=5)
     async def save_call_time(self):
@@ -53,8 +52,7 @@ class VoiceRecordCog(commands.Cog):
                 continue
             seconds = int((now() - start).total_seconds())
             if seconds > 0:
-                addVoiceTime(mydb, guild.id, member, seconds)
-                self.voice_sessions[user_id] = now()
+                updateVoiceRecord(mydb, guild.id, member, seconds)
         endConnectionWithCommit(mydb)
 
 
