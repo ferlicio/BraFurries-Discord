@@ -515,7 +515,7 @@ def includeEvent(mydb, user: Union[discord.Member,str], locale_id:int, city:str,
 
 def getAllEvents():
     with pooled_connection() as cursor:
-        query = f"""SELECT events.id, events.event_name, events.address, events.point_name, events.price, events.max_price, events.starting_datetime, events.ending_datetime, events.description, events.group_chat_link, users.username, locale.locale_name, locale.locale_abbrev, events.city, events.website, events.out_of_tickets, events.sales_ended
+        query = f"""SELECT events.id, events.event_name, events.address, events.point_name, events.price, events.max_price, events.starting_datetime, events.ending_datetime, events.description, events.group_chat_link, users.username, locale.locale_name, locale.locale_abbrev AS state_abbrev, events.city, events.website, events.out_of_tickets, events.sales_ended
     FROM events
     JOIN users ON events.host_user_id = users.id
     JOIN locale ON events.locale_id = locale.id
