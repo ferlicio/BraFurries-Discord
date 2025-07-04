@@ -17,7 +17,7 @@ class InfoCog(commands.Cog):
     @app_commands.command(name='registrar_local', description='Registra o seu local')
     async def registerLocal(self, ctx: discord.Interaction, local: str):
         mydb = connectToDatabase()
-        availableLocals = getAllLocals(mydb)
+        availableLocals = getAllLocals()
         if stateLetterCodes[local]:
             await ctx.response.defer()
             result = includeLocale(mydb, ctx.guild.id, local.upper(), ctx.user, availableLocals)
@@ -35,7 +35,7 @@ class InfoCog(commands.Cog):
     @app_commands.command(name='furros_na_area', description='Lista todos os furries registrados em um local')
     async def listFurries(self, ctx: discord.Interaction, local: str):
         with pooled_connection() as cursor:
-            availableLocals = getAllLocals(cursor)
+            availableLocals = getAllLocals()
             if stateLetterCodes[local]:
                 await ctx.response.defer()
                 result = getUsersByLocale(cursor, local.upper(), availableLocals)
