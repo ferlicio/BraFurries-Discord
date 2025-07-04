@@ -423,8 +423,8 @@ WHERE user_birthday.mentionable = 1;"""
 def getUserInfo(user: discord.Member, guildId: int, userId: int = None, create_if_missing: bool = True) -> User :
     """Retrieve a user from the database. Optionally registers the user if missing."""
     mydb = connectToDatabase()
-    cursor = mydb.cursor()
     user_id = includeUser(mydb, user, guildId)
+    cursor = mydb.cursor(dictionary=True)
 
     query = (
         "SELECT discord_user.discord_user_id, discord_user.display_name, "
