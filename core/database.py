@@ -230,7 +230,7 @@ def getUserId(discord_user_id: int):
 
 
 
-def includeUser(mydb, user: Union[discord.Member, str], guildId: int = os.getenv("DISCORD_GUILD_ID"), approvedAt: datetime | None = None) -> int:
+def includeUser(mydb, user: Union[discord.Member, str], guildId: int = os.getenv("DISCORD_GUILD_ID"), approvedAt: datetime = None) -> int:
     """Ensure a user exists in the database and return the internal id."""
     cursor = mydb.cursor(dictionary=True, buffered=True)
 
@@ -420,7 +420,7 @@ WHERE user_birthday.mentionable = 1;"""
     myresult = [{'user_id': i[0], 'birth_date': i[1]} for i in myresult]
     return myresult
 
-def getUserInfo(user: discord.Member, guildId: int, userId: int | None = None, create_if_missing: bool = True) -> User | None:
+def getUserInfo(user: discord.Member, guildId: int, userId: int = None, create_if_missing: bool = True) -> User:
     """Retrieve a user from the database. Optionally registers the user if missing."""
     with pooled_connection() as cursor:
         if userId is not None:
@@ -896,7 +896,7 @@ def getStaffRoles(guild_id:int):
     myresult = cursor.fetchall()
     return myresult[0][0]
 
-def registerUser(guild_id: int, discord_user: discord.Member, birthday: date, approved_date: date | None = None) -> bool:
+def registerUser(guild_id: int, discord_user: discord.Member, birthday: date, approved_date: date = None) -> bool:
     """Register a member in the database and saves the birthday."""
     with pooled_connection() as cursor:
         userId = includeUser(cursor.connection, discord_user, guild_id, datetime.now() if approved_date is None else approved_date)
