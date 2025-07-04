@@ -3,7 +3,7 @@ import discord
 from discord import app_commands
 from typing import Literal
 from datetime import datetime
-from core.database import connectToDatabase, endConnectionWithCommit, endConnection
+from core.database import connectToDatabase, endConnectionWithCommit, endConnection, pooled_connection
 from core.database import includeLocale, getAllLocals, getUsersByLocale
 from core.database import includeBirthday, getAllBirthdays
 from schemas.models.locals import stateLetterCodes
