@@ -177,46 +177,44 @@ async def bumpReward():
             if [member for member in topBumpers if member not in alreadyVipMembers].__len__() == 3 or i == (bumpers.__len__()-1):
                 break
         for idx, membro in enumerate([member for member in topBumpers if member not in alreadyVipMembers]):
-            mydb = connectToDatabase()
-            if idx == 0:
-                await membro.add_roles(guild.get_role(DISCORD_VIP_ROLES_ID[1]))
-                assignTempRole(mydb, guild.id, membro, DISCORD_VIP_ROLES_ID[1], (now()+timedelta(days=21)).replace(tzinfo=None), "Bump Reward")
-                await membro.send(f"""Parabéns! Você foi um dos top 3 bumpers do mês passado no servidor da BraFurries e ganhou o cargo VIP {guild.get_role(DISCORD_VIP_ROLES_ID[1]).name} por 3 semanas!""")
-                (f"""
-Junto com o cargo, você também ganhou 1 nivel de VIP e algumas moedas! (em implementação)""")
-            if idx == 1:
-                await membro.add_roles(guild.get_role(DISCORD_VIP_ROLES_ID[1]))
-                assignTempRole(mydb, guild.id, membro, DISCORD_VIP_ROLES_ID[1], (now()+timedelta(days=14)).replace(tzinfo=None), "Bump Reward")
-                await membro.send(f"""Parabéns! Você foi um dos top 3 bumpers do mês passado no servidor da BraFurries e ganhou o cargo VIP {guild.get_role(DISCORD_VIP_ROLES_ID[1]).name} por 2 semanas!""")
-                (f"""
-Junto com o cargo, você também ganhou algumas moedas! (em implementação)""")
-            if idx == 2:
-                await membro.add_roles(guild.get_role(DISCORD_VIP_ROLES_ID[1]))
-                assignTempRole(mydb, guild.id, membro, DISCORD_VIP_ROLES_ID[1], (now()+timedelta(days=7)).replace(tzinfo=None), "Bump Reward")
-                await membro.send(f"Parabéns! Você foi um dos top 3 bumpers do mês passado no servidor da BraFurries e ganhou o cargo VIP {guild.get_role(DISCORD_VIP_ROLES_ID[1]).name} por 1 semana!")
-            endConnectionWithCommit(mydb)
-            
-        for idx, membro in enumerate([member for member in topBumpers if member in alreadyVipMembers]):
-            mydb = connectToDatabase()
-            if idx == 0:
-                if membro == topBumpers[0]:
-                    await membro.send(f"""Parabéns! Você foi o membro que mais deu bump no servidor da BraFurries no mês passado! 
+            with pooled_connection() as cursor:
+                if idx == 0:
+                    await membro.add_roles(guild.get_role(DISCORD_VIP_ROLES_ID[1]))
+                    assignTempRole(cursor, guild.id, membro, DISCORD_VIP_ROLES_ID[1], (now()+timedelta(days=21)).replace(tzinfo=None), "Bump Reward")
+                    await membro.send(f"""Parabéns! Você foi um dos top 3 bumpers do mês passado no servidor da BraFurries e ganhou o cargo VIP {guild.get_role(DISCORD_VIP_ROLES_ID[1]).name} por 3 semanas!""")
+                    (f"""
+    Junto com o cargo, você também ganhou 1 nivel de VIP e algumas moedas! (em implementação)""")
+                if idx == 1:
+                    await membro.add_roles(guild.get_role(DISCORD_VIP_ROLES_ID[1]))
+                    assignTempRole(cursor, guild.id, membro, DISCORD_VIP_ROLES_ID[1], (now()+timedelta(days=14)).replace(tzinfo=None), "Bump Reward")
+                    await membro.send(f"""Parabéns! Você foi um dos top 3 bumpers do mês passado no servidor da BraFurries e ganhou o cargo VIP {guild.get_role(DISCORD_VIP_ROLES_ID[1]).name} por 2 semanas!""")
+                    (f"""
+    Junto com o cargo, você também ganhou algumas moedas! (em implementação)""")
+                if idx == 2:
+                    await membro.add_roles(guild.get_role(DISCORD_VIP_ROLES_ID[1]))
+                    assignTempRole(cursor, guild.id, membro, DISCORD_VIP_ROLES_ID[1], (now()+timedelta(days=7)).replace(tzinfo=None), "Bump Reward")
+                    await membro.send(f"Parabéns! Você foi um dos top 3 bumpers do mês passado no servidor da BraFurries e ganhou o cargo VIP {guild.get_role(DISCORD_VIP_ROLES_ID[1]).name} por 1 semana!")
 
-Obrigado de coração por ajudar o servidor a crescer! <3""")
-                    "Porém como você ja tem um cargo VIP, apenas iremos adicionar 1 nivel de VIP para você e mais algumas moedas(em implementação)!"
-            if idx == 1:
-                if membro == topBumpers[1]:
-                    await membro.send(f"""Parabéns! Você foi o segundo membro que mais deu bump no servidor da BraFurries no mês passado!
+        with pooled_connection() as cursor:     
+            for idx, membro in enumerate([member for member in topBumpers if member in alreadyVipMembers]):
+                if idx == 0:
+                    if membro == topBumpers[0]:
+                        await membro.send(f"""Parabéns! Você foi o membro que mais deu bump no servidor da BraFurries no mês passado! 
 
-Obrigado de coração por ajudar o servidor a crescer! <3""")
-                    "Porém como você ja tem um cargo VIP, apenas iremos adicionar algumas moedas ao seu inventário!(em implementação)"
-            if idx == 2:
-                if membro == topBumpers[2]:
-                    await membro.send(f"""Parabéns! Você foi o terceiro membro que mais deu bump no servidor da BraFurries no mês passado!
+    Obrigado de coração por ajudar o servidor a crescer! <3""")
+                        "Porém como você ja tem um cargo VIP, apenas iremos adicionar 1 nivel de VIP para você e mais algumas moedas(em implementação)!"
+                if idx == 1:
+                    if membro == topBumpers[1]:
+                        await membro.send(f"""Parabéns! Você foi o segundo membro que mais deu bump no servidor da BraFurries no mês passado!
 
-Obrigado de coração por ajudar o servidor a crescer! <3""")
-                    "Porém como você ja tem um cargo VIP, apenas iremos adicionar algumas moedas ao seu inventário!(em implementação)"
-            endConnectionWithCommit(mydb)
+    Obrigado de coração por ajudar o servidor a crescer! <3""")
+                        "Porém como você ja tem um cargo VIP, apenas iremos adicionar algumas moedas ao seu inventário!(em implementação)"
+                if idx == 2:
+                    if membro == topBumpers[2]:
+                        await membro.send(f"""Parabéns! Você foi o terceiro membro que mais deu bump no servidor da BraFurries no mês passado!
+
+    Obrigado de coração por ajudar o servidor a crescer! <3""")
+                        "Porém como você ja tem um cargo VIP, apenas iremos adicionar algumas moedas ao seu inventário!(em implementação)"
         
         for membroId in otherBumpers:
             membro = guild.get_member(membroId)

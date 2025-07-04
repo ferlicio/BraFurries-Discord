@@ -43,9 +43,8 @@ class UtilsCog(commands.Cog):
             duration = timedelta(days=int(duration[:-1]) * 30)
         expiration_date = now() + duration
         await ctx.response.send_message(content='Adicionando o cargo...', ephemeral=True)
-        mydb = connectToDatabase()
-        roleAssignment = assignTempRole(mydb, ctx.guild_id, member, role.id, expiration_date, reason)
-        endConnectionWithCommit(mydb)
+        with pooled_connection() as cursor:
+            roleAssignment = assignTempRole(cursor, ctx.guild_id, member, role.id, expiration_date, reason)
         if roleAssignment:
             await member.add_roles(role)
             await ctx.edit_original_response(content=f'O membro <@{member.id}> agora tem o cargo {role.name} por {duration}!')

@@ -156,27 +156,24 @@ else f'R$'+str(f"{event['price']:.0f}").replace('.',',') if (event['max_price']=
     return eventEmbeded
 
 async def removeTempRoles(bot:commands.Bot):
-    mydb = connectToDatabase()
-    cursor = mydb.cursor()
-    expiringTempRoles = getExpiringTempRoles(mydb, DISCORD_GUILD_ID)
-    if expiringTempRoles == []:
-        endConnection(mydb)
+    with pooled_connection() as cursor:
+        expiringTempRoles = getExpiringTempRoles(cursor, DISCORD_GUILD_ID)
+        if expiringTempRoles == []:
+            return
+        for TempRole in expiringTempRoles:
+            guild = bot.get_guild(DISCORD_GUILD_ID)
+            member = guild.get_member(TempRole['user_id'])
+            role = guild.get_role(TempRole['role_id'])
+            if member != None and role != None:
+                if member.roles.__contains__(role):
+                    await member.remove_roles(role)
+                    print(f'{member.name} perdeu o cargo {role.name}')
+                else:
+                    print(f'{member.name} não tinha o cargo {role.name}')
+                deleteTempRole(cursor, TempRole['id'])
+            elif member == None:
+                deleteTempRole(cursor, TempRole['id'])
         return
-    for TempRole in expiringTempRoles:
-        guild = bot.get_guild(DISCORD_GUILD_ID)
-        member = guild.get_member(TempRole['user_id'])
-        role = guild.get_role(TempRole['role_id'])
-        if member != None and role != None:
-            if member.roles.__contains__(role):
-                await member.remove_roles(role)
-                print(f'{member.name} perdeu o cargo {role.name}')
-            else:
-                print(f'{member.name} não tinha o cargo {role.name}')
-            deleteTempRole(cursor, TempRole['id'])
-        elif member == None:
-            deleteTempRole(cursor, TempRole['id'])
-    endConnectionWithCommit(mydb)
-    return
 
 async def mentionArtRoles(bot, message:discord.Message):
     guild = bot.get_guild(DISCORD_GUILD_ID)
@@ -331,9 +328,8 @@ async def sendBirthdayMessages(bot:MyBot):
         for user in users:
             member = guild.get_member(user.DiscordId)
             await member.add_roles(guild.get_role(774439314015780926))
-            mydb = connectToDatabase()
-            assignTempRole(mydb, guild.id, member, 774439314015780926, now() + timedelta(days=3), "Aniversário")
-            endConnectionWithCommit(mydb)
+            with pooled_connection() as cursor:
+                assignTempRole(cursor, guild.id, member, 774439314015780926, now() + timedelta(days=3), "Aniversário")
         usersForMessage = [f'<@{user.DiscordId}>' for user in users]
         messageToSend = message.replace('{users}', ', '.join(usersForMessage[:-1]) + ' e ' if usersForMessage.__len__()> 1 else '' + usersForMessage[-1])
         await bot.get_channel(799761052375449610).send(messageToSend)

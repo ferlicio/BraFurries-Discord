@@ -407,18 +407,16 @@ WHERE user_id = '{user_id}';"""
             return False
 
 def getAllBirthdays():
-    mydb = connectToDatabase()
-    cursor = mydb.cursor()
-    query = f"""SELECT discord_user.discord_user_id, user_birthday.birth_date
-FROM discord_user
-JOIN user_birthday ON discord_user.user_id = user_birthday.user_id
-WHERE user_birthday.mentionable = 1;"""
-    cursor.execute(query)
-    myresult = cursor.fetchall()
-    endConnection(mydb)
-    #convertendo para uma lista de dicionários
-    myresult = [{'user_id': i[0], 'birth_date': i[1]} for i in myresult]
-    return myresult
+    with pooled_connection() as cursor:
+        query = f"""SELECT discord_user.discord_user_id, user_birthday.birth_date
+    FROM discord_user
+    JOIN user_birthday ON discord_user.user_id = user_birthday.user_id
+    WHERE user_birthday.mentionable = 1;"""
+        cursor.execute(query)
+        myresult = cursor.fetchall()
+        #convertendo para uma lista de dicionários
+        myresult = [{'user_id': i["discord_user_id"], 'birth_date': i["birth_date"]} for i in myresult]
+        return myresult
 
 def getUserInfo(user: discord.Member, guildId: int, userId: int = None, create_if_missing: bool = True) -> User :
     """Retrieve a user from the database. Optionally registers the user if missing."""
@@ -516,83 +514,61 @@ def includeEvent(mydb, user: Union[discord.Member,str], locale_id:int, city:str,
         print('An error occurred: %s' % error)
 
 def getAllEvents():
-    mydb = connectToDatabase()
-    cursor = mydb.cursor()
-    query = f"""SELECT events.id, events.event_name, events.address, events.point_name, events.price, events.max_price, events.starting_datetime, events.ending_datetime, events.description, events.group_chat_link, users.username, locale.locale_name, locale.locale_abbrev, events.city, events.website, events.out_of_tickets, events.sales_ended
-FROM events
-JOIN users ON events.host_user_id = users.id
-JOIN locale ON events.locale_id = locale.id
-WHERE events.approved = 1"""
-    cursor.execute(query)
-    myresult = cursor.fetchall()
-    endConnection(mydb)
-    #convertendo para uma lista de dicionários
-    propriedades = ['id','event_name', 'address', 'point_name', 'price', 'max_price', 'starting_datetime', 'ending_datetime', 'description', 'group_chat_link', 'host_user', 'state', 'state_abbrev', 'city', 'website', 'out_of_tickets', 'sales_ended']
-    resultados_finais = []
-    for i in myresult:
-        evento_dict = dict(zip(propriedades, i))
-        evento_dict['starting_datetime'] = datetime.strptime(f"{evento_dict['starting_datetime']}", '%Y-%m-%d %H:%M:%S')
-        evento_dict['ending_datetime'] = datetime.strptime(f"{evento_dict['ending_datetime']}", '%Y-%m-%d %H:%M:%S')
-        if evento_dict['website'] != None and not evento_dict['website'].__contains__('http'):
-            evento_dict['website'] = f'https://{evento_dict["website"]}'
-        if evento_dict['group_chat_link'] != None and not evento_dict['group_chat_link'].__contains__('http'):
-            evento_dict['group_chat_link'] = f'https://{evento_dict["group_chat_link"]}'
-        resultados_finais.append(evento_dict)
-    myresult = [i for i in resultados_finais if i['ending_datetime'] >= datetime.now()]
-    return myresult
+    with pooled_connection() as cursor:
+        query = f"""SELECT events.id, events.event_name, events.address, events.point_name, events.price, events.max_price, events.starting_datetime, events.ending_datetime, events.description, events.group_chat_link, users.username, locale.locale_name, locale.locale_abbrev, events.city, events.website, events.out_of_tickets, events.sales_ended
+    FROM events
+    JOIN users ON events.host_user_id = users.id
+    JOIN locale ON events.locale_id = locale.id
+    WHERE events.approved = 1"""
+        cursor.execute(query)
+        events = cursor.fetchall()
+        for e in events:
+            e['starting_datetime'] = datetime.strptime(f"{e['starting_datetime']}", '%Y-%m-%d %H:%M:%S')
+            e['ending_datetime'] = datetime.strptime(f"{e['ending_datetime']}", '%Y-%m-%d %H:%M:%S')
+            if e['website'] != None and not e['website'].__contains__('http'):
+                e['website'] = f'https://{e["website"]}'
+            if e['group_chat_link'] != None and not e['group_chat_link'].__contains__('http'):
+                e['group_chat_link'] = f'https://{e["group_chat_link"]}'
+        events = [e for e in events if e['ending_datetime'] >= datetime.now()]
+        return events
 
 def getAllPendingApprovalEvents():
-    mydb = connectToDatabase()
-    cursor = mydb.cursor()
-    query = f"""SELECT events.id, events.event_name, events.address, events.point_name, events.price, events.max_price, events.starting_datetime, events.ending_datetime, events.description, events.group_chat_link, users.username, locale.locale_name, locale.locale_abbrev, events.city, events.website, events.out_of_tickets, events.sales_ended
-FROM events
-JOIN users ON events.host_user_id = users.id
-JOIN locale ON events.locale_id = locale.id
-WHERE events.approved = 0"""
-    cursor.execute(query)
-    myresult = cursor.fetchall()
-    endConnection(mydb)
-    #convertendo para uma lista de dicionários
-    propriedades = ['id','event_name', 'address', 'point_name', 'price', 'max_price', 'starting_datetime', 'ending_datetime', 'description', 'group_chat_link', 'host_user', 'state', 'state_abbrev', 'city', 'website', 'out_of_tickets', 'sales_ended']
-    resultados_finais = []
-    for i in myresult:
-        evento_dict = dict(zip(propriedades, i))
-        evento_dict['starting_datetime'] = datetime.strptime(f"{evento_dict['starting_datetime']}", '%Y-%m-%d %H:%M:%S')
-        evento_dict['ending_datetime'] = datetime.strptime(f"{evento_dict['ending_datetime']}", '%Y-%m-%d %H:%M:%S')
-        if evento_dict['website'] != None and not evento_dict['website'].__contains__('http'):
-            evento_dict['website'] = f'https://{evento_dict["website"]}'
-        if evento_dict['group_chat_link'] != None and not evento_dict['group_chat_link'].__contains__('http'):
-            evento_dict['group_chat_link'] = f'https://{evento_dict["group_chat_link"]}'
-        resultados_finais.append(evento_dict)
-    myresult = resultados_finais
-    return myresult
+    with pooled_connection() as cursor:
+        query = f"""SELECT events.id, events.event_name, events.address, events.point_name, events.price, events.max_price, events.starting_datetime, events.ending_datetime, events.description, events.group_chat_link, users.username, locale.locale_name, locale.locale_abbrev, events.city, events.website, events.out_of_tickets, events.sales_ended
+    FROM events
+    JOIN users ON events.host_user_id = users.id
+    JOIN locale ON events.locale_id = locale.id
+    WHERE events.approved = 0"""
+        cursor.execute(query)
+        events = cursor.fetchall()
+        for e in events:
+            e['starting_datetime'] = datetime.strptime(f"{e['starting_datetime']}", '%Y-%m-%d %H:%M:%S')
+            e['ending_datetime'] = datetime.strptime(f"{e['ending_datetime']}", '%Y-%m-%d %H:%M:%S')
+            if e['website'] != None and not e['website'].__contains__('http'):
+                e['website'] = f'https://{e["website"]}'
+            if e['group_chat_link'] != None and not e['group_chat_link'].__contains__('http'):
+                e['group_chat_link'] = f'https://{e["group_chat_link"]}'
+        return events
 
 def getEventsByState(locale_id:int):
-    mydb = connectToDatabase()
-    cursor = mydb.cursor()
-    query = f"""SELECT events.id, events.event_name, events.address, events.point_name, events.price, events.max_price, events.starting_datetime, events.ending_datetime, events.description, events.group_chat_link, users.username, locale.locale_name, locale.locale_abbrev, events.city, events.website, events.out_of_tickets, events.sales_ended
-FROM events
-JOIN users ON events.host_user_id = users.id
-JOIN locale ON events.locale_id = locale.id
-WHERE events.locale_id = '{locale_id}'
-AND events.approved = 1;"""
-    cursor.execute(query)
-    myresult = cursor.fetchall()
-    endConnection(mydb)
-    #convertendo para uma lista de dicionários
-    propriedades = ['id','event_name', 'address', 'point_name', 'price', 'max_price', 'starting_datetime', 'ending_datetime', 'description', 'group_chat_link', 'host_user', 'state', 'state_abbrev', 'city', 'website', 'out_of_tickets', 'sales_ended']
-    resultados_finais = []
-    for i in myresult:
-        evento_dict = dict(zip(propriedades, i))
-        evento_dict['starting_datetime'] = datetime.strptime(f"{evento_dict['starting_datetime']}", '%Y-%m-%d %H:%M:%S')
-        evento_dict['ending_datetime'] = datetime.strptime(f"{evento_dict['ending_datetime']}", '%Y-%m-%d %H:%M:%S')
-        if evento_dict['website'] != None and not evento_dict['website'].__contains__('http'):
-            evento_dict['website'] = f'https://{evento_dict["website"]}'
-        if evento_dict['group_chat_link'] != None and not evento_dict['group_chat_link'].__contains__('http'):
-            evento_dict['group_chat_link'] = f'https://{evento_dict["group_chat_link"]}'
-        resultados_finais.append(evento_dict)
-    myresult = [i for i in resultados_finais if i['ending_datetime'] >= datetime.now()]
-    return myresult
+    with pooled_connection() as cursor:
+        query = f"""SELECT events.id, events.event_name, events.address, events.point_name, events.price, events.max_price, events.starting_datetime, events.ending_datetime, events.description, events.group_chat_link, users.username, locale.locale_name, locale.locale_abbrev, events.city, events.website, events.out_of_tickets, events.sales_ended
+    FROM events
+    JOIN users ON events.host_user_id = users.id
+    JOIN locale ON events.locale_id = locale.id
+    WHERE events.locale_id = '{locale_id}'
+    AND events.approved = 1;"""
+        cursor.execute(query)
+        events = cursor.fetchall()
+        for e in events:
+            e['starting_datetime'] = datetime.strptime(f"{e['starting_datetime']}", '%Y-%m-%d %H:%M:%S')
+            e['ending_datetime'] = datetime.strptime(f"{e['ending_datetime']}", '%Y-%m-%d %H:%M:%S')
+            if e['website'] != None and not e['website'].__contains__('http'):
+                e['website'] = f'https://{e["website"]}'
+            if e['group_chat_link'] != None and not e['group_chat_link'].__contains__('http'):
+                e['group_chat_link'] = f'https://{e["group_chat_link"]}'
+        events = [e for e in events if e['ending_datetime'] >= datetime.now()]
+        return events
 
 def getEventByName(event_name:str):
     mydb = connectToDatabase()
@@ -653,24 +629,20 @@ WHERE users.username = '{owner_name}';"""
     return resultados_finais
 
 def approveEventById(event_id:int):
-    mydb = connectToDatabase()
-    cursor = mydb.cursor()
-    query = f"""SELECT id FROM events WHERE id = {event_id} AND approved = 0;"""
-    cursor.execute(query)
-    myresult = cursor.fetchall()
-    if myresult == []:
-        endConnection(mydb)
-        return "não encontrado"
-    try:
-        query = f"""UPDATE events
-    SET approved = 1
-    WHERE id = {event_id};"""
+    with pooled_connection() as cursor:
+        query = f"""SELECT id FROM events WHERE id = {event_id} AND approved = 0;"""
         cursor.execute(query)
-        endConnectionWithCommit(mydb)
-        return True
-    except:
-        endConnection(mydb)
-        return False
+        myresult = cursor.fetchall()
+        if myresult == []:
+            return "não encontrado"
+        try:
+            query = f"""UPDATE events
+        SET approved = 1
+        WHERE id = {event_id};"""
+            cursor.execute(query)
+            return True
+        except:
+            return False
 
 
 def scheduleNextEventDate(event_name:str, new_starting_datetime:datetime, user):
@@ -790,45 +762,35 @@ def admConnectTelegramAccount(discord_user:discord.Member, telegram_user:str):
         return True
     
 
-def assignTempRole(mydb, guild_id:int, discord_user:discord.Member, role_id:str, expiring_date:datetime, reason:str):
-    cursor = mydb.cursor()
+def assignTempRole(cursor, guild_id:int, discord_user:discord.Member, role_id:str, expiring_date:datetime, reason:str):
     query = f"""SELECT id FROM discord_servers WHERE guild_id = '{guild_id}';"""
     cursor.execute(query)
-    discord_community_id = cursor.fetchall()[0][0]
+    discord_community_id = cursor.fetchone()["id"]
     user_id = includeUser(mydb, discord_user, guild_id)
     query = f"""SELECT id FROM discord_user WHERE user_id = '{user_id}';"""
     cursor.execute(query)
-    result = cursor.fetchall()
-    discord_user_id = result[0][0]
+    discord_user_id = cursor.fetchone()["id"]
     try:
         query = f"""INSERT INTO temp_roles (disc_community_id, disc_user_id, role_id, expiring_date, reason)
         VALUES ('{discord_community_id}', '{discord_user_id}', '{role_id}', '{expiring_date}', '{reason}');"""
         cursor.execute(query)
-        mydb.commit()
         return True
     except Exception as e:
         print(e)
         return False
     
-def getExpiringTempRoles(mydb, guild_id:int):
-    cursor = mydb.cursor()
+def getExpiringTempRoles(cursor, guild_id:int):
     query = f"""SELECT id FROM discord_servers WHERE guild_id = '{guild_id}';"""
     cursor.execute(query)
-    discord_community_id = cursor.fetchall()[0][0]
-    query = f"""SELECT temp_roles.id, temp_roles.role_id, discord_user.discord_user_id FROM temp_roles
+    discord_community_id = cursor.fetchone()["id"]
+    query = f"""SELECT temp_roles.id, temp_roles.role_id, discord_user.discord_user_id AS user_id FROM temp_roles
 JOIN discord_user ON temp_roles.disc_user_id = discord_user.id
 WHERE temp_roles.disc_community_id = '{discord_community_id}'
 AND temp_roles.expiring_date <= NOW();
     """
     cursor.execute(query)
-    myresult = cursor.fetchall()
-    ## convertendo para uma lista de dicionários
-    propriedades = ['id','role_id', 'user_id']
-    resultados_finais = []
-    for i in myresult:
-        temp_role_dict = dict(zip(propriedades, i))
-        resultados_finais.append(temp_role_dict)
-    return resultados_finais
+    expiredTempRoles = cursor.fetchall()
+    return expiredTempRoles
 
 def deleteTempRole(cursor, tempRoleDBId:int):
     query = f"""DELETE FROM temp_roles
@@ -896,7 +858,7 @@ def registerUser(guild_id: int, discord_user: discord.Member, birthday: date, ap
     user_id = includeUser(mydb, discord_user, guild_id, datetime.now() if approved_date is None else approved_date)
     birthdayRegistered = False
     try:
-        birthdayRegistered = includeBirthday(cursor.connection, guild_id, birthday, discord_user, False, user_id)
+        birthdayRegistered = includeBirthday(mydb, guild_id, birthday, discord_user, False, user_id)
     except Exception as e:
         if not e.args[0].__contains__('Duplicate entry'):
             print(e)
@@ -983,15 +945,13 @@ WHERE user_id = {user_id}"""
             endConnection(mydb)
             
 def getServerMessage(messageType:ServerMessagesEnum, guild_id:int):
-    mydb = connectToDatabase()
-    cursor = mydb.cursor(buffered=True)
-    query = f"""SELECT {messageType} 
-    FROM discord_server_messages
-    WHERE server_guild_id = {guild_id}"""
-    cursor.execute(query)
-    myresult = cursor.fetchone()
-    endConnection(mydb)
-    return myresult[0] if myresult != None else None
+    with pooled_connection(True) as cursor:
+        query = f"""SELECT {messageType} 
+        FROM discord_server_messages
+        WHERE server_guild_id = {guild_id}"""
+        cursor.execute(query)
+        message = cursor.fetchone()
+        return message if message != None else None
 
 def setServerMessage(guild_id:int, messageType:ServerMessagesEnum, message:str):
     mydb = connectToDatabase()
@@ -1067,15 +1027,13 @@ WHERE user_id = {user_id} AND server_guild_id = {guild_id};"""
 
 def getAllVoiceRecords(guild_id: int, limit: int = 10):
     """Retrieve top voice call records for a guild sorted by duration"""
-    mydb = connectToDatabase()
-    cursor = mydb.cursor()
-    query = f"""SELECT discord_user.discord_user_id, user_records.voice_time
-FROM user_records
-JOIN discord_user ON discord_user.user_id = user_records.user_id
-WHERE user_records.server_guild_id = {guild_id}
-ORDER BY user_records.voice_time DESC
-LIMIT {limit};"""
-    cursor.execute(query)
-    myresult = cursor.fetchall()
-    endConnection(mydb)
-    return [{'user_id': row[0], 'seconds': row[1]} for row in myresult]
+    with pooled_connection() as cursor:
+        query = f"""SELECT discord_user.discord_user_id, user_records.voice_time
+    FROM user_records
+    JOIN discord_user ON discord_user.user_id = user_records.user_id
+    WHERE user_records.server_guild_id = {guild_id}
+    ORDER BY user_records.voice_time DESC
+    LIMIT {limit};"""
+        cursor.execute(query)
+        records = cursor.fetchall()
+        return [{'user_id': row["discord_user_id"], 'seconds': row["voice_time"]} for row in records]
