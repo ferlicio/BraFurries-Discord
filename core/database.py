@@ -355,20 +355,17 @@ def includeLocale(mydb, guildId: int, abbrev:str, user:discord.User, availableLo
             except:
                 return False
 
-def getByLocale(mydb, abbrev:str, availableLocals:list):
-    cursor = mydb.cursor()
+def getUsersByLocale(cursor, abbrev:str, availableLocals:list):
     for local in availableLocals:
         if local['locale_abbrev'] == abbrev:
-            query = f"""SELECT users.username
-FROM users
-JOIN user_locale ON users.id = user_locale.user_id
-JOIN locale ON user_locale.locale_id = locale.id
-WHERE locale.locale_abbrev = '{abbrev}';"""
+            query = f"""
+            SELECT users.username
+            FROM users
+            JOIN user_locale ON users.id = user_locale.user_id
+            JOIN locale ON user_locale.locale_id = locale.id
+            WHERE locale.locale_abbrev = '{abbrev}';"""
             cursor.execute(query)
-            myresult = cursor.fetchall()
-            #convertendo para lista
-            myresult = [i[0] for i in myresult]
-            return myresult
+            return cursor.fetchall()
         
 def includeBirthday(mydb, guildId: int, date:date, user:discord.User, mentionable:bool, userId:int=None, registered:bool=False):
     if userId != None:
@@ -515,11 +512,28 @@ def includeEvent(mydb, user: Union[discord.Member,str], locale_id:int, city:str,
 
 def getAllEvents():
     with pooled_connection() as cursor:
-        query = f"""SELECT events.id, events.event_name, events.address, events.point_name, events.price, events.max_price, events.starting_datetime, events.ending_datetime, events.description, events.group_chat_link, users.username, locale.locale_name, locale.locale_abbrev AS state_abbrev, events.city, events.website, events.out_of_tickets, events.sales_ended
-    FROM events
-    JOIN users ON events.host_user_id = users.id
-    JOIN locale ON events.locale_id = locale.id
-    WHERE events.approved = 1"""
+        query = f"""
+        SELECT  events.id, 
+                events.event_name, 
+                events.address, 
+                events.point_name, 
+                events.price, 
+                events.max_price, 
+                events.starting_datetime, 
+                events.ending_datetime, 
+                events.description, 
+                events.group_chat_link, 
+                users.username, 
+                locale.locale_name AS state, 
+                locale.locale_abbrev AS state_abbrev, 
+                events.city, 
+                events.website, 
+                events.out_of_tickets, 
+                events.sales_ended
+        FROM events
+        JOIN users ON events.host_user_id = users.id
+        JOIN locale ON events.locale_id = locale.id
+        WHERE events.approved = 1"""
         cursor.execute(query)
         events = cursor.fetchall()
         for e in events:
@@ -534,11 +548,28 @@ def getAllEvents():
 
 def getAllPendingApprovalEvents():
     with pooled_connection() as cursor:
-        query = f"""SELECT events.id, events.event_name, events.address, events.point_name, events.price, events.max_price, events.starting_datetime, events.ending_datetime, events.description, events.group_chat_link, users.username, locale.locale_name, locale.locale_abbrev, events.city, events.website, events.out_of_tickets, events.sales_ended
-    FROM events
-    JOIN users ON events.host_user_id = users.id
-    JOIN locale ON events.locale_id = locale.id
-    WHERE events.approved = 0"""
+        query = f"""
+        SELECT  events.id, 
+                events.event_name, 
+                events.address, 
+                events.point_name, 
+                events.price, 
+                events.max_price, 
+                events.starting_datetime, 
+                events.ending_datetime, 
+                events.description, 
+                events.group_chat_link, 
+                users.username, 
+                locale.locale_name AS state, 
+                locale.locale_abbrev AS state_abbrev, 
+                events.city, 
+                events.website, 
+                events.out_of_tickets, 
+                events.sales_ended
+        FROM events
+        JOIN users ON events.host_user_id = users.id
+        JOIN locale ON events.locale_id = locale.id
+        WHERE events.approved = 0"""
         cursor.execute(query)
         events = cursor.fetchall()
         for e in events:
@@ -552,12 +583,29 @@ def getAllPendingApprovalEvents():
 
 def getEventsByState(locale_id:int):
     with pooled_connection() as cursor:
-        query = f"""SELECT events.id, events.event_name, events.address, events.point_name, events.price, events.max_price, events.starting_datetime, events.ending_datetime, events.description, events.group_chat_link, users.username, locale.locale_name, locale.locale_abbrev, events.city, events.website, events.out_of_tickets, events.sales_ended
-    FROM events
-    JOIN users ON events.host_user_id = users.id
-    JOIN locale ON events.locale_id = locale.id
-    WHERE events.locale_id = '{locale_id}'
-    AND events.approved = 1;"""
+        query = f"""
+        SELECT  events.id, 
+                events.event_name, 
+                events.address, 
+                events.point_name, 
+                events.price, 
+                events.max_price, 
+                events.starting_datetime, 
+                events.ending_datetime, 
+                events.description, 
+                events.group_chat_link, 
+                users.username, 
+                locale.locale_name AS state, 
+                locale.locale_abbrev AS state_abbrev, 
+                events.city, 
+                events.website, 
+                events.out_of_tickets, 
+                events.sales_ended
+        FROM events
+        JOIN users ON events.host_user_id = users.id
+        JOIN locale ON events.locale_id = locale.id
+        WHERE events.locale_id = '{locale_id}'
+        AND events.approved = 1;"""
         cursor.execute(query)
         events = cursor.fetchall()
         for e in events:
@@ -571,62 +619,78 @@ def getEventsByState(locale_id:int):
         return events
 
 def getEventByName(event_name:str):
-    mydb = connectToDatabase()
-    cursor = mydb.cursor()
-    query = f"""SELECT events.id, events.event_name, events.address, events.point_name, events.price, events.max_price, events.starting_datetime, events.ending_datetime, events.description, events.group_chat_link, users.username, locale.locale_name, locale.locale_abbrev, events.city, events.website, events.event_logo_url, events.max_price, events.out_of_tickets, events.sales_ended
-FROM events
-JOIN users ON events.host_user_id = users.id
-JOIN locale ON events.locale_id = locale.id
-WHERE events.event_name = '{event_name}'
-AND events.approved = 1;"""
-    cursor.execute(query)
-    myresult = cursor.fetchall()
-    if myresult == []:
-        query = f"""SELECT events.id, events.event_name, events.address, events.point_name, events.price, events.max_price, events.starting_datetime, events.ending_datetime, events.description, events.group_chat_link, users.username, locale.locale_name, locale.locale_abbrev, events.city, events.website, events.event_logo_url, events.max_price, events.out_of_tickets, events.sales_ended
-FROM events
-JOIN users ON events.host_user_id = users.id
-JOIN locale ON events.locale_id = locale.id
-WHERE events.event_name LIKE '%{event_name}%'
-AND events.approved = 1;"""
-        cursor.execute(query)
-        myresult = cursor.fetchall()
-        endConnection(mydb)
-    #convertendo para uma lista de dicionários
-    propriedades = ['id','event_name', 'address', 'point_name', 'price', 'max_price', 'starting_datetime', 'ending_datetime', 'description', 'group_chat_link', 'host_user', 'state', 'state_abbrev', 'city', 'website', 'logo_url', 'max_price', 'out_of_tickets', 'sales_ended']
-    resultados_finais = []
-    for i in myresult:
-        evento_dict = dict(zip(propriedades, i))
-        evento_dict['starting_datetime'] = datetime.strptime(f"{evento_dict['starting_datetime']}", '%Y-%m-%d %H:%M:%S')
-        evento_dict['ending_datetime'] = datetime.strptime(f"{evento_dict['ending_datetime']}", '%Y-%m-%d %H:%M:%S')
-        if evento_dict['website'] != None and not evento_dict['website'].__contains__('http'):
-            evento_dict['website'] = f'https://{evento_dict["website"]}'
-        if evento_dict['group_chat_link'] != None and not evento_dict['group_chat_link'].__contains__('http'):
-            evento_dict['group_chat_link'] = f'https://{evento_dict["group_chat_link"]}'
-        resultados_finais.append(evento_dict)
-    return resultados_finais[0] if resultados_finais != [] else None 
+    with pooled_connection() as cursor:
+        query = f"""
+        SELECT  events.id, 
+                events.event_name, 
+                events.address, 
+                events.point_name, 
+                events.price, 
+                events.max_price, 
+                events.starting_datetime, 
+                events.ending_datetime, 
+                events.description, 
+                events.group_chat_link, 
+                users.username, 
+                locale.locale_name AS state, 
+                locale.locale_abbrev AS state_abbrev, 
+                events.city, 
+                events.website, 
+                events.event_logo_url, 
+                events.max_price, 
+                events.out_of_tickets, 
+                events.sales_ended
+        FROM events
+        JOIN users ON events.host_user_id = users.id
+        JOIN locale ON events.locale_id = locale.id"""
+        cursor.execute(query + f""" WHERE events.event_name = '{event_name}' AND events.approved = 1;""")
+        events = cursor.fetchall()
+        if event == []:
+            cursor.execute(query + f""" WHERE events.event_name LIKE '%{event_name}%' AND events.approved = 1;""")
+            events = cursor.fetchall()
+        for e in events:
+            e['starting_datetime'] = datetime.strptime(f"{e['starting_datetime']}", '%Y-%m-%d %H:%M:%S')
+            e['ending_datetime'] = datetime.strptime(f"{e['ending_datetime']}", '%Y-%m-%d %H:%M:%S')
+            if e['website'] != None and not e['website'].__contains__('http'):
+                e['website'] = f'https://{e["website"]}'
+            if e['group_chat_link'] != None and not e['group_chat_link'].__contains__('http'):
+                e['group_chat_link'] = f'https://{e["group_chat_link"]}'
+        return events[0] if events != [] else None 
     
-def getEventsByOwner(mydb, owner_name:str):
-    cursor = mydb.cursor()
-    query = f"""SELECT events.id, events.event_name, events.address, events.point_name, events.price, events.max_price, events.starting_datetime, events.ending_datetime, events.description, events.group_chat_link, users.username, locale.locale_name, locale.locale_abbrev, events.city, events.website, events.out_of_tickets, events.sales_ended
-FROM events
-JOIN users ON events.host_user_id = users.id
-JOIN locale ON events.locale_id = locale.id
-WHERE users.username = '{owner_name}';"""
-    cursor.execute(query)
-    myresult = cursor.fetchall()
-    #convertendo para uma lista de dicionários
-    propriedades = ['id','event_name', 'address', 'point_name', 'price', 'max_price', 'starting_datetime', 'ending_datetime', 'description', 'group_chat_link', 'host_user', 'state', 'state_abbrev', 'city', 'website', 'out_of_tickets', 'sales_ended']
-    resultados_finais = []
-    for i in myresult:
-        evento_dict = dict(zip(propriedades, i))
-        evento_dict['starting_datetime'] = datetime.strptime(f"{evento_dict['starting_datetime']}", '%Y-%m-%d %H:%M:%S')
-        evento_dict['ending_datetime'] = datetime.strptime(f"{evento_dict['ending_datetime']}", '%Y-%m-%d %H:%M:%S')
-        if evento_dict['website'] != None and not evento_dict['website'].__contains__('http'):
-            evento_dict['website'] = f'https://{evento_dict["website"]}'
-        if evento_dict['group_chat_link'] != None and not evento_dict['group_chat_link'].__contains__('http'):
-            evento_dict['group_chat_link'] = f'https://{evento_dict["group_chat_link"]}'
-        resultados_finais.append(evento_dict)
-    return resultados_finais
+def getEventsByOwner(owner_name:str):
+    with pooled_connection() as cursor:
+        query = f"""
+        SELECT  events.id, 
+                events.event_name, 
+                events.address, 
+                events.point_name, 
+                events.price, 
+                events.max_price, 
+                events.starting_datetime, 
+                events.ending_datetime, 
+                events.description, 
+                events.group_chat_link, 
+                users.username, 
+                locale.locale_name AS state, 
+                locale.locale_abbrev AS state_abbrev, 
+                events.city, 
+                events.website, 
+                events.out_of_tickets, 
+                events.sales_ended
+        FROM events
+        JOIN users ON events.host_user_id = users.id
+        JOIN locale ON events.locale_id = locale.id
+        WHERE users.username = '{owner_name}';"""
+        cursor.execute(query)
+        eventos = cursor.fetchall()
+        for e in eventos:
+            e['starting_datetime'] = datetime.strptime(f"{e['starting_datetime']}", '%Y-%m-%d %H:%M:%S')
+            e['ending_datetime'] = datetime.strptime(f"{e['ending_datetime']}", '%Y-%m-%d %H:%M:%S')
+            if e['website'] != None and not e['website'].__contains__('http'):
+                e['website'] = f'https://{e["website"]}'
+            if e['group_chat_link'] != None and not e['group_chat_link'].__contains__('http'):
+                e['group_chat_link'] = f'https://{e["group_chat_link"]}'
+        return eventos
 
 def approveEventById(event_id:int):
     with pooled_connection() as cursor:

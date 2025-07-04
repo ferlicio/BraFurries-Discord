@@ -4,7 +4,7 @@ from discord import app_commands
 from typing import Literal
 from datetime import datetime
 from core.database import connectToDatabase, endConnectionWithCommit, endConnection
-from core.database import includeLocale, getAllLocals, getByLocale
+from core.database import includeLocale, getAllLocals, getUsersByLocale
 from core.database import includeBirthday, getAllBirthdays
 from schemas.models.locals import stateLetterCodes
 
@@ -34,23 +34,22 @@ class InfoCog(commands.Cog):
 
     @app_commands.command(name='furros_na_area', description='Lista todos os furries registrados em um local')
     async def listFurries(self, ctx: discord.Interaction, local: str):
-        mydb = connectToDatabase()
-        availableLocals = getAllLocals(mydb)
-        if stateLetterCodes[local]:
-            await ctx.response.defer()
-            result = getByLocale(mydb, local.upper(), availableLocals)
-            endConnection(mydb)
-            if result:
-                for locale in availableLocals:
-                    if locale['locale_abbrev'] == local.upper():
-                        membersResponse = ',\n'.join(member for member in result)
-                        return await ctx.followup.send(content=f'''Aqui estão os furros registrados em {locale["locale_name"]}:```{membersResponse}```''')
+        with pooled_connection() as cursor:
+            availableLocals = getAllLocals(cursor)
+            if stateLetterCodes[local]:
+                await ctx.response.defer()
+                result = getUsersByLocale(cursor, local.upper(), availableLocals)
+                if result:
+                    for locale in availableLocals:
+                        if locale['locale_abbrev'] == local.upper():
+                            membersResponse = ',\n'.join(member for member in result)
+                            return await ctx.followup.send(content=f'''Aqui estão os furros registrados em {locale["locale_name"]}:```{membersResponse}```''')
+                else:
+                    for locale in availableLocals:
+                        if locale['locale_abbrev'] == local.upper():
+                            return await ctx.followup.send(content=f'Não há furros registrados em {locale["locale_name"]}... que tal ser o primeiro? :3')
             else:
-                for locale in availableLocals:
-                    if locale['locale_abbrev'] == local.upper():
-                        return await ctx.followup.send(content=f'Não há furros registrados em {locale["locale_name"]}... que tal ser o primeiro? :3')
-        else:
-            return await ctx.response.send_message(content='''Local inválido! Você deve informar uma sigla de Estado válido''', ephemeral=True)
+                return await ctx.response.send_message(content='''Local inválido! Você deve informar uma sigla de Estado válido''', ephemeral=True)
 
     @app_commands.command(name='registrar_aniversario', description='Registra seu aniversário')
     async def registerBirthday(self, ctx: discord.Interaction, data: str, mencionavel: Literal["sim", "não"]):
