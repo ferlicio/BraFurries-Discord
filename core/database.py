@@ -217,6 +217,17 @@ def getAllLocals(mydb):
     return locals_list
 
 
+def getUserId(discord_user_id: int):
+    """Fetch the internal user id for a Discord member."""
+    with pooled_connection() as cursor:
+        cursor.execute(
+            "SELECT user_id FROM discord_user WHERE discord_user_id = %s",
+            (discord_user_id,)
+        )
+        row = cursor.fetchone()
+        return row["user_id"] if row else None
+
+
 
 
 def includeUser(mydb, user: Union[discord.Member,str], guildId:int=os.getenv('DISCORD_GUILD_ID'), approvedAt:datetime=None) -> int:
@@ -404,51 +415,72 @@ WHERE user_birthday.mentionable = 1;"""
     myresult = [{'user_id': i[0], 'birth_date': i[1]} for i in myresult]
     return myresult
 
-def getUserInfo(user:discord.Member, guildId:int, userId:int=None) -> User:
-    mydb = connectToDatabase()
-    cursor = mydb.cursor(buffered=True)
-    if userId != None:
-        user_id = userId
-    else:
-        user_id = includeUser(mydb, user, guildId)
-    query = f"""SELECT discord_user.discord_user_id, discord_user.display_name, 
-user_community_status.member_since, user_community_status.approved, user_community_status.approved_at, 
-user_community_status.is_vip, user_community_status.is_partner, user_level.current_level,
-user_birthday.birth_date, user_birthday.verified, locale.locale_name, user_economy.bank_balance
-FROM users
-LEFT JOIN discord_user ON users.id = discord_user.user_id
-LEFT JOIN user_community_status ON users.id = user_community_status.user_id
-LEFT JOIN user_birthday ON user_birthday.user_id = users.id
-LEFT JOIN user_level ON user_level.user_id = users.id AND user_level.server_guild_id = '{guildId}'
-LEFT JOIN user_locale ON user_locale.user_id = users.id
-LEFT JOIN locale ON locale.id = user_locale.locale_id
-LEFT JOIN warnings ON warnings.user_id = users.id
-LEFT JOIN user_economy ON user_economy.user_id = users.id AND user_economy.server_guild_id = '{guildId}'
-WHERE discord_user.user_id = '{user_id}';"""
-    cursor.execute(query)
-    dbUser = cursor.fetchone()
-    userToReturn = User(id=user_id, discordId=dbUser[0], username=user.name, displayName=user.display_name, 
-                        memberSince=dbUser[2], approved=dbUser[3], approvedAt=dbUser[4], isVip=dbUser[5], 
-                        isPartner=dbUser[6], level=dbUser[7], birthday=dbUser[8], birthdayVerified=dbUser[9], 
-                        locale=dbUser[10], coins=dbUser[11], warnings=[], inventory=[], staffOf=[])
-    query = f"""SELECT warnings.date, warnings.reason, warnings.expired
-FROM warnings
-JOIN users ON warnings.user_id = users.id
-WHERE users.id = '{user_id}';"""
-    cursor.execute(query)
-    warnings = cursor.fetchall()
-    warnings = [Warning(i[0], i[1], i[2]) for i in warnings] if warnings != [] else []
-    userToReturn.warnings = warnings
-    #query = f"""SELECT items.item, items.description, items.amount
-#FROM items
-#JOIN users ON items.user_id = users.id
-#WHERE users.id = '{user_id}';"""
-    #cursor.execute(query)
-    #inventory = cursor.fetchall()
-    #inventory = [{'item': i[0], 'description': i[1], 'amount': i[2]} for i in inventory]
-    #userDict['inventory'] = inventory
+def getUserInfo(user: discord.Member, guildId: int, userId: int | None = None, create_if_missing: bool = True) -> User | None:
+    """Retrieve a user from the database. Optionally registers the user if missing."""
+    with pooled_connection() as cursor:
+        if userId is not None:
+            user_id = userId
+        else:
+            if create_if_missing:
+                user_id = includeUser(cursor.connection, user, guildId)
+            else:
+                user_id = getUserId(user.id)
+                if user_id is None:
+                    return None
 
-    return userToReturn
+        query = (
+            "SELECT discord_user.discord_user_id, discord_user.display_name, "
+            "user_community_status.member_since, user_community_status.approved, "
+            "user_community_status.approved_at, user_community_status.is_vip, "
+            "user_community_status.is_partner, user_level.current_level, "
+            "user_birthday.birth_date, user_birthday.verified, locale.locale_name, "
+            "user_economy.bank_balance "
+            "FROM users "
+            "LEFT JOIN discord_user ON users.id = discord_user.user_id "
+            "LEFT JOIN user_community_status ON users.id = user_community_status.user_id "
+            "LEFT JOIN user_birthday ON user_birthday.user_id = users.id "
+            "LEFT JOIN user_level ON user_level.user_id = users.id AND user_level.server_guild_id = %s "
+            "LEFT JOIN user_locale ON user_locale.user_id = users.id "
+            "LEFT JOIN locale ON locale.id = user_locale.locale_id "
+            "LEFT JOIN warnings ON warnings.user_id = users.id "
+            "LEFT JOIN user_economy ON user_economy.user_id = users.id AND user_economy.server_guild_id = %s "
+            "WHERE discord_user.user_id = %s"
+        )
+        cursor.execute(query, (guildId, guildId, user_id))
+        dbUser = cursor.fetchone()
+        if not dbUser:
+            return None
+
+        userToReturn = User(
+            id=user_id,
+            discordId=dbUser["discord_user_id"],
+            username=user.name,
+            displayName=user.display_name,
+            memberSince=dbUser["member_since"],
+            approved=dbUser["approved"],
+            approvedAt=dbUser["approved_at"],
+            isVip=dbUser["is_vip"],
+            isPartner=dbUser["is_partner"],
+            level=dbUser["current_level"],
+            birthday=dbUser["birth_date"],
+            birthdayVerified=dbUser["verified"],
+            locale=dbUser["locale_name"],
+            coins=dbUser["bank_balance"],
+            warnings=[],
+            inventory=[],
+            staffOf=[],
+        )
+
+        cursor.execute(
+            "SELECT warnings.date, warnings.reason, warnings.expired "
+            "FROM warnings JOIN users ON warnings.user_id = users.id "
+            "WHERE users.id = %s",
+            (user_id,),
+        )
+        warnings = cursor.fetchall() or []
+        userToReturn.warnings = [Warning(i["date"], i["reason"], i["expired"]) for i in warnings]
+
+        return userToReturn
     
 
 def includeEvent(mydb, user: Union[discord.Member,str], locale_id:int, city:str, event_name:str, address:str, price:float, starting_datetime: datetime, ending_datetime: datetime, description: str, group_link:str, website:str, max_price:float, event_logo_url:str):
@@ -859,21 +891,19 @@ def getStaffRoles(guild_id:int):
     myresult = cursor.fetchall()
     return myresult[0][0]
 
-def registerUser(guild_id:int, discord_user:discord.Member, birthday:date, approved_date:date=None):
-    mydb = connectToDatabase()
-    userId = includeUser(mydb, discord_user, guild_id, datetime.now() if approved_date==None else approved_date)
-    birthdayRegistered = False
-    try:
-        birthdayRegistered = includeBirthday(mydb, guild_id, birthday, discord_user, False, userId)
-    except Exception as e:
-        if not e.args[0].__contains__('Duplicate entry'):
-            print(e)
-        else:
-            birthdayRegistered = True
-    endConnectionWithCommit(mydb)
-    if userId != None and birthdayRegistered:
-        return True
-    return False
+def registerUser(guild_id: int, discord_user: discord.Member, birthday: date, approved_date: date | None = None) -> bool:
+    """Register a member in the database and saves the birthday."""
+    with pooled_connection() as cursor:
+        userId = includeUser(cursor.connection, discord_user, guild_id, datetime.now() if approved_date is None else approved_date)
+        birthdayRegistered = False
+        try:
+            birthdayRegistered = includeBirthday(cursor.connection, guild_id, birthday, discord_user, False, userId)
+        except Exception as e:
+            if not e.args[0].__contains__('Duplicate entry'):
+                print(e)
+            else:
+                birthdayRegistered = True
+        return userId is not None and birthdayRegistered
 
 def saveCustomRole(guild_id:int, discord_user:discord.Member, color:str=None, iconId:int=None):
     mydb = connectToDatabase()
