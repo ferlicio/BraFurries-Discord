@@ -230,110 +230,115 @@ def getUserId(discord_user_id: int):
 
 
 
-def includeUser(mydb, user: Union[discord.Member,str], guildId:int=os.getenv('DISCORD_GUILD_ID'), approvedAt:datetime=None) -> int:
-    cursor = mydb.cursor(buffered=True)
-    if type(user) != str:
+def includeUser(mydb, user: Union[discord.Member, str], guildId: int = os.getenv("DISCORD_GUILD_ID"), approvedAt: datetime | None = None) -> int:
+    """Ensure a user exists in the database and return the internal id."""
+    cursor = mydb.cursor(dictionary=True, buffered=True)
+
+    if isinstance(user, discord.Member):
         username = user.name
-        displayName = user.display_name
-        memberSince = user.joined_at.strftime('%Y-%m-%d %H:%M:%S')
+        display_name = user.display_name
+        member_since = user.joined_at.strftime("%Y-%m-%d %H:%M:%S")
         approved = 0 if discord.utils.get(user.guild.roles, id=860453882323927060) in user.roles else 1
+        cursor.execute(
+            "SELECT user_id, display_name FROM discord_user WHERE discord_user_id = %s",
+            (user.id,),
+        )
+        result = cursor.fetchone()
     else:
         username = user
-        displayName = user
-        memberSince = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        display_name = user
+        member_since = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         approved = 0
-    approvedAt = approvedAt.strftime('%Y-%m-%d %H:%M:%S') if approvedAt != None else None
-
-    foundUser = False
-    if type(user) != str:
-        query = f"""SELECT user_id FROM discord_user WHERE discord_user_id = '{user.id}';"""
-        cursor.execute(query)
+        cursor.execute(
+            "SELECT user_id, display_name FROM telegram_user WHERE username = %s",
+            (user,),
+        )
         result = cursor.fetchone()
-        if result != None:
-            user_id = result[0]
-            query = f"""SELECT discord_user.display_name, users.display_name 
-    FROM discord_user 
-    JOIN users ON discord_user.user_id = {user_id}
-    WHERE user_id = '{user_id}';"""
-            cursor.execute(query)
-            displayNameToUpdate = cursor.fetchone()
 
-    else:
-        query = f"""SELECT user_id FROM telegram_user WHERE username = '{user}';"""
-        cursor.execute(query)
-        result = cursor.fetchone()
-        if result != None:
-            user_id = result[0]
-            query = f"""SELECT discord_user.display_name, users.display_name  
-    FROM discord_user 
-    JOIN users ON discord_user.user_id = {user_id}
-    WHERE user_id = '{user_id}';"""
-            cursor.execute(query)
-            displayNameToUpdate = cursor.fetchone()
+    approved_at_str = approvedAt.strftime("%Y-%m-%d %H:%M:%S") if approvedAt else None
 
-    if result != None:
-        foundUser = True
-        if displayNameToUpdate[0] != displayName:
-            query = f"""UPDATE discord_user
-SET display_name = '{displayName}'
-WHERE user_id = '{user_id}';"""
-            cursor.execute(query)
-        if displayNameToUpdate[1] != displayName:
-            query = f"""UPDATE users
-SET display_name = '{displayName}'
-WHERE id = '{user_id}';"""
-            cursor.execute(query)
-    
-    if foundUser:
-        query = f"""SELECT user_id, approved_at FROM user_community_status WHERE user_id = '{user_id}';"""
-        cursor.execute(query)
-        result = cursor.fetchone()
-        if result != None:
-            if result[1] == None and approvedAt != None:
-                query = f"""UPDATE user_community_status
-SET approved_at = '{approvedAt}', approved = 1
-WHERE user_id = '{user_id}';"""
-                cursor.execute(query)
-            return user_id
+    if result:
+        user_id = result["user_id"]
+
+        if result["display_name"] != display_name:
+            table = "discord_user" if isinstance(user, discord.Member) else "telegram_user"
+            cursor.execute(
+                f"UPDATE {table} SET display_name = %s WHERE user_id = %s",
+                (display_name, user_id),
+            )
+        cursor.execute("SELECT display_name FROM users WHERE id = %s", (user_id,))
+        row = cursor.fetchone()
+        if row and row["display_name"] != display_name:
+            cursor.execute("UPDATE users SET display_name = %s WHERE id = %s", (display_name, user_id))
+
+        cursor.execute(
+            "SELECT approved_at FROM user_community_status WHERE user_id = %s",
+            (user_id,),
+        )
+        status = cursor.fetchone()
+        if status:
+            if status["approved_at"] is None and approved_at_str:
+                cursor.execute(
+                    "UPDATE user_community_status SET approved_at = %s, approved = 1 WHERE user_id = %s",
+                    (approved_at_str, user_id),
+                )
         else:
-            query = f"""SELECT community_id FROM discord_servers WHERE guild_id = '{guildId}';"""
-            cursor.execute(query)
-            result = cursor.fetchone()
-            community_id = result[0]
-            query = f"""INSERT INTO user_community_status (user_id, community_id, member_since, approved, approved_at, is_vip, banned)
-        VALUES ('{user_id}', {community_id}, '{memberSince}', {approved}, {"'"+approvedAt+"'" if approvedAt != None else 'NULL'}, 0, 0);"""
-            cursor.execute(query)
-            return user_id
-    # Verificar se o usuário já existe na tabela `users`
-    try: 
-        query = f"""INSERT INTO users (display_name, username)
-    VALUES ('{displayName}','{username}');"""
-        cursor.execute(query)
-    except:
-        raise Exception('Nome de usuário inválido. Não é possivel aprovar membros com caracteres especiais.')
-    # Obter o id do usuário na tabela `users`
-    query = f"""SELECT id FROM users WHERE username = '{username}';"""
-    cursor.execute(query)
-    result = cursor.fetchone()
-    user_id = result[0]
-    # Inserir o usuário na tabela `user_community_status`
-    query = f"""SELECT community_id FROM discord_servers WHERE guild_id = '{guildId}';"""
-    cursor.execute(query)
-    result = cursor.fetchone()
-    community_id = result[0]
-    query = f"""INSERT INTO user_community_status (user_id, community_id, member_since, approved, approved_at, is_vip, banned)
-VALUES ({user_id}, {community_id}, '{memberSince}', {approved}, {"'"+approvedAt+"'" if approvedAt != None else 'NULL'}, false, false);"""
-    cursor.execute(query)
+            cursor.execute(
+                "SELECT community_id FROM discord_servers WHERE guild_id = %s",
+                (guildId,),
+            )
+            community_id = cursor.fetchone()["community_id"]
+            cursor.execute(
+                "INSERT INTO user_community_status (user_id, community_id, member_since, approved, approved_at, is_vip, banned)"
+                " VALUES (%s, %s, %s, %s, %s, 0, 0)",
+                (user_id, community_id, member_since, approved, approved_at_str),
+            )
 
-    # Inserir o usuário na tabela `discord_user`
+        return user_id
+
+    # User not found: create
     try:
-        query = f"""INSERT INTO discord_user (user_id, discord_user_id, username, display_name)
-            VALUES ({user_id}, {user.id}, '{username}', '{user.nick}');""" if type(user) != str else f"""
-            INSERT IGNORE INTO telegram_user (user_id, username, display_name)
-            VALUES ({user_id}, '{user}', '{username}';"""
-        cursor.execute(query)
-    except:
-        raise Exception('Nome de usuário inválido. Não é possivel aprovar membros com caracteres especiais.')
+        cursor.execute(
+            "INSERT INTO users (display_name, username) VALUES (%s, %s)",
+            (display_name, username),
+        )
+    except Exception as e:
+        raise Exception(
+            "Nome de usuário inválido. Não é possivel aprovar membros com caracteres especiais."
+        ) from e
+
+    user_id = cursor.lastrowid
+    if not user_id:
+        cursor.execute("SELECT id FROM users WHERE username = %s", (username,))
+        user_id = cursor.fetchone()["id"]
+
+    cursor.execute(
+        "SELECT community_id FROM discord_servers WHERE guild_id = %s",
+        (guildId,),
+    )
+    community_id = cursor.fetchone()["community_id"]
+    cursor.execute(
+        "INSERT INTO user_community_status (user_id, community_id, member_since, approved, approved_at, is_vip, banned)"
+        " VALUES (%s, %s, %s, %s, %s, false, false)",
+        (user_id, community_id, member_since, approved, approved_at_str),
+    )
+
+    try:
+        if isinstance(user, discord.Member):
+            cursor.execute(
+                "INSERT INTO discord_user (user_id, discord_user_id, username, display_name) VALUES (%s, %s, %s, %s)",
+                (user_id, user.id, username, user.nick),
+            )
+        else:
+            cursor.execute(
+                "INSERT IGNORE INTO telegram_user (user_id, username, display_name) VALUES (%s, %s, %s)",
+                (user_id, user, username),
+            )
+    except Exception as e:
+        raise Exception(
+            "Nome de usuário inválido. Não é possivel aprovar membros com caracteres especiais."
+        ) from e
+
     mydb.commit()
     return user_id
 
