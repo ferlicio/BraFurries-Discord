@@ -27,18 +27,28 @@ class RecordsCog(commands.Cog):
     async def showRecords(self, ctx: discord.Interaction, tipo: RecordTypes = None):
         await ctx.response.defer()
         if tipo is None or tipo == "Tempo em call":
-            records = getAllVoiceRecords(ctx.guild.id)
+            records = getAllVoiceRecords(ctx.guild.id, limit=10)
             if not records:
                 await ctx.followup.send(content='Nenhum recorde registrado.')
                 return
-            lines = []
-            for record in records:
+
+            embed = discord.Embed(
+                title='Recordes de tempo em call',
+                color=discord.Color.blue(),
+            )
+
+            for index, record in enumerate(records, start=1):
                 member = ctx.guild.get_member(record['user_id'])
                 if member is None:
                     continue
                 duration = str(timedelta(seconds=record['seconds']))
-                lines.append(f'{member.display_name} - {duration}')
-            await ctx.followup.send(content='Recordes de tempo em call:\n' + '\n'.join(lines))
+                embed.add_field(
+                    name=f'{index}. {member.display_name}',
+                    value=duration,
+                    inline=False
+                )
+
+            await ctx.followup.send(embed=embed)
         else:
             await ctx.followup.send(content='Tipo de recorde desconhecido.', ephemeral=True)
 
