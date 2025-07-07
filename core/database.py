@@ -101,23 +101,34 @@ def getConfig(guild:discord.Guild):
         cursor.execute(query)
         
         # Recupera as configurações do servidor
-        query = f"""SELECT COLUMN_NAME
-    FROM INFORMATION_SCHEMA.COLUMNS
-    WHERE TABLE_NAME = 'server_settings';"""
-        cursor.execute(query)
+        cursor.execute("""
+        SELECT COLUMN_NAME
+          FROM INFORMATION_SCHEMA.COLUMNS
+         WHERE TABLE_NAME = 'server_settings'
+        """)
         todas_colunas = cursor.fetchall()
 
-        dynamic_query = f"""SELECT discord_servers.name, discord_servers.guild_id AS guildId"""
-        for column in todas_colunas:
-            if column != 'server_guild_id' and column != 'id':
-                dynamic_query += f", server_settings.{column}"
+        nomes = [
+            row['COLUMN_NAME']
+            for row in todas_colunas
+            if row['COLUMN_NAME'] not in ('server_guild_id', 'id')
+        ]
 
-        dynamic_query += f"""
-    FROM discord_servers
-    LEFT JOIN server_settings ON discord_servers.guild_id = server_settings.server_guild_id
-    WHERE discord_servers.guild_id = '{guild.id}'"""
+        extras = ", ".join(f"server_settings.{col}" for col in nomes)
 
-        cursor.execute(dynamic_query)
+        # 4) monta a query completa
+        dynamic_query = f"""
+            SELECT
+            discord_servers.name,
+            discord_servers.guild_id AS guildId
+            {',' if extras else ''}{extras}
+            FROM discord_servers
+            LEFT JOIN server_settings
+            ON discord_servers.guild_id = server_settings.server_guild_id
+            WHERE discord_servers.guild_id = %s
+        """
+
+        cursor.execute(dynamic_query, (guild.id,))
         config = cursor.fetchone()
 
         return config
