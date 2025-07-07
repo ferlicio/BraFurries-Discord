@@ -1109,7 +1109,7 @@ def getAllGameRecords(guild_id: int, limit: int = 10, blacklist: list[str] = Non
 def getBlacklistedGames(guild_id: int) -> list[str]:
     """Retrieve all blacklisted games for a guild"""
     with pooled_connection() as cursor:
-        query = f"""SELECT game_name FROM game_blacklist
+        query = f"""SELECT game_name FROM blacklisted_games
     WHERE server_guild_id = {guild_id};"""
         cursor.execute(query)
         rows = cursor.fetchall()
@@ -1120,7 +1120,7 @@ def addGameToBlacklist(guild_id: int, game_name: str) -> bool:
     """Add a game to the blacklist for a guild"""
     with pooled_connection() as cursor:
         try:
-            query = """INSERT IGNORE INTO game_blacklist (server_guild_id, game_name)
+            query = """INSERT IGNORE INTO blacklisted_games (server_guild_id, game_name)
     VALUES (%s, %s);"""
             cursor.execute(query, (guild_id, game_name))
             return True
