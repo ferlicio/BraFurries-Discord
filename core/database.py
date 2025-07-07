@@ -110,7 +110,7 @@ def getConfig(guild:discord.Guild):
         dynamic_query = f"""SELECT discord_servers.name, discord_servers.guild_id AS guildId"""
         for column in todas_colunas:
             if column != 'server_guild_id' and column != 'id':
-                dynamic_query += f", server_settings.{column["COLUMN_NAME"]}"
+                dynamic_query += f", server_settings.{column}"
 
         dynamic_query += f"""
     FROM discord_servers
