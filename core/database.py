@@ -42,27 +42,10 @@ def getCredentials():
         with open('token.json', 'w') as token:
             token.write(creds.to_json())
     return creds
-
-
-def connectToDatabase():
-    mydb = mysql.connector.connect(
-        host=os.getenv('BOT_DATABASE_HOST'),
-        user=os.getenv('BOT_DATABASE_USER'),
-        password=os.getenv('BOT_DATABASE_PASSWORD'),
-        database='coddy'
-    )
-    return mydb
-
-def endConnection(mydb):
-    cursor = mydb.cursor()
-    mydb.close()
-    cursor.close()
-
-def endConnectionWithCommit(mydb):
-    mydb.commit()
-    endConnection(mydb)
     
-connection_pool = pooling.MySQLConnectionPool(pool_name="mypool", pool_size=5, **db_config)
+connection_pool = pooling.MySQLConnectionPool(
+    pool_name="Discord", pool_size=5, **db_config
+)
 
 @contextmanager
 def pooled_connection(buffered: bool = False):
@@ -81,77 +64,71 @@ def pooled_connection(buffered: bool = False):
 
 
 def getConfig(guild:discord.Guild):
-    mydb = connectToDatabase()
-    cursor = mydb.cursor(buffered=True)
-    #verifica se a comunidade já está no banco de dados
-    query = f"""SELECT * FROM communities"""
-    cursor.execute(query)
-    myresult = cursor.fetchall()
-    if myresult == []:
-        botOriginalGuildName = discord.utils.get(guild.client.guilds, id=int(os.getenv('BOT_GUILD_ID'))).name
-        query = f"""INSERT IGNORE INTO communities (name)
-VALUES ('{botOriginalGuildName}');"""
+    with pooled_connection() as cursor:
+        #verifica se a comunidade já está no banco de dados
+        query = f"""SELECT * FROM communities"""
         cursor.execute(query)
-        query = f"""INSERT IGNORE INTO discord_servers (community_id, name, guild_id)
-VALUES ('{myresult[-1][0]}', '{guild.name}', '{guild.id}');"""
-        cursor.execute(query)
-    else:
-        existInCommunities = False
-        for community in myresult:
-            if community[1] in guild.name:
-                existInCommunities = True
-                query = f"""INSERT IGNORE INTO discord_servers (community_id, name, guild_id) 
-            VALUES ('{community[0]}', '{guild.name}', '{guild.id}');"""
-            cursor.execute(query)
-            continue
-        if not existInCommunities:
+        myresult = cursor.fetchall()
+        if myresult == []:
+            botOriginalGuildName = discord.utils.get(guild.client.guilds, id=int(os.getenv('BOT_GUILD_ID'))).name
             query = f"""INSERT IGNORE INTO communities (name)
-VALUES ('{guild.name}');""" 
+    VALUES ('{botOriginalGuildName}');"""
             cursor.execute(query)
-            query = f"""SELECT * FROM communities"""
-            cursor.execute(query)
-            myresult = cursor.fetchall()
             query = f"""INSERT IGNORE INTO discord_servers (community_id, name, guild_id)
-VALUES ('{myresult[-1][0]}', '{guild.name}', '{guild.id}');"""
+    VALUES ('{myresult[-1][0]}', '{guild.name}', '{guild.id}');"""
             cursor.execute(query)
-    query = f"""INSERT IGNORE INTO server_settings (server_guild_id) 
-VALUES ('{guild.id}');"""
-    cursor.execute(query)
-    mydb.commit()
-    
-    # Recupera as configurações do servidor
-    query = f"""SELECT COLUMN_NAME
-FROM INFORMATION_SCHEMA.COLUMNS
-WHERE TABLE_NAME = 'server_settings';"""
-    cursor.execute(query)
-    todas_colunas = cursor.fetchall()
+        else:
+            existInCommunities = False
+            for community in myresult:
+                if community[1] in guild.name:
+                    existInCommunities = True
+                    query = f"""INSERT IGNORE INTO discord_servers (community_id, name, guild_id) 
+                VALUES ('{community[0]}', '{guild.name}', '{guild.id}');"""
+                cursor.execute(query)
+                continue
+            if not existInCommunities:
+                query = f"""INSERT IGNORE INTO communities (name)
+    VALUES ('{guild.name}');""" 
+                cursor.execute(query)
+                query = f"""SELECT * FROM communities"""
+                cursor.execute(query)
+                community = cursor.fetchall()
+                query = f"""INSERT IGNORE INTO discord_servers (community_id, name, guild_id)
+    VALUES ('{community[-1]["id"]}', '{guild.name}', '{guild.id}');"""
+                cursor.execute(query)
+        query = f"""INSERT IGNORE INTO server_settings (server_guild_id) 
+    VALUES ('{guild.id}');"""
+        cursor.execute(query)
+        
+        # Recupera as configurações do servidor
+        query = f"""SELECT COLUMN_NAME
+    FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_NAME = 'server_settings';"""
+        cursor.execute(query)
+        todas_colunas = cursor.fetchall()
 
-    dynamic_query = f"""SELECT discord_servers.name, discord_servers.guild_id"""
-    for column in todas_colunas:
-        if column[0] != 'server_guild_id' and column[0] != 'id':
-            dynamic_query += f", server_settings.{column[0]}"
+        dynamic_query = f"""SELECT discord_servers.name, discord_servers.guild_id"""
+        for column in todas_colunas:
+            if column[0] != 'server_guild_id' and column[0] != 'id':
+                dynamic_query += f", server_settings.{column[0]}"
 
-    dynamic_query += f"""
-FROM discord_servers
-LEFT JOIN server_settings ON discord_servers.guild_id = server_settings.server_guild_id
-WHERE discord_servers.guild_id = '{guild.id}'"""
+        dynamic_query += f"""
+    FROM discord_servers
+    LEFT JOIN server_settings ON discord_servers.guild_id = server_settings.server_guild_id
+    WHERE discord_servers.guild_id = '{guild.id}'"""
 
-    cursor.execute(dynamic_query)
-    myresult = cursor.fetchall()
+        cursor.execute(dynamic_query)
+        myresult = cursor.fetchall()
 
-    column_names = ['name', 'guildId']
-    for column in todas_colunas:
-        if column[0] != 'server_guild_id' and column[0] != 'id':
-            columnName = column[0].split('_')
-            columnName = "".join(element.title() if element!=columnName[0] else element for element in columnName)
-            column_names.append(columnName)
-    config = dict(zip(column_names, myresult[0]))
+        column_names = ['name', 'guildId']
+        for column in todas_colunas:
+            if column[0] != 'server_guild_id' and column[0] != 'id':
+                columnName = column[0].split('_')
+                columnName = "".join(element.title() if element!=columnName[0] else element for element in columnName)
+                column_names.append(columnName)
+        config = dict(zip(column_names, myresult[0]))
 
-    
-    cursor.close()
-    mydb.close()
-
-    return config
+        return config
 
 def getLevelConfig():
     with pooled_connection() as cursor:
@@ -331,7 +308,6 @@ def includeUser(user: Union[discord.Member, str], guildId: int = os.getenv("DISC
                 "Nome de usuário inválido. Não é possivel aprovar membros com caracteres especiais."
             ) from e
 
-        mydb.commit()
         return user_id
 
 def includeLocale(guildId: int, abbrev:str, user:discord.User, availableLocals:list):
@@ -342,7 +318,6 @@ def includeLocale(guildId: int, abbrev:str, user:discord.User, availableLocals:l
                 try:
                     query = f"""INSERT INTO user_locale (user_id, locale_id) VALUES ('{user_id}','{local['id']}');"""
                     cursor.execute(query)
-                    mydb.commit()
                     return True
                 except:
                     return False
@@ -466,8 +441,8 @@ def getUserInfo(user: discord.Member, guildId: int, userId: int = None, create_i
         return userToReturn
     
 
-def includeEvent(mydb, user: Union[discord.Member,str], locale_id:int, city:str, event_name:str, address:str, price:float, starting_datetime: datetime, ending_datetime: datetime, description: str, group_link:str, website:str, max_price:float, event_logo_url:str):
-    user_id = includeUser(mydb, user)
+def includeEvent(user: Union[discord.Member,str], locale_id:int, city:str, event_name:str, address:str, price:float, starting_datetime: datetime, ending_datetime: datetime, description: str, group_link:str, website:str, max_price:float, event_logo_url:str):
+    user_id = includeUser(user)
     with pooled_connection() as cursor:
         creds = getCredentials()
         try:
@@ -495,7 +470,6 @@ def includeEvent(mydb, user: Union[discord.Member,str], locale_id:int, city:str,
         VALUES ({user_id}, {locale_id}, '{event_name}', '{description}', '{city}', '{address}', '{price}', '{max_price if max_price!=None else 0}', '{starting_datetime}', '{ending_datetime}', '{group_link}', '{website}', '{event_logo_url}', '{response['id']}');"""
             query = query.replace("'None'", 'NULL')
             cursor.execute(query)
-            mydb.commit()
             return True
         except HttpError as error:
             print('An error occurred: %s' % error)
@@ -834,7 +808,7 @@ def assignTempRole(guild_id:int, discord_user:discord.Member, role_id:str, expir
         query = f"""SELECT id FROM discord_servers WHERE guild_id = '{guild_id}';"""
         cursor.execute(query)
         discord_community_id = cursor.fetchone()["id"]
-        user_id = includeUser(mydb, discord_user, guild_id)
+        user_id = includeUser(discord_user, guild_id)
         query = f"""SELECT id FROM discord_user WHERE user_id = '{user_id}';"""
         cursor.execute(query)
         discord_user_id = cursor.fetchone()["id"]
@@ -971,35 +945,29 @@ def getAllCustomRoles(guild_id:int):
 
 
 def grantNSFWAccess(guild_id:int, discord_user:discord.Member, birthday:date):
-    mydb = connectToDatabase()
-    cursor = mydb.cursor()
     approved = False
     try:
-        user_id = includeUser(mydb, discord_user, guild_id)
-        query = f"""SELECT user_id, birth_date FROM user_birthday
-WHERE user_id = {user_id}"""
-        cursor.execute(query)
-        myresult = cursor.fetchone()
-        if myresult != None:
-            databaseBirthday = datetime.strptime(f"{myresult[1]}", '%Y-%m-%d').date()
-            if databaseBirthday == birthday:
-                query = f"""UPDATE user_birthday
-SET verified = 1
-WHERE user_id = {user_id}"""
-                cursor.execute(query)
-                approved = True
+        user_id = includeUser(discord_user, guild_id)
+        with pooled_connection() as cursor:
+            query = f"""SELECT user_id, birth_date FROM user_birthday
+    WHERE user_id = {user_id}"""
+            cursor.execute(query)
+            myresult = cursor.fetchone()
+            if myresult != None:
+                databaseBirthday = datetime.strptime(f"{myresult[1]}", '%Y-%m-%d').date()
+                if databaseBirthday == birthday:
+                    query = f"""UPDATE user_birthday
+    SET verified = 1
+    WHERE user_id = {user_id}"""
+                    cursor.execute(query)
+                    approved = True
+                else:
+                    approved = 'dont_match'
             else:
-                approved = 'dont_match'
-        else:
-            approved = 'not_registered'
-        return approved
+                approved = 'not_registered'
+            return approved
     except Exception as e: 
         return approved
-    finally:
-        if approved:
-            endConnectionWithCommit(mydb)
-        else:
-            endConnection(mydb)
             
 def getServerMessage(messageType:ServerMessagesEnum, guild_id:int):
     with pooled_connection(True) as cursor:
@@ -1011,75 +979,67 @@ def getServerMessage(messageType:ServerMessagesEnum, guild_id:int):
         return message if message != None else None
 
 def setServerMessage(guild_id:int, messageType:ServerMessagesEnum, message:str):
-    mydb = connectToDatabase()
-    cursor = mydb.cursor(buffered=True)
-    query = f"""SELECT * 
-FROM discord_server_messages
-WHERE server_guild_id = {guild_id}"""
-    cursor.execute(query)
-    myresult = cursor.fetchone()
-    try:
-        if myresult == None:
-            query = f"""INSERT INTO discord_server_messages (server_guild_id, {messageType})
-    VALUES ({guild_id}, '{message}')"""
-            cursor.execute(query)
-            return True
-        else:
-            query = f"""UPDATE discord_server_messages
-    SET {messageType} = '{message}'
+    with pooled_connection(True) as cursor:
+        query = f"""SELECT * 
+    FROM discord_server_messages
     WHERE server_guild_id = {guild_id}"""
-            cursor.execute(query)
-            return True
-    except Exception as e:
-        return False
-    finally:
-        endConnectionWithCommit(mydb)
+        cursor.execute(query)
+        myresult = cursor.fetchone()
+        try:
+            if myresult == None:
+                query = f"""INSERT INTO discord_server_messages (server_guild_id, {messageType})
+        VALUES ({guild_id}, '{message}')"""
+                cursor.execute(query)
+                return True
+            else:
+                query = f"""UPDATE discord_server_messages
+        SET {messageType} = '{message}'
+        WHERE server_guild_id = {guild_id}"""
+                cursor.execute(query)
+                return True
+        except Exception as e:
+            return False
 
 
 def getTodayBirthdays(guild_id:int):
-    mydb = connectToDatabase()
-    cursor = mydb.cursor()
-    query = f"""SELECT discord_user.discord_user_id, user_birthday.birth_date FROM user_birthday
-JOIN discord_user ON user_birthday.user_id = discord_user.user_id
-WHERE MONTH(birth_date) = MONTH(NOW())
-AND DAY(birth_date) = DAY(NOW())
-AND mentionable = 1;"""
-    cursor.execute(query)
-    myresult = cursor.fetchall()
-    endConnection(mydb)
-    users:list[SimpleUserBirthday] = []
-    for user in myresult:
-        users.append(SimpleUserBirthday(user[0],user[1]))
-    return users
-
-
-def updateVoiceRecord(mydb, guild_id:int, discord_user:discord.Member, seconds:int):
-    """Update the longest continuous voice call time for a member"""
-    cursor = mydb.cursor()
-    user_id = includeUser(mydb, discord_user, guild_id)
-    try:
-        query = f"""INSERT INTO user_records (user_id, server_guild_id, voice_time)
-VALUES ({user_id}, {guild_id}, {seconds})
-ON DUPLICATE KEY UPDATE voice_time = IF({seconds} > voice_time, {seconds}, voice_time);"""
+    with pooled_connection() as cursor:
+        query = f"""SELECT discord_user.discord_user_id, user_birthday.birth_date FROM user_birthday
+    JOIN discord_user ON user_birthday.user_id = discord_user.user_id
+    WHERE MONTH(birth_date) = MONTH(NOW())
+    AND DAY(birth_date) = DAY(NOW())
+    AND mentionable = 1;"""
         cursor.execute(query)
-        mydb.commit()
-        return True
-    except mysql.connector.Error as err:
-        logging.error(f"Database error occurred: {err}")
-        return False
+        myresult = cursor.fetchall()
+        users:list[SimpleUserBirthday] = []
+        for ub in myresult:
+            users.append(SimpleUserBirthday(ub["discord_user_id"],ub["birth_date"]))
+        return users
+
+
+def updateVoiceRecord(guild_id:int, discord_user:discord.Member, seconds:int):
+    """Update the longest continuous voice call time for a member"""
+    user_id = includeUser(discord_user, guild_id)
+    with pooled_connection() as cursor:
+        try:
+            query = f"""INSERT INTO user_records (user_id, server_guild_id, voice_time)
+    VALUES ({user_id}, {guild_id}, {seconds})
+    ON DUPLICATE KEY UPDATE voice_time = IF({seconds} > voice_time, {seconds}, voice_time);"""
+            cursor.execute(query)
+            return True
+        except mysql.connector.Error as err:
+            logging.error(f"Database error occurred: {err}")
+            return False
 
 
 def getVoiceTime(guild_id:int, discord_user:discord.Member) -> int:
     """Retrieve the total recorded voice time in seconds for a member"""
-    mydb = connectToDatabase()
-    cursor = mydb.cursor()
-    user_id = includeUser(mydb, discord_user, guild_id)
-    query = f"""SELECT voice_time FROM user_records
-WHERE user_id = {user_id} AND server_guild_id = {guild_id};"""
-    cursor.execute(query)
-    myresult = cursor.fetchone()
-    endConnection(mydb)
-    return myresult[0] if myresult else 0
+    user_id = includeUser(discord_user, guild_id)
+    with pooled_connection() as cursor:
+        query = f"""SELECT voice_time FROM user_records
+    WHERE user_id = {user_id} AND server_guild_id = {guild_id};"""
+        cursor.execute(query)
+        myresult = cursor.fetchone()
+        return myresult[0] if myresult else 0
 
 
 def getAllVoiceRecords(guild_id: int, limit: int = 10):

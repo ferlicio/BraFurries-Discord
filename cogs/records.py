@@ -4,8 +4,6 @@ from discord import app_commands
 from datetime import datetime, timedelta
 from core.time_functions import now
 from core.database import (
-    connectToDatabase,
-    endConnectionWithCommit,
     updateVoiceRecord,
     getAllVoiceRecords,
 )
@@ -62,17 +60,13 @@ class RecordsCog(commands.Cog):
             start = self.voice_sessions.pop(member.id, None)
             if start:
                 seconds = int((now() - start).total_seconds())
-                mydb = connectToDatabase()
-                updateVoiceRecord(mydb, member.guild.id, member, seconds)
-                endConnectionWithCommit(mydb)
+                updateVoiceRecord(member.guild.id, member, seconds)
         # Member switched channels
         elif before.channel != after.channel:
             start = self.voice_sessions.get(member.id)
             if start:
                 seconds = int((now() - start).total_seconds())
-                mydb = connectToDatabase()
-                updateVoiceRecord(mydb, member.guild.id, member, seconds)
-                endConnectionWithCommit(mydb)
+                updateVoiceRecord(member.guild.id, member, seconds)
 
     @tasks.loop(minutes=5)
     async def save_call_time(self):
@@ -81,15 +75,13 @@ class RecordsCog(commands.Cog):
         guild = self.bot.get_guild(DISCORD_GUILD_ID)
         if guild is None:
             return
-        mydb = connectToDatabase()
         for user_id, start in list(self.voice_sessions.items()):
             member = guild.get_member(user_id)
             if member is None:
                 continue
             seconds = int((now() - start).total_seconds())
             if seconds > 0:
-                updateVoiceRecord(mydb, guild.id, member, seconds)
-        endConnectionWithCommit(mydb)
+                updateVoiceRecord(guild.id, member, seconds)
 
 
 async def setup(bot: commands.Bot):

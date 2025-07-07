@@ -1,4 +1,3 @@
-from core.database import connectToDatabase, assignTempRole, endConnectionWithCommit
 from core.routine_functions import generateUserDescription
 from discord import Interaction, Member, Role, app_commands
 from discord.ext import commands
@@ -6,6 +5,7 @@ from datetime import timedelta, datetime
 from dateutil import relativedelta
 from core.time_functions import now
 from core.database import getUserInfo
+from core.database import assignTempRole
 from core.verifications import verifyDate
 from core.database import *
 from core.time_functions import MONTHS
@@ -136,12 +136,10 @@ class ModerationCog(commands.Cog):
 
     @app_commands.command(name=f'warn', description=f'Aplica um warn em um membro')
     async def warn(self, ctx: discord.Interaction, membro: discord.Member, motivo: str):
-        mydb = connectToDatabase()
         #staffRoles = getStaffRoles(ctx.guild)
         await ctx.response.send_message("Registrando warn...")
         if True: #adicionar verificação de cargo de staff
-            warnings = warnMember(mydb, ctx.guild.id, membro, motivo)
-            endConnectionWithCommit(mydb)
+            warnings = warnMember(ctx.guild.id, membro, motivo)
             if warnings:
                 if warnings['warningsCount'] < (int(warnings['warningsLimit']) - 1):
                     await membro.send(f'Você recebeu um warn por "{motivo}", totalizando {warnings["warningsCount"]}! Cuidado com suas ações no servidor!')
@@ -153,7 +151,6 @@ class ModerationCog(commands.Cog):
                     await membro.send(f'Você recebeu um warn por "{motivo}" e atingiu o limite de {warnings["warningsCount"]} warnings do servidor!')
                     return await ctx.edit_original_response(content=f'Warn registrado com sucesso! \nCom esse warn, o membro {membro.mention} atingiu o limite de warns do servidor e deverá ser **Banido**')
             return await ctx.edit_original_response(content=f'Não foi possível aplicar o warn no membro {membro.mention}')
-        endConnection(mydb)
         return await ctx.response.send_message(content='Você não tem permissão para fazer isso', ephemeral=True)
 
     @app_commands.command(name=f'warnings', description=f'Mostra os warnings de um membro')

@@ -1,4 +1,4 @@
-from core.database import connectToDatabase, assignTempRole, endConnectionWithCommit
+from core.database import assignTempRole
 from datetime import timedelta, datetime
 from core.time_functions import now
 from discord import Interaction, Member, Role, app_commands

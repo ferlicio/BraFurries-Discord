@@ -3,7 +3,6 @@ import discord
 import os
 from discord import app_commands
 from datetime import datetime
-from core.database import connectToDatabase, endConnectionWithCommit, endConnection
 from core.database import includeEvent, getAllEvents, getEventsByState, getAllPendingApprovalEvents, approveEventById
 from core.database import admConnectTelegramAccount, getEventByName, scheduleNextEventDate, rescheduleEventDate
 from core.routine_functions import formatSingleEvent, formatEventList
@@ -33,12 +32,10 @@ class EventCog(commands.Cog):
         ending_datetime = datetime.strptime(f'{ending_date} {ending_time}', '%d/%m/%Y %H:%M')
         if starting_datetime > ending_datetime:
             return await ctx.response.send_message(content='''A data e hora de início do evento não pode ser maior que a data e hora de encerramento!''', ephemeral=True)
-        mydb = connectToDatabase()
-        locale_id = await localeIsAvailable(ctx, mydb, state)
+        locale_id = await localeIsAvailable(state)
         if locale_id:
             await ctx.response.defer()
-            result = includeEvent(mydb, user, locale_id, city, event_name, address, price, starting_datetime, ending_datetime, description, group_link, site, max_price, event_logo_url)
-            endConnectionWithCommit(mydb)
+            result = includeEvent(user, locale_id, city, event_name, address, price, starting_datetime, ending_datetime, description, group_link, site, max_price, event_logo_url)
             if result:
                 return await ctx.followup.send(content=f'O evento **{event_name}** foi registrado com sucesso!', ephemeral=False)
 
@@ -72,11 +69,9 @@ class EventCog(commands.Cog):
 
     @app_commands.command(name='eventos_por_estado', description='Lista todos os eventos registrados em um estado')
     async def listEventsByState(self, ctx: discord.Interaction, state: str):
-        mydb = connectToDatabase()
         await ctx.response.defer()
-        locale_id = await localeIsAvailable(ctx, mydb, state)
+        locale_id = await localeIsAvailable(state)
         result = getEventsByState(locale_id)
-        endConnection(mydb)
         if result:
             formattedEvents = formatEventList(result)
             eventsResponse = []
