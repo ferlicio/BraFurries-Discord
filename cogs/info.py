@@ -35,7 +35,7 @@ class InfoCog(commands.Cog):
             availableLocals = getAllLocals()
             if stateLetterCodes[local]:
                 await ctx.response.defer()
-                result = getUsersByLocale(cursor, local.upper(), availableLocals)
+                result = getUsersByLocale(local.upper(), availableLocals)
                 if result:
                     for locale in availableLocals:
                         if locale['locale_abbrev'] == local.upper():
