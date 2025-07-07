@@ -145,8 +145,8 @@ else f'R$'+str(f"{event['price']:.0f}").replace('.',',') if (event['max_price']=
         title=event["event_name"].title(),
         description=embeded_description
     )
-    if event["logo_url"]!=None:
-        eventEmbeded.set_thumbnail(url=event["logo_url"])
+    if event["event_logo_url"]!=None:
+        eventEmbeded.set_thumbnail(url=event["event_logo_url"])
     else: eventEmbeded.set_author(name='')
     return eventEmbeded
 
