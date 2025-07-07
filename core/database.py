@@ -1088,7 +1088,7 @@ def getGameTime(guild_id:int, discord_user:discord.Member) -> int:
         return myresult[0] if myresult else 0
 
 
-def getAllGameRecords(guild_id: int, limit: int = 10, blacklist: list[str] | None = None):
+def getAllGameRecords(guild_id: int, limit: int = 10, blacklist: list[str] = None):
     """Retrieve top game time records for a guild sorted by duration"""
     with pooled_connection() as cursor:
         exclusion = ""

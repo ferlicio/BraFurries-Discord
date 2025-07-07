@@ -31,22 +31,21 @@ class InfoCog(commands.Cog):
 
     @app_commands.command(name='furros_na_area', description='Lista todos os furries registrados em um local')
     async def listFurries(self, ctx: discord.Interaction, local: str):
-        with pooled_connection() as cursor:
-            availableLocals = getAllLocals()
-            if stateLetterCodes[local]:
-                await ctx.response.defer()
-                result = getUsersByLocale(local.upper(), availableLocals)
-                if result:
-                    for locale in availableLocals:
-                        if locale['locale_abbrev'] == local.upper():
-                            membersResponse = ',\n'.join(member for member in result)
-                            return await ctx.followup.send(content=f'''Aqui estão os furros registrados em {locale["locale_name"]}:```{membersResponse}```''')
-                else:
-                    for locale in availableLocals:
-                        if locale['locale_abbrev'] == local.upper():
-                            return await ctx.followup.send(content=f'Não há furros registrados em {locale["locale_name"]}... que tal ser o primeiro? :3')
+        availableLocals = getAllLocals()
+        if stateLetterCodes[local]:
+            await ctx.response.defer()
+            result = getUsersByLocale(local.upper(), availableLocals)
+            if result:
+                for locale in availableLocals:
+                    if locale['locale_abbrev'] == local.upper():
+                        membersResponse = ',\n'.join(member for member in result)
+                        return await ctx.followup.send(content=f'''Aqui estão os furros registrados em {locale["locale_name"]}:```{membersResponse}```''')
             else:
-                return await ctx.response.send_message(content='''Local inválido! Você deve informar uma sigla de Estado válido''', ephemeral=True)
+                for locale in availableLocals:
+                    if locale['locale_abbrev'] == local.upper():
+                        return await ctx.followup.send(content=f'Não há furros registrados em {locale["locale_name"]}... que tal ser o primeiro? :3')
+        else:
+            return await ctx.response.send_message(content='''Local inválido! Você deve informar uma sigla de Estado válido''', ephemeral=True)
 
     @app_commands.command(name='registrar_aniversario', description='Registra seu aniversário')
     async def registerBirthday(self, ctx: discord.Interaction, data: str, mencionavel: Literal["sim", "não"]):
