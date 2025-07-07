@@ -59,7 +59,7 @@ async def getLocalId(locale):
         locale_id = [local_dict['id'] for local_dict in availableLocals if local_dict['locale_abbrev'] == locale.upper()][0]
         return locale_id
     else:
-        raise Exception(f'O local {locale} não está disponível. Por favor, escolha um local válido.')
+        raise ValueError(f'O local {locale} não está disponível. Por favor, escolha um local válido.')
     
 def hex_to_rgb(hex_color):
     return sRGBColor.new_from_rgb_hex(hex_color)
