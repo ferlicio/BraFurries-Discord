@@ -613,7 +613,7 @@ def getEventByName(event_name:str):
         JOIN locale ON events.locale_id = locale.id"""
         cursor.execute(query + f""" WHERE events.event_name = '{event_name}' AND events.approved = 1;""")
         events = cursor.fetchall()
-        if event == []:
+        if events == []:
             cursor.execute(query + f""" WHERE events.event_name LIKE '%{event_name}%' AND events.approved = 1;""")
             events = cursor.fetchall()
         for e in events:
