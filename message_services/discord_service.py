@@ -105,9 +105,7 @@ async def cronJobs30m():
 @tasks.loop(minutes=1)
 async def timeSpecificTasks():
     """ if now().hour == 0 and now().minute == 0:
-        mydb = connectToDatabase()
-        resetDailyCoins(mydb.cursor())
-        endConnectionWithCommit(mydb) """
+        resetDailyCoins()"""
     if now().hour == 10 and now().minute == 10:
         await sendBirthdayMessages(bot)
 

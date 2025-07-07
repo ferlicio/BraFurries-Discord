@@ -52,19 +52,14 @@ async def rearrangeRoleInsideInterval(guild, roleID, start, end):
         newRolePosition = start.position-1
         await guild.edit_role_positions(positions={role: newRolePosition})
 
-async def localeIsAvailable(ctx, mydb, locale):
-    availableLocals = getAllLocals(mydb)
+async def getLocalId(locale):
+    availableLocals = getAllLocals()
     if locale.upper() in [local_dict['locale_abbrev'] for local_dict in availableLocals]:
         #pegaremos o id do local
         locale_id = [local_dict['id'] for local_dict in availableLocals if local_dict['locale_abbrev'] == locale.upper()][0]
         return locale_id
     else:
-        endConnection(mydb)
-        availableLocalsResponse = ',\n'.join(f'{local["locale_abbrev"]} = {local["locale_name"]}' for local in availableLocals)
-        await ctx.response.send_message(content=f'''você precisa fornecer um local existente!
-Você deve usar apenas a sigla do local, sem acentos ou espaços.\n
-Os locais disponiveis são:\n ```{availableLocalsResponse}```''', ephemeral=True)
-        return False
+        raise ValueError(f'O local {locale} não está disponível. Por favor, escolha um local válido.')
     
 def hex_to_rgb(hex_color):
     return sRGBColor.new_from_rgb_hex(hex_color)
