@@ -1058,3 +1058,44 @@ def getAllVoiceRecords(guild_id: int, limit: int = 10):
         cursor.execute(query)
         records = cursor.fetchall()
         return [{'user_id': row["discord_user_id"], 'seconds': row["voice_time"]} for row in records]
+
+
+def updateGameRecord(guild_id:int, discord_user:discord.Member, seconds:int, game_name:str):
+    """Update the longest continuous game time for a member and store the game name"""
+    user_id = includeUser(discord_user, guild_id)
+    with pooled_connection() as cursor:
+        try:
+            query = f"""INSERT INTO user_records (user_id, server_guild_id, game_time, game_name)
+    VALUES ({user_id}, {guild_id}, {seconds}, '{game_name}')
+    ON DUPLICATE KEY UPDATE game_time = IF({seconds} > game_time, {seconds}, game_time),
+    game_name = IF({seconds} > game_time, '{game_name}', game_name);"""
+            cursor.execute(query)
+            return True
+        except mysql.connector.Error as err:
+            logging.error(f"Database error occurred: {err}")
+            return False
+
+
+def getGameTime(guild_id:int, discord_user:discord.Member) -> int:
+    """Retrieve the total recorded game time in seconds for a member"""
+    user_id = includeUser(discord_user, guild_id)
+    with pooled_connection() as cursor:
+        query = f"""SELECT game_time FROM user_records
+    WHERE user_id = {user_id} AND server_guild_id = {guild_id};"""
+        cursor.execute(query)
+        myresult = cursor.fetchone()
+        return myresult[0] if myresult else 0
+
+
+def getAllGameRecords(guild_id: int, limit: int = 10):
+    """Retrieve top game time records for a guild sorted by duration"""
+    with pooled_connection() as cursor:
+        query = f"""SELECT discord_user.discord_user_id, user_records.game_time, user_records.game_name
+    FROM user_records
+    JOIN discord_user ON discord_user.user_id = user_records.user_id
+    WHERE user_records.server_guild_id = {guild_id}
+    ORDER BY user_records.game_time DESC
+    LIMIT {limit};"""
+        cursor.execute(query)
+        records = cursor.fetchall()
+        return [{'user_id': row["discord_user_id"], 'seconds': row["game_time"], 'game': row["game_name"]} for row in records]
