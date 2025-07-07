@@ -68,22 +68,22 @@ def getConfig(guild:discord.Guild):
         #verifica se a comunidade já está no banco de dados
         query = f"""SELECT * FROM communities"""
         cursor.execute(query)
-        myresult = cursor.fetchall()
-        if myresult == []:
+        communities = cursor.fetchall()
+        if communities == []:
             botOriginalGuildName = discord.utils.get(guild.client.guilds, id=int(os.getenv('BOT_GUILD_ID'))).name
             query = f"""INSERT IGNORE INTO communities (name)
     VALUES ('{botOriginalGuildName}');"""
             cursor.execute(query)
             query = f"""INSERT IGNORE INTO discord_servers (community_id, name, guild_id)
-    VALUES ('{myresult[-1][0]}', '{guild.name}', '{guild.id}');"""
+    VALUES ('{cursor.lastrowid}', '{guild.name}', '{guild.id}');"""
             cursor.execute(query)
         else:
             existInCommunities = False
-            for community in myresult:
-                if community[1] in guild.name:
+            for community in communities:
+                if community["name"] in guild.name:
                     existInCommunities = True
                     query = f"""INSERT IGNORE INTO discord_servers (community_id, name, guild_id) 
-                VALUES ('{community[0]}', '{guild.name}', '{guild.id}');"""
+                VALUES ('{community['id']}', '{guild.name}', '{guild.id}');"""
                 cursor.execute(query)
                 continue
             if not existInCommunities:
@@ -105,12 +105,12 @@ def getConfig(guild:discord.Guild):
     FROM INFORMATION_SCHEMA.COLUMNS
     WHERE TABLE_NAME = 'server_settings';"""
         cursor.execute(query)
-        todas_colunas = cursor.fetchall()
+        todas_colunas = cursor.fetchall()["COLUMN_NAME"]
 
-        dynamic_query = f"""SELECT discord_servers.name, discord_servers.guild_id"""
+        dynamic_query = f"""SELECT discord_servers.name, discord_servers.guild_id AS guildId"""
         for column in todas_colunas:
-            if column[0] != 'server_guild_id' and column[0] != 'id':
-                dynamic_query += f", server_settings.{column[0]}"
+            if column != 'server_guild_id' and column != 'id':
+                dynamic_query += f", server_settings.{column}"
 
         dynamic_query += f"""
     FROM discord_servers
@@ -118,15 +118,7 @@ def getConfig(guild:discord.Guild):
     WHERE discord_servers.guild_id = '{guild.id}'"""
 
         cursor.execute(dynamic_query)
-        myresult = cursor.fetchall()
-
-        column_names = ['name', 'guildId']
-        for column in todas_colunas:
-            if column[0] != 'server_guild_id' and column[0] != 'id':
-                columnName = column[0].split('_')
-                columnName = "".join(element.title() if element!=columnName[0] else element for element in columnName)
-                column_names.append(columnName)
-        config = dict(zip(column_names, myresult[0]))
+        config = cursor.fetchone()
 
         return config
 
