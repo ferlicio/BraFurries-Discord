@@ -1066,11 +1066,20 @@ def updateGameRecord(guild_id:int, discord_user:discord.Member, seconds:int, gam
     user_id = includeUser(discord_user, guild_id)
     with pooled_connection() as cursor:
         try:
-            query = f"""INSERT INTO user_records (user_id, server_guild_id, game_time, game_name)
-    VALUES ({user_id}, {guild_id}, {seconds}, '{game_name}')
-    ON DUPLICATE KEY UPDATE game_time = IF({seconds} > game_time, {seconds}, game_time),
-    game_name = IF({seconds} > game_time, '{game_name}', game_name);"""
-            cursor.execute(query)
+            sql = """
+            INSERT INTO user_records
+              (user_id, server_guild_id, game_time, game_name)
+            VALUES (%s, %s, %s, %s)
+            ON DUPLICATE KEY UPDATE
+              game_time  = IF(%s > game_time, %s,  game_time),
+              game_name  = IF(%s > game_time, %s,  game_name)
+            """
+            params = (
+                user_id, guild_id, seconds, game_name,  # INSERT
+                seconds, seconds,                        # UPDATE game_time
+                seconds, game_name                       # UPDATE game_name
+            )
+            cursor.execute(sql, params)
             return True
         except mysql.connector.Error as err:
             logging.error(f"Database error occurred: {err}")
