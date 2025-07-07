@@ -7,6 +7,7 @@ from schemas.models.user import User, CustomRole, Warning
 from schemas.enums.server_messages import ServerMessagesEnum
 from schemas.models.user import SimpleUserBirthday
 from mysql.connector.cursor import MySQLCursorAbstract
+from core.utilities import snake_to_camel
 from mysql.connector import pooling
 import mysql.connector
 from datetime import date, datetime
@@ -114,7 +115,7 @@ def getConfig(guild:discord.Guild):
             if row['COLUMN_NAME'] not in ('server_guild_id', 'id')
         ]
 
-        extras = ", ".join(f"server_settings.{col}" for col in nomes)
+        extras = ", ".join(f"server_settings.{col} AS {snake_to_camel(col)}" for col in nomes)
 
         # 4) monta a query completa
         dynamic_query = f"""

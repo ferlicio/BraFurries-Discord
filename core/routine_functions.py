@@ -151,24 +151,23 @@ else f'R$'+str(f"{event['price']:.0f}").replace('.',',') if (event['max_price']=
     return eventEmbeded
 
 async def removeTempRoles(bot:commands.Bot):
-    with pooled_connection() as cursor:
-        expiringTempRoles = getExpiringTempRoles(cursor, DISCORD_GUILD_ID)
-        if expiringTempRoles == []:
-            return
-        for TempRole in expiringTempRoles:
-            guild = bot.get_guild(DISCORD_GUILD_ID)
-            member = guild.get_member(TempRole['user_id'])
-            role = guild.get_role(TempRole['role_id'])
-            if member != None and role != None:
-                if member.roles.__contains__(role):
-                    await member.remove_roles(role)
-                    print(f'{member.name} perdeu o cargo {role.name}')
-                else:
-                    print(f'{member.name} não tinha o cargo {role.name}')
-                deleteTempRole(cursor, TempRole['id'])
-            elif member == None:
-                deleteTempRole(cursor, TempRole['id'])
+    expiringTempRoles = getExpiringTempRoles(DISCORD_GUILD_ID)
+    if expiringTempRoles == []:
         return
+    for TempRole in expiringTempRoles:
+        guild = bot.get_guild(DISCORD_GUILD_ID)
+        member = guild.get_member(TempRole['user_id'])
+        role = guild.get_role(TempRole['role_id'])
+        if member != None and role != None:
+            if member.roles.__contains__(role):
+                await member.remove_roles(role)
+                print(f'{member.name} perdeu o cargo {role.name}')
+            else:
+                print(f'{member.name} não tinha o cargo {role.name}')
+            deleteTempRole(TempRole['id'])
+        elif member == None:
+            deleteTempRole(TempRole['id'])
+    return
 
 async def mentionArtRoles(bot, message:discord.Message):
     guild = bot.get_guild(DISCORD_GUILD_ID)
