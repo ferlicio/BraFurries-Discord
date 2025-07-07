@@ -8,6 +8,8 @@ from core.database import (
     getAllVoiceRecords,
     updateGameRecord,
     getAllGameRecords,
+    getBlacklistedGames,
+    addGameToBlacklist,
 )
 from schemas.types.record_types import RecordTypes
 from settings import DISCORD_GUILD_ID
@@ -18,6 +20,7 @@ class RecordsCog(commands.Cog):
         self.bot = bot
         self.voice_sessions: dict[int, datetime] = {}
         self.game_sessions: dict[int, tuple[datetime, str]] = {}
+        self.blacklisted_games: set[str] = set(getBlacklistedGames(DISCORD_GUILD_ID))
         super().__init__()
         self.save_records.start()
 
@@ -51,7 +54,7 @@ class RecordsCog(commands.Cog):
 
             await ctx.followup.send(embed=embed)
         elif tipo == "Tempo em jogo":
-            records = getAllGameRecords(ctx.guild.id, limit=10)
+            records = getAllGameRecords(ctx.guild.id, limit=10, blacklist=list(self.blacklisted_games))
             if not records:
                 await ctx.followup.send(content='Nenhum recorde registrado.')
                 return
@@ -77,7 +80,7 @@ class RecordsCog(commands.Cog):
             await ctx.followup.send(embed=embed)
         else:
             voice_records = getAllVoiceRecords(ctx.guild.id, limit=3)
-            game_records = getAllGameRecords(ctx.guild.id, limit=3)
+            game_records = getAllGameRecords(ctx.guild.id, limit=3, blacklist=list(self.blacklisted_games))
             if not voice_records and not game_records:
                 await ctx.followup.send(content='Nenhum recorde registrado.')
                 return
@@ -117,6 +120,19 @@ class RecordsCog(commands.Cog):
 
             await ctx.followup.send(embed=embed)
 
+    @app_commands.command(name='recorde_adicionar_blacklist', description='Adiciona um jogo à blacklist de recordes')
+    async def addRecordBlacklist(self, ctx: discord.Interaction, *, jogo: str):
+        await ctx.response.defer()
+        if addGameToBlacklist(ctx.guild.id, jogo):
+            self.blacklisted_games.add(jogo)
+            # remove any ongoing sessions for this game
+            for user_id, (start, game_name) in list(self.game_sessions.items()):
+                if game_name == jogo:
+                    self.game_sessions.pop(user_id, None)
+            await ctx.followup.send(content=f'Jogo "{jogo}" adicionado à blacklist!')
+        else:
+            await ctx.followup.send(content='Não foi possível adicionar o jogo à blacklist.', ephemeral=True)
+
     @commands.Cog.listener()
     async def on_voice_state_update(self, member: discord.Member, before: discord.VoiceState, after: discord.VoiceState):
         # Member joined a voice channel
@@ -139,6 +155,10 @@ class RecordsCog(commands.Cog):
     async def on_presence_update(self, before: discord.Member, after: discord.Member):
         before_game = next((a.name for a in before.activities if a.type == discord.ActivityType.playing), None)
         after_game = next((a.name for a in after.activities if a.type == discord.ActivityType.playing), None)
+        if before_game in self.blacklisted_games:
+            before_game = None
+        if after_game in self.blacklisted_games:
+            after_game = None
         if before_game is None and after_game is not None:
             self.game_sessions[after.id] = (now(), after_game)
         elif before_game is not None and after_game is None:
@@ -173,6 +193,8 @@ class RecordsCog(commands.Cog):
         for user_id, (start, game_name) in list(self.game_sessions.items()):
             member = guild.get_member(user_id)
             if member is None:
+                continue
+            if game_name in self.blacklisted_games:
                 continue
             seconds = int((now() - start).total_seconds())
             if seconds > 0:

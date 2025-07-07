@@ -16,6 +16,7 @@ import discord
 import os.path
 import dotenv
 from contextlib import contextmanager
+import logging
 
 dotenv_file = dotenv.find_dotenv()
 dotenv.load_dotenv(dotenv_file)
@@ -1087,15 +1088,42 @@ def getGameTime(guild_id:int, discord_user:discord.Member) -> int:
         return myresult[0] if myresult else 0
 
 
-def getAllGameRecords(guild_id: int, limit: int = 10):
+def getAllGameRecords(guild_id: int, limit: int = 10, blacklist: list[str] | None = None):
     """Retrieve top game time records for a guild sorted by duration"""
     with pooled_connection() as cursor:
+        exclusion = ""
+        if blacklist:
+            names = "', '".join(name.replace("'", "\\'") for name in blacklist)
+            exclusion = f" AND user_records.game_name NOT IN ('{names}')"
         query = f"""SELECT discord_user.discord_user_id, user_records.game_time, user_records.game_name
     FROM user_records
     JOIN discord_user ON discord_user.user_id = user_records.user_id
-    WHERE user_records.server_guild_id = {guild_id}
+    WHERE user_records.server_guild_id = {guild_id}{exclusion}
     ORDER BY user_records.game_time DESC
     LIMIT {limit};"""
         cursor.execute(query)
         records = cursor.fetchall()
         return [{'user_id': row["discord_user_id"], 'seconds': row["game_time"], 'game': row["game_name"]} for row in records]
+
+
+def getBlacklistedGames(guild_id: int) -> list[str]:
+    """Retrieve all blacklisted games for a guild"""
+    with pooled_connection() as cursor:
+        query = f"""SELECT game_name FROM game_blacklist
+    WHERE server_guild_id = {guild_id};"""
+        cursor.execute(query)
+        rows = cursor.fetchall()
+        return [row["game_name"] for row in rows]
+
+
+def addGameToBlacklist(guild_id: int, game_name: str) -> bool:
+    """Add a game to the blacklist for a guild"""
+    with pooled_connection() as cursor:
+        try:
+            query = f"""INSERT IGNORE INTO game_blacklist (server_guild_id, game_name)
+    VALUES ({guild_id}, '{game_name}');"""
+            cursor.execute(query)
+            return True
+        except mysql.connector.Error as err:
+            logging.error(f"Database error occurred: {err}")
+            return False
