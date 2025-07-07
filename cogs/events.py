@@ -5,8 +5,7 @@ from discord import app_commands
 from datetime import datetime
 from core.database import includeEvent, getAllEvents, getEventsByState, getAllPendingApprovalEvents, approveEventById
 from core.database import admConnectTelegramAccount, getEventByName, scheduleNextEventDate, rescheduleEventDate
-from core.routine_functions import formatSingleEvent, formatEventList
-from core.verifications import localeIsAvailable
+from core.routine_functions import formatSingleEvent, formatEventList, getLocalId
 
 
 class EventCog(commands.Cog):
@@ -32,7 +31,7 @@ class EventCog(commands.Cog):
         ending_datetime = datetime.strptime(f'{ending_date} {ending_time}', '%d/%m/%Y %H:%M')
         if starting_datetime > ending_datetime:
             return await ctx.response.send_message(content='''A data e hora de início do evento não pode ser maior que a data e hora de encerramento!''', ephemeral=True)
-        locale_id = await localeIsAvailable(state)
+        locale_id = await getLocalId(state)
         if locale_id:
             await ctx.response.defer()
             result = includeEvent(user, locale_id, city, event_name, address, price, starting_datetime, ending_datetime, description, group_link, site, max_price, event_logo_url)
@@ -70,7 +69,7 @@ class EventCog(commands.Cog):
     @app_commands.command(name='eventos_por_estado', description='Lista todos os eventos registrados em um estado')
     async def listEventsByState(self, ctx: discord.Interaction, state: str):
         await ctx.response.defer()
-        locale_id = await localeIsAvailable(state)
+        locale_id = await getLocalId(state)
         result = getEventsByState(locale_id)
         if result:
             formattedEvents = formatEventList(result)

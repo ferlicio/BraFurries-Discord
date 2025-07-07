@@ -6,8 +6,3 @@ def verifyDate(date:str, dateFormat:str=None):
         return datetime.strptime(date, "%d/%m/%Y" if dateFormat==None else dateFormat).date()
     except ValueError:
         return False
-
-def localeIsAvailable(locale:str):
-    if locale in getAllLocals():
-        return true
-    else: return false
