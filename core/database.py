@@ -1120,9 +1120,9 @@ def addGameToBlacklist(guild_id: int, game_name: str) -> bool:
     """Add a game to the blacklist for a guild"""
     with pooled_connection() as cursor:
         try:
-            query = f"""INSERT IGNORE INTO game_blacklist (server_guild_id, game_name)
-    VALUES ({guild_id}, '{game_name}');"""
-            cursor.execute(query)
+            query = """INSERT IGNORE INTO game_blacklist (server_guild_id, game_name)
+    VALUES (%s, %s);"""
+            cursor.execute(query, (guild_id, game_name))
             return True
         except mysql.connector.Error as err:
             logging.error(f"Database error occurred: {err}")
