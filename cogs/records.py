@@ -138,12 +138,20 @@ class RecordsCog(commands.Cog):
         # Member joined a voice channel
         if before.channel is None and after.channel is not None:
             self.voice_sessions[member.id] = now()
+            game_name = next((a.name for a in member.activities if a.type == discord.ActivityType.playing), None)
+            if game_name and game_name not in self.blacklisted_games:
+                self.game_sessions[member.id] = (now(), game_name)
         # Member left voice channel
         elif before.channel is not None and after.channel is None:
             start = self.voice_sessions.pop(member.id, None)
             if start:
                 seconds = int((now() - start).total_seconds())
                 updateVoiceRecord(member.guild.id, member, seconds)
+            session = self.game_sessions.pop(member.id, None)
+            if session:
+                start, game_name = session
+                seconds = int((now() - start).total_seconds())
+                updateGameRecord(member.guild.id, member, seconds, game_name)
         # Member switched channels
         elif before.channel != after.channel:
             start = self.voice_sessions.get(member.id)
@@ -159,22 +167,19 @@ class RecordsCog(commands.Cog):
             before_game = None
         if after_game in self.blacklisted_games:
             after_game = None
-        if before_game is None and after_game is not None:
+        in_voice = after.voice and after.voice.channel is not None
+        session = self.game_sessions.get(after.id)
+
+        if session:
+            start, current_game = session
+            if after_game is None or not in_voice or after_game != current_game:
+                seconds = int((now() - start).total_seconds())
+                updateGameRecord(after.guild.id, after, seconds, current_game)
+                self.game_sessions.pop(after.id, None)
+                session = None
+
+        if after_game is not None and in_voice and session is None:
             self.game_sessions[after.id] = (now(), after_game)
-        elif before_game is not None and after_game is None:
-            session = self.game_sessions.pop(after.id, None)
-            if session:
-                start, game_name = session
-                seconds = int((now() - start).total_seconds())
-                updateGameRecord(after.guild.id, after, seconds, game_name)
-        elif before_game != after_game:
-            session = self.game_sessions.pop(after.id, None)
-            if session:
-                start, game_name = session
-                seconds = int((now() - start).total_seconds())
-                updateGameRecord(after.guild.id, after, seconds, game_name)
-            if after_game is not None:
-                self.game_sessions[after.id] = (now(), after_game)
 
     @tasks.loop(minutes=5)
     async def save_records(self):
