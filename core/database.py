@@ -50,7 +50,7 @@ connection_pool = pooling.MySQLConnectionPool(
     pool_name="Discord", pool_size=5, **db_config
 )
 
-def normalize_text(text: str) -> str:
+def normalize_text(text: Optional[str]) -> str:
     """Normalize text removing accents and special characters."""
     if text is None:
         return ""
