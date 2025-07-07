@@ -92,12 +92,12 @@ class EventCog(commands.Cog):
         if event_name.__len__() < 4:
             return await ctx.response.send_message(content='''Nome do evento inválido! você informou um nome com menos de 4 caracteres? <:catsip:851024825333186560>''', ephemeral=True)
         await ctx.response.defer()
-        event = getEventByName(event_name)
-        if event:
-            eventEmbeded = formatSingleEvent(event)
-            return await ctx.followup.send(embed=eventEmbeded)
-        else:
-            return await ctx.followup.send(content=f'Não há eventos registrados com esse nome. Tem certeza que digitou o nome certo?')
+        with getEventByName(event_name) as event:
+            if event:
+                eventEmbeded = formatSingleEvent(event)
+                return await ctx.followup.send(embed=eventEmbeded)
+            else:
+                return await ctx.followup.send(content=f'Não há eventos registrados com esse nome. Tem certeza que digitou o nome certo?')
 
     @app_commands.command(name=f'evento_reagendar', description=f'Reagenda um evento pendente')
     async def rescheduleEvent(self, ctx: discord.Interaction, event_name: str, new_date: str):
