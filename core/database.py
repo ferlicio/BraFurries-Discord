@@ -105,7 +105,7 @@ def getConfig(guild:discord.Guild):
     FROM INFORMATION_SCHEMA.COLUMNS
     WHERE TABLE_NAME = 'server_settings';"""
         cursor.execute(query)
-        todas_colunas = cursor.fetchone()["COLUMN_NAME"]
+        todas_colunas = cursor.fetchall()
 
         dynamic_query = f"""SELECT discord_servers.name, discord_servers.guild_id AS guildId"""
         for column in todas_colunas:
