@@ -17,6 +17,7 @@ import os.path
 import dotenv
 from contextlib import contextmanager
 import logging
+import unicodedata
 
 dotenv_file = dotenv.find_dotenv()
 dotenv.load_dotenv(dotenv_file)
@@ -48,6 +49,12 @@ def getCredentials():
 connection_pool = pooling.MySQLConnectionPool(
     pool_name="Discord", pool_size=5, **db_config
 )
+
+def normalize_text(text: str) -> str:
+    """Normalize text removing accents and special characters."""
+    if text is None:
+        return ""
+    return unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode("ascii")
 
 @contextmanager
 def pooled_connection(buffered: bool = False):
@@ -211,6 +218,8 @@ def includeUser(user: Union[discord.Member, str], guildId: int = os.getenv("DISC
         if isinstance(user, discord.Member):
             username = user.name
             display_name = user.display_name
+            db_username = normalize_text(username)
+            db_display_name = normalize_text(display_name)
             member_since = user.joined_at.strftime("%Y-%m-%d %H:%M:%S")
             approved = 0 if discord.utils.get(user.guild.roles, id=860453882323927060) in user.roles else 1
             cursor.execute(
@@ -221,6 +230,8 @@ def includeUser(user: Union[discord.Member, str], guildId: int = os.getenv("DISC
         else:
             username = user
             display_name = user
+            db_username = normalize_text(username)
+            db_display_name = normalize_text(display_name)
             member_since = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             approved = 0
             cursor.execute(
@@ -234,16 +245,16 @@ def includeUser(user: Union[discord.Member, str], guildId: int = os.getenv("DISC
         if result:
             user_id = result["user_id"]
 
-            if result["display_name"] != display_name:
+            if result["display_name"] != db_display_name:
                 table = "discord_user" if isinstance(user, discord.Member) else "telegram_user"
                 cursor.execute(
                     f"UPDATE {table} SET display_name = %s WHERE user_id = %s",
-                    (display_name, user_id),
+                    (db_display_name, user_id),
                 )
             cursor.execute("SELECT display_name FROM users WHERE id = %s", (user_id,))
             row = cursor.fetchone()
-            if row and row["display_name"] != display_name:
-                cursor.execute("UPDATE users SET display_name = %s WHERE id = %s", (display_name, user_id))
+            if row and row["display_name"] != db_display_name:
+                cursor.execute("UPDATE users SET display_name = %s WHERE id = %s", (db_display_name, user_id))
 
             cursor.execute(
                 "SELECT approved_at FROM user_community_status WHERE user_id = %s",
@@ -274,7 +285,7 @@ def includeUser(user: Union[discord.Member, str], guildId: int = os.getenv("DISC
         try:
             cursor.execute(
                 "INSERT INTO users (display_name, username) VALUES (%s, %s)",
-                (display_name, username),
+                (db_display_name, db_username),
             )
         except Exception as e:
             raise Exception(
@@ -283,7 +294,7 @@ def includeUser(user: Union[discord.Member, str], guildId: int = os.getenv("DISC
 
         user_id = cursor.lastrowid
         if not user_id:
-            cursor.execute("SELECT id FROM users WHERE username = %s", (username,))
+            cursor.execute("SELECT id FROM users WHERE username = %s", (db_username,))
             user_id = cursor.fetchone()["id"]
 
         cursor.execute(
@@ -301,12 +312,12 @@ def includeUser(user: Union[discord.Member, str], guildId: int = os.getenv("DISC
             if isinstance(user, discord.Member):
                 cursor.execute(
                     "INSERT INTO discord_user (user_id, discord_user_id, username, display_name) VALUES (%s, %s, %s, %s)",
-                    (user_id, user.id, username, user.nick),
+                    (user_id, user.id, db_username, normalize_text(user.nick) if user.nick else db_display_name),
                 )
             else:
                 cursor.execute(
                     "INSERT IGNORE INTO telegram_user (user_id, username, display_name) VALUES (%s, %s, %s)",
-                    (user_id, user, username),
+                    (user_id, db_username, db_display_name),
                 )
         except Exception as e:
             raise Exception(

@@ -159,6 +159,7 @@ BraFurries-Discord is a comprehensive bot packed with features to streamline com
 Here are some common errors and solutions:
 
 * **Dependencies aren't up to date:** Regularly update packages using `pip install -r requirements.txt`.
+* **Unable to register users with special characters:** The bot now normalizes usernames by removing accents and symbols before saving them in the database.
 
 ## Contributing
 
