@@ -28,7 +28,7 @@ def previous_months(amount: int) -> List[str]:
     return months
 
 
-def add_time(game: str, seconds: int, guild_id: int, month: str | None = None, week: str | None = None) -> None:
+def add_time(game: str, seconds: int, guild_id: int, month: str = None, week: str = None) -> None:
     """Record play time for a game in the given month and week for a guild."""
     month = month or current_month()
     week = week or current_week()
@@ -47,7 +47,7 @@ def add_time(game: str, seconds: int, guild_id: int, month: str | None = None, w
         cursor.execute(sql_week, (guild_id, week, game, seconds))
 
 
-def get_trending_games(guild_id: int, month: str | None = None) -> Dict[str, int]:
+def get_trending_games(guild_id: int, month: str = None) -> Dict[str, int]:
     """Return a mapping of game names to total seconds for a guild.
 
     If ``month`` is provided the data is taken from ``stats_monthly_game_activity``
