@@ -28,27 +28,27 @@ def previous_months(amount: int) -> List[str]:
     return months
 
 
-def add_time(game: str, seconds: int, month: str | None = None, week: str | None = None) -> None:
-    """Record play time for a game in the given month and week."""
+def add_time(game: str, seconds: int, guild_id: int, month: str | None = None, week: str | None = None) -> None:
+    """Record play time for a game in the given month and week for a guild."""
     month = month or current_month()
     week = week or current_week()
     with pooled_connection() as cursor:
         sql_month = """
-        INSERT INTO stats_monthly_game_activity (month, game_name, seconds)
-        VALUES (%s, %s, %s)
+        INSERT INTO stats_monthly_game_activity (server_guild_id, month, game_name, seconds)
+        VALUES (%s, %s, %s, %s)
         ON DUPLICATE KEY UPDATE seconds = seconds + VALUES(seconds);
         """
-        cursor.execute(sql_month, (month, game, seconds))
+        cursor.execute(sql_month, (guild_id, month, game, seconds))
         sql_week = """
-        INSERT INTO stats_weekly_game_activity (week, game_name, seconds)
-        VALUES (%s, %s, %s)
+        INSERT INTO stats_weekly_game_activity (server_guild_id, week, game_name, seconds)
+        VALUES (%s, %s, %s, %s)
         ON DUPLICATE KEY UPDATE seconds = seconds + VALUES(seconds);
         """
-        cursor.execute(sql_week, (week, game, seconds))
+        cursor.execute(sql_week, (guild_id, week, game, seconds))
 
 
-def get_trending_games(month: str | None = None) -> Dict[str, int]:
-    """Return a mapping of game names to total seconds.
+def get_trending_games(guild_id: int, month: str | None = None) -> Dict[str, int]:
+    """Return a mapping of game names to total seconds for a guild.
 
     If ``month`` is provided the data is taken from ``stats_monthly_game_activity``
     for that month. Otherwise the function aggregates the play time from the last
@@ -60,10 +60,10 @@ def get_trending_games(month: str | None = None) -> Dict[str, int]:
             sql = """
             SELECT game_name, seconds
               FROM stats_monthly_game_activity
-             WHERE month = %s
+             WHERE server_guild_id = %s AND month = %s
              ORDER BY seconds DESC;
             """
-            cursor.execute(sql, (month,))
+            cursor.execute(sql, (guild_id, month))
             rows = cursor.fetchall()
             return {row["game_name"]: row["seconds"] for row in rows}
 
@@ -75,31 +75,32 @@ def get_trending_games(month: str | None = None) -> Dict[str, int]:
         sql = """
         SELECT game_name, SUM(seconds) AS total
           FROM stats_weekly_game_activity
-         WHERE week >= %s
+         WHERE server_guild_id = %s AND week >= %s
          GROUP BY game_name
          ORDER BY total DESC;
         """
-        cursor.execute(sql, (start_week,))
+        cursor.execute(sql, (guild_id, start_week))
         rows = cursor.fetchall()
         return {row["game_name"]: row["total"] for row in rows}
 
 
-def get_total_games() -> Dict[str, int]:
-    """Return total seconds played for each game across all months."""
+def get_total_games(guild_id: int) -> Dict[str, int]:
+    """Return total seconds played for each game for a guild across all months."""
     with pooled_connection() as cursor:
         sql = """
         SELECT game_name, SUM(seconds) AS total
           FROM stats_monthly_game_activity
+         WHERE server_guild_id = %s
          GROUP BY game_name
          ORDER BY total DESC;
         """
-        cursor.execute(sql)
+        cursor.execute(sql, (guild_id,))
         rows = cursor.fetchall()
         return {row["game_name"]: row["total"] for row in rows}
 
 
-def get_games_for_months(months: List[str]) -> Dict[str, int]:
-    """Return the total seconds played for the given list of months."""
+def get_games_for_months(guild_id: int, months: List[str]) -> Dict[str, int]:
+    """Return the total seconds played for the given months in a guild."""
     if not months:
         return {}
     placeholders = ", ".join(["%s"] * len(months))
@@ -107,11 +108,11 @@ def get_games_for_months(months: List[str]) -> Dict[str, int]:
         sql = f"""
         SELECT game_name, SUM(seconds) AS total
           FROM stats_monthly_game_activity
-         WHERE month IN ({placeholders})
+         WHERE server_guild_id = %s AND month IN ({placeholders})
          GROUP BY game_name
          ORDER BY total DESC;
         """
-        cursor.execute(sql, months)
+        cursor.execute(sql, (guild_id, *months))
         rows = cursor.fetchall()
         return {row["game_name"]: row["total"] for row in rows}
 

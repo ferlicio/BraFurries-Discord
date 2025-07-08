@@ -31,7 +31,7 @@ class TrendingCog(commands.Cog):
     @app_commands.command(name='atividades_em_alta', description='Mostra os jogos mais jogados do mês')
     async def showTrending(self, ctx: discord.Interaction):
         await ctx.response.defer()
-        games = get_trending_games()
+        games = get_trending_games(ctx.guild.id)
         if not games:
             await ctx.followup.send(content='Nenhuma atividade registrada neste mês.')
             return
@@ -71,7 +71,7 @@ class TrendingCog(commands.Cog):
             months = previous_months(12)
             title = 'Atividades do último ano'
 
-        games = get_games_for_months(months)
+        games = get_games_for_months(ctx.guild.id, months)
 
         if not games:
             await ctx.followup.send(content='Nenhuma atividade registrada.')
@@ -95,13 +95,13 @@ class TrendingCog(commands.Cog):
             if session:
                 start, game_name = session
                 seconds = int((now() - start).total_seconds())
-                add_time(game_name, seconds)
+                add_time(game_name, seconds, after.guild.id)
         elif before_game != after_game:
             session = self.sessions.pop(after.id, None)
             if session:
                 start, game_name = session
                 seconds = int((now() - start).total_seconds())
-                add_time(game_name, seconds)
+                add_time(game_name, seconds, after.guild.id)
             if after_game is not None:
                 self.sessions[after.id] = (now(), after_game)
 
@@ -118,7 +118,7 @@ class TrendingCog(commands.Cog):
                 continue
             seconds = int((now() - start).total_seconds())
             if seconds > 0:
-                add_time(game_name, seconds)
+                add_time(game_name, seconds, guild.id)
                 self.sessions[user_id] = (now(), game_name)
 
     @tasks.loop(hours=24)
