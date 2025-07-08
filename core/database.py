@@ -463,7 +463,7 @@ def getUserInfo(user: discord.Member, guildId: int, userId: int = None, create_i
     """Retrieve a user from the database. Optionally registers the user if missing."""
     user_id = includeUser(user, guildId)
 
-    with pooled_connection() as cursor:
+    with pooled_connection(True) as cursor:
         query = (
             "SELECT discord_user.discord_user_id, discord_user.display_name, "
             "user_community_status.member_since, user_community_status.approved, "
@@ -517,6 +517,21 @@ def getUserInfo(user: discord.Member, guildId: int, userId: int = None, create_i
         userToReturn.warnings = [Warning(i["date"], i["reason"], i["expired"]) for i in warnings]
 
         return userToReturn
+
+
+def getAltAccounts(member: discord.Member) -> list[int]:
+    """Return a list of other Discord IDs linked to the same user."""
+    user_id = getUserId(member.id)
+    if user_id is None:
+        return []
+
+    with pooled_connection() as cursor:
+        cursor.execute(
+            "SELECT discord_user_id FROM discord_user WHERE user_id = %s AND discord_user_id <> %s",
+            (user_id, member.id),
+        )
+        rows = cursor.fetchall() or []
+        return [row["discord_user_id"] for row in rows]
     
 
 def includeEvent(user: Union[discord.Member,str], locale_id:int, city:str, event_name:str, address:str, price:float, starting_datetime: datetime, ending_datetime: datetime, description: str, group_link:str, website:str, max_price:float, event_logo_url:str):
