@@ -82,6 +82,20 @@ class ModerationCog(commands.Cog):
         guild_member = ctx.guild.get_member(member.id)
         memberProfile = getUserInfo(guild_member if guild_member else member, ctx.guild.id)
         profileDescription = generateUserDescription(memberProfile)
+
+        voice_record = getVoiceRecordPosition(ctx.guild.id, member)
+        if voice_record and voice_record["rank"] <= 10:
+            duration = str(timedelta(seconds=voice_record["seconds"]))
+            profileDescription += f"\n**Recorde em call:** {duration} (#{voice_record['rank']})"
+
+        game_record = getGameRecordPosition(
+            ctx.guild.id, member, blacklist=getBlacklistedGames(ctx.guild.id)
+        )
+        if game_record and game_record["rank"] <= 10:
+            duration = str(timedelta(seconds=game_record["seconds"]))
+            game_name = game_record.get("game")
+            game_info = f" - {game_name}" if game_name else ""
+            profileDescription += f"\n**Recorde em jogo:** {duration}{game_info} (#{game_record['rank']})"
         embedUserProfile = discord.Embed(
             color=discord.Color.from_str('#febf10'),
             title='{0} - ID {1:64}'.format(member.name, str(member.id)),
