@@ -401,7 +401,7 @@ def getUserInfo(user: discord.Member, guildId: int, userId: int = None, create_i
     """Retrieve a user from the database. Optionally registers the user if missing."""
     user_id = includeUser(user, guildId)
 
-    with pooled_connection() as cursor:
+    with pooled_connection(True) as cursor:
         query = (
             "SELECT discord_user.discord_user_id, discord_user.display_name, "
             "user_community_status.member_since, user_community_status.approved, "
