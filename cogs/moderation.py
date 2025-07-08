@@ -77,23 +77,25 @@ class ModerationCog(commands.Cog):
 
 
     @app_commands.command(name=f'perfil', description=f'Mostra o perfil de um membro')
-    async def profile(self, ctx: discord.Interaction, member: discord.Member):
+    async def profile(self, ctx: discord.Interaction, member: discord.User):
         await ctx.response.defer()
-        memberProfile = getUserInfo(member, ctx.guild.id)
+        guild_member = ctx.guild.get_member(member.id)
+        memberProfile = getUserInfo(guild_member if guild_member else member, ctx.guild.id)
         profileDescription = generateUserDescription(memberProfile)
         embedUserProfile = discord.Embed(
             color=discord.Color.from_str('#febf10'),
-            title='{0} - ID {1:64}'.format(member.name, str(member.id)), 
+            title='{0} - ID {1:64}'.format(member.name, str(member.id)),
             description=profileDescription)
         embedUserProfile.set_thumbnail(url=member.avatar.url)
         embedUserProfile.set_author(
-            name=(member.display_name)+f' (level {memberProfile.level})',
-            icon_url=member.guild_avatar.url if member.guild_avatar != None else member.avatar.url)
-        alt_ids = getAltAccounts(member)
-        if alt_ids:
-            mentions = ', '.join(f'<@{uid}>' for uid in alt_ids)
-            embedUserProfile.add_field(name='Contas alternativas', value=mentions, inline=False)
-        embedUserProfile.set_footer(text=f'{memberProfile.warnings.__len__()} Warns{"  -  Ultimo warn em "+now().strftime("%d/%m/%Y") if memberProfile.warnings.__len__() > 0 else f""}{"  -  >> DE CASTIGO <<" if member.is_timed_out() else ""}')
+            name=(guild_member.display_name if guild_member else member.name)+f' (level {memberProfile.level})',
+            icon_url=guild_member.guild_avatar.url if guild_member and guild_member.guild_avatar != None else member.avatar.url)
+        if guild_member:
+            alt_ids = getAltAccounts(guild_member)
+            if alt_ids:
+                mentions = ', '.join(f'<@{uid}>' for uid in alt_ids)
+                embedUserProfile.add_field(name='Contas alternativas', value=mentions, inline=False)
+            embedUserProfile.set_footer(text=f'{len(memberProfile.warnings)} Warns{"  -  Ultimo warn em "+now().strftime("%d/%m/%Y") if len(memberProfile.warnings) > 0 else ""}{"  -  >> DE CASTIGO <<" if guild_member.is_timed_out() else ""}')
         await ctx.followup.send(embed=embedUserProfile)
 
 

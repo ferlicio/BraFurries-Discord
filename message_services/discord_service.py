@@ -4,6 +4,7 @@ from core.discord_events import *
 from core.verifications import *
 from core.database import *
 from discord.ext import tasks
+from discord import app_commands
 from schemas.models.bot import *
 from schemas.models.locals import *
 from schemas.types.server_messages import *
@@ -49,6 +50,16 @@ async def on_ready():
     
 @bot.tree.error
 async def on_app_command_error(ctx, error):
+    if isinstance(error, app_commands.AppCommandError) and 'Member' in str(error) and 'not found' in str(error):
+        match = re.search(r"(\d{17,20})", str(error))
+        if match:
+            member_id = int(match.group(1))
+            try:
+                user = await bot.fetch_user(member_id)
+            except Exception:
+                user = None
+            includeUser(user if user else str(member_id), ctx.guild.id)
+        return await ctx.response.send_message('Não foi possível encontrar o membro informado.', ephemeral=True)
     if isinstance(error, commands.CommandNotFound):
         return
     if isinstance(error, commands.MissingRequiredArgument):

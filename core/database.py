@@ -213,7 +213,7 @@ def getUserId(discord_user_id: int):
 
 
 
-def includeUser(user: Union[discord.Member, str], guildId: int = os.getenv("DISCORD_GUILD_ID"), approvedAt: datetime = None) -> int:
+def includeUser(user: Union[discord.Member, discord.User, str], guildId: int = os.getenv("DISCORD_GUILD_ID"), approvedAt: datetime = None) -> int:
     """Ensure a user exists in the database and return the internal id."""
     with pooled_connection(True) as cursor:
         if isinstance(user, discord.Member):
@@ -223,6 +223,18 @@ def includeUser(user: Union[discord.Member, str], guildId: int = os.getenv("DISC
             db_display_name = normalize_text(display_name)
             member_since = user.joined_at.strftime("%Y-%m-%d %H:%M:%S")
             approved = 0 if discord.utils.get(user.guild.roles, id=860453882323927060) in user.roles else 1
+            cursor.execute(
+                "SELECT user_id, display_name FROM discord_user WHERE discord_user_id = %s",
+                (user.id,),
+            )
+            result = cursor.fetchone()
+        elif isinstance(user, discord.User):
+            username = user.name
+            display_name = user.name
+            db_username = normalize_text(username)
+            db_display_name = normalize_text(display_name)
+            member_since = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            approved = 0
             cursor.execute(
                 "SELECT user_id, display_name FROM discord_user WHERE discord_user_id = %s",
                 (user.id,),
@@ -310,10 +322,10 @@ def includeUser(user: Union[discord.Member, str], guildId: int = os.getenv("DISC
         )
 
         try:
-            if isinstance(user, discord.Member):
+            if isinstance(user, discord.Member) or isinstance(user, discord.User):
                 cursor.execute(
                     "INSERT INTO discord_user (user_id, discord_user_id, username, display_name) VALUES (%s, %s, %s, %s)",
-                    (user_id, user.id, db_username, normalize_text(user.nick) if user.nick else db_display_name),
+                    (user_id, user.id, db_username, normalize_text(user.nick) if isinstance(user, discord.Member) and user.nick else db_display_name),
                 )
             else:
                 cursor.execute(
@@ -459,7 +471,7 @@ def getAllBirthdays():
         myresult = [{'user_id': i["discord_user_id"], 'birth_date': i["birth_date"]} for i in myresult]
         return myresult
 
-def getUserInfo(user: discord.Member, guildId: int, userId: int = None, create_if_missing: bool = True) -> User :
+def getUserInfo(user: Union[discord.Member, discord.User], guildId: int, userId: int = None, create_if_missing: bool = True) -> User :
     """Retrieve a user from the database. Optionally registers the user if missing."""
     user_id = includeUser(user, guildId)
 
@@ -491,7 +503,7 @@ def getUserInfo(user: discord.Member, guildId: int, userId: int = None, create_i
             id=user_id,
             discordId=dbUser["discord_user_id"],
             username=user.name,
-            displayName=user.display_name,
+            displayName=getattr(user, 'display_name', user.name),
             memberSince=dbUser["member_since"],
             approved=dbUser["approved"],
             approvedAt=dbUser["approved_at"],
