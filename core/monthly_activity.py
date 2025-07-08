@@ -65,7 +65,7 @@ def get_trending_games(guild_id: int, month: str = None) -> Dict[str, int]:
             """
             cursor.execute(sql, (guild_id, month))
             rows = cursor.fetchall()
-            return {row["game_name"]: row["seconds"] for row in rows}
+            return {row["game_name"]: int(row["seconds"]) for row in rows}
 
         # Aggregate from the last four weeks
         now = datetime.now()
@@ -81,7 +81,7 @@ def get_trending_games(guild_id: int, month: str = None) -> Dict[str, int]:
         """
         cursor.execute(sql, (guild_id, start_week))
         rows = cursor.fetchall()
-        return {row["game_name"]: row["total"] for row in rows}
+        return {row["game_name"]: int(row["total"]) for row in rows}
 
 
 def get_total_games(guild_id: int) -> Dict[str, int]:
@@ -96,7 +96,7 @@ def get_total_games(guild_id: int) -> Dict[str, int]:
         """
         cursor.execute(sql, (guild_id,))
         rows = cursor.fetchall()
-        return {row["game_name"]: row["total"] for row in rows}
+        return {row["game_name"]: int(row["total"]) for row in rows}
 
 
 def get_games_for_months(guild_id: int, months: List[str]) -> Dict[str, int]:
@@ -114,7 +114,7 @@ def get_games_for_months(guild_id: int, months: List[str]) -> Dict[str, int]:
         """
         cursor.execute(sql, (guild_id, *months))
         rows = cursor.fetchall()
-        return {row["game_name"]: row["total"] for row in rows}
+        return {row["game_name"]: int(row["total"]) for row in rows}
 
 
 def cleanup_old_weekly_entries(max_age_weeks: int = 4) -> None:
