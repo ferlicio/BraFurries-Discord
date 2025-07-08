@@ -817,6 +817,73 @@ def admConnectTelegramAccount(discord_user:discord.Member, telegram_user:str):
                 return False
         else:
             return True
+
+
+def mergeDiscordAccounts(
+    guild_id: int, member: discord.Member, existing_member: discord.Member
+) -> bool:
+    """Link ``member`` to the same user as ``existing_member``.
+
+    When ``member`` already has a different ``users`` entry all related data is
+    reassigned to ``existing_member``'s user before the old entry is removed.
+    """
+
+    with pooled_connection() as cursor:
+        target_user_id = includeUser(existing_member, guild_id)
+        current_user_id = getUserId(member.id)
+
+        if current_user_id is None:
+            try:
+                cursor.execute(
+                    "INSERT INTO discord_user (user_id, discord_user_id, username, display_name)"
+                    " VALUES (%s, %s, %s, %s)",
+                    (
+                        target_user_id,
+                        member.id,
+                        normalize_text(member.name),
+                        normalize_text(member.display_name),
+                    ),
+                )
+                return True
+            except Exception as e:
+                logging.error(e)
+                return False
+
+        if current_user_id == target_user_id:
+            return True
+
+        try:
+            tables = [
+                ("user_community_status", "user_id"),
+                ("user_locale", "user_id"),
+                ("user_birthday", "user_id"),
+                ("warnings", "user_id"),
+                ("user_records", "user_id"),
+                ("events", "host_user_id"),
+                ("user_custom_roles", "user_id"),
+                ("user_economy", "user_id"),
+                ("user_level", "user_id"),
+                ("telegram_user", "user_id"),
+            ]
+
+            for table, column in tables:
+                try:
+                    cursor.execute(
+                        f"UPDATE {table} SET {column} = %s WHERE {column} = %s",
+                        (target_user_id, current_user_id),
+                    )
+                except Exception as e:
+                    logging.error(e)
+
+            cursor.execute(
+                "UPDATE discord_user SET user_id = %s WHERE discord_user_id = %s",
+                (target_user_id, member.id),
+            )
+            cursor.execute("DELETE FROM users WHERE id = %s", (current_user_id,))
+            return True
+        except Exception as e:
+            logging.error(e)
+            return False
     
 
 def assignTempRole(guild_id:int, discord_user:discord.Member, role_id:str, expiring_date:datetime, reason:str):
