@@ -12,6 +12,7 @@ from mysql.connector import pooling
 import mysql.connector
 from datetime import date, datetime
 from typing import Union, Optional
+from core.verifications import validate_birthdate
 import discord
 import os.path
 import dotenv
@@ -351,39 +352,100 @@ def getUsersByLocale(abbrev:str, availableLocals:list):
                 cursor.execute(query)
                 return cursor.fetchall()
         
-def includeBirthday(guildId: int, date:date, user:discord.User, mentionable:bool, userId:int=None, registered:bool=False):
-    if userId != None:
-        user_id = userId
-    else:
-        user_id = includeUser(user, guildId)
+def includeBirthday(
+    guildId: int,
+    date: date,
+    user: discord.User,
+    mentionable: bool,
+    userId: int | None = None,
+    registered: bool = False,
+) -> bool:
+    """Create or update a birthday entry for a user.
+
+    The stored birth date is only changed when the provided ``date`` is later
+    than the existing value and the record has not been verified yet.
+    """
+
+    validate_birthdate(date)
+
+    user_id = userId if userId is not None else includeUser(user, guildId)
+
     with pooled_connection() as cursor:
-        query = f"""SELECT birth_date, mentionable, registered FROM user_birthday WHERE user_id = '{user_id}'"""
-        cursor.execute(query)
-        birthday = cursor.fetchone()
-        birthday = {'date': birthday[0], 'mentionable': birthday[1], 'registered': birthday[2]} if birthday != None else None
-        if birthday:
-            if birthday['registered'] == 0 or birthday['mentionable'] != mentionable:
-                query = f"""SELECT approved_at FROM user_community_status WHERE user_id = '{user_id}';"""
-                cursor.execute(query)
-                approved_at = cursor.fetchone()
-                approved_at = datetime.strptime(f"{approved_at[0]}", '%Y-%m-%d %H:%M:%S')
-                query = f"""UPDATE user_birthday
-    SET mentionable = {mentionable}, registered = 1{f", verified = 1" if (datetime.now() - approved_at).days > 40 and date == birthday['date'] else ''}
-    WHERE user_id = '{user_id}';"""
-                cursor.execute(query)
-                if birthday['registered'] == 1:
-                    raise Exception('Changed Entry')
-                return True
-            else:
-                if birthday['registered'] == 1:
-                    raise Exception('Duplicate entry')
-        else:
-            try:
-                query = f"""INSERT INTO user_birthday (user_id, birth_date, verified, mentionable, registered) VALUES ('{user_id}','{date}',FALSE,{mentionable},{registered});"""
-                cursor.execute(query)
-                return True
-            except:
-                return False
+        cursor.execute(
+            "SELECT birth_date, mentionable, registered, verified FROM user_birthday WHERE user_id = %s",
+            (user_id,),
+        )
+        row = cursor.fetchone()
+        birthday = (
+            {
+                "date": row["birth_date"],
+                "mentionable": row["mentionable"],
+                "registered": row["registered"],
+                "verified": row["verified"],
+            }
+            if row
+            else None
+        )
+
+    if birthday:
+        update_date = (
+            birthday["verified"] == 0 and birthday["date"] != date and date > birthday["date"]
+        )
+        if (
+            birthday["registered"] == 0
+            or birthday["mentionable"] != mentionable
+            or update_date
+        ):
+            with pooled_connection() as cursor:    
+                cursor.execute(
+                    "SELECT approved_at FROM user_community_status WHERE user_id = %s",
+                    (user_id,),
+                )
+                approved_row = cursor.fetchone()
+                approved_at = approved_row["approved_at"] if approved_row else None
+                if approved_at and not isinstance(approved_at, datetime):
+                    approved_at = datetime.strptime(str(approved_at), "%Y-%m-%d %H:%M:%S")
+
+                verified_sql = (
+                    ", verified = 1"
+                    if approved_at
+                    and (datetime.now() - approved_at).days > 40
+                    and date == birthday["date"]
+                    else ""
+                )
+
+                set_clauses = []
+                params: list = []
+                if update_date:
+                    set_clauses.append("birth_date = %s")
+                    params.append(date)
+                set_clauses.append("mentionable = %s")
+                params.append(mentionable)
+                set_clauses.append("registered = 1")
+
+                query = (
+                    f"UPDATE user_birthday SET {', '.join(set_clauses)}{verified_sql} WHERE user_id = %s"
+                )
+                params.append(user_id)
+                cursor.execute(query, tuple(params))
+
+            if birthday["registered"] == 1:
+                raise Exception("Changed Entry")
+            return True
+
+        if birthday["registered"] == 1:
+            raise Exception("Duplicate entry")
+
+        return False
+
+    try:
+        cursor.execute(
+            "INSERT INTO user_birthday (user_id, birth_date, verified, mentionable, registered) VALUES (%s, %s, FALSE, %s, %s)",
+            (user_id, date, mentionable, registered),
+        )
+        return True
+    except Exception:
+        return False
 
 def getAllBirthdays():
     with pooled_connection() as cursor:
