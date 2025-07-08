@@ -5,7 +5,7 @@ from datetime import timedelta, datetime
 from dateutil import relativedelta
 from core.time_functions import now
 from core.database import getUserInfo
-from core.database import assignTempRole
+from core.database import assignTempRole, getAltAccounts
 from core.verifications import verifyDate
 from core.database import *
 from core.time_functions import MONTHS
@@ -87,8 +87,12 @@ class ModerationCog(commands.Cog):
             description=profileDescription)
         embedUserProfile.set_thumbnail(url=member.avatar.url)
         embedUserProfile.set_author(
-            name=(member.display_name)+f' (level {memberProfile.level})', 
+            name=(member.display_name)+f' (level {memberProfile.level})',
             icon_url=member.guild_avatar.url if member.guild_avatar != None else member.avatar.url)
+        alt_ids = getAltAccounts(member)
+        if alt_ids:
+            mentions = ', '.join(f'<@{uid}>' for uid in alt_ids)
+            embedUserProfile.add_field(name='Contas alternativas', value=mentions, inline=False)
         embedUserProfile.set_footer(text=f'{memberProfile.warnings.__len__()} Warns{"  -  Ultimo warn em "+now().strftime("%d/%m/%Y") if memberProfile.warnings.__len__() > 0 else f""}{"  -  >> DE CASTIGO <<" if member.is_timed_out() else ""}')
         await ctx.followup.send(embed=embedUserProfile)
 

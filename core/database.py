@@ -455,6 +455,21 @@ def getUserInfo(user: discord.Member, guildId: int, userId: int = None, create_i
         userToReturn.warnings = [Warning(i["date"], i["reason"], i["expired"]) for i in warnings]
 
         return userToReturn
+
+
+def getAltAccounts(member: discord.Member) -> list[int]:
+    """Return a list of other Discord IDs linked to the same user."""
+    user_id = getUserId(member.id)
+    if user_id is None:
+        return []
+
+    with pooled_connection() as cursor:
+        cursor.execute(
+            "SELECT discord_user_id FROM discord_user WHERE user_id = %s AND discord_user_id <> %s",
+            (user_id, member.id),
+        )
+        rows = cursor.fetchall() or []
+        return [row["discord_user_id"] for row in rows]
     
 
 def includeEvent(user: Union[discord.Member,str], locale_id:int, city:str, event_name:str, address:str, price:float, starting_datetime: datetime, ending_datetime: datetime, description: str, group_link:str, website:str, max_price:float, event_logo_url:str):
@@ -817,6 +832,285 @@ def admConnectTelegramAccount(discord_user:discord.Member, telegram_user:str):
                 return False
         else:
             return True
+
+
+def mergeDiscordAccounts(
+    guild_id: int, member: discord.Member, existing_member: discord.Member
+) -> bool:
+    """Link ``member`` to ``existing_member``'s user entry.
+
+    All information tied to ``member`` is transferred so no data is lost. If
+    duplicate rows exist in tables that should only contain one record per user,
+    a simple precedence logic is applied to decide which information to keep:
+
+    - ``user_community_status``: keep the oldest ``member_since`` entry
+    - ``user_locale``: keep the locale of ``existing_member``
+    - ``user_birthday``: keep the most recent ``birth_date``
+    - ``user_records``: keep the highest ``voice_time`` and ``game_time``
+    - ``user_custom_roles``: keep roles from ``existing_member``
+    - ``user_economy``: bank balances are summed
+    - ``user_level``: keep the row with highest ``total_xp``
+    """
+
+    with pooled_connection() as cursor:
+        target_user_id = includeUser(existing_member, guild_id)
+        current_user_id = getUserId(member.id)
+
+        if current_user_id is None:
+            try:
+                cursor.execute(
+                    "INSERT INTO discord_user (user_id, discord_user_id, username, display_name)"
+                    " VALUES (%s, %s, %s, %s)",
+                    (
+                        target_user_id,
+                        member.id,
+                        normalize_text(member.name),
+                        normalize_text(member.display_name),
+                    ),
+                )
+                return True
+            except Exception as e:
+                logging.error(e)
+                return False
+
+        if current_user_id == target_user_id:
+            return True
+
+        try:
+            # -- community status: keep the oldest member_since --
+            cursor.execute(
+                "SELECT id, user_id, member_since FROM user_community_status "
+                "WHERE user_id IN (%s,%s) ORDER BY member_since ASC",
+                (target_user_id, current_user_id),
+            )
+            status_rows = cursor.fetchall()
+            if status_rows:
+                keep = status_rows[0]
+                if keep["user_id"] != target_user_id:
+                    cursor.execute(
+                        "UPDATE user_community_status SET user_id=%s WHERE id=%s",
+                        (target_user_id, keep["id"]),
+                    )
+                for row in status_rows[1:]:
+                    cursor.execute(
+                        "DELETE FROM user_community_status WHERE id=%s",
+                        (row["id"],),
+                    )
+
+            # -- locale: prefer existing member --
+            cursor.execute(
+                "SELECT id, user_id FROM user_locale WHERE user_id IN (%s,%s)",
+                (target_user_id, current_user_id),
+            )
+            loc_rows = cursor.fetchall()
+            target_loc = next((r for r in loc_rows if r["user_id"] == target_user_id), None)
+            other_loc = next((r for r in loc_rows if r["user_id"] == current_user_id), None)
+            if other_loc:
+                if target_loc:
+                    cursor.execute(
+                        "DELETE FROM user_locale WHERE id=%s",
+                        (other_loc["id"],),
+                    )
+                else:
+                    cursor.execute(
+                        "UPDATE user_locale SET user_id=%s WHERE id=%s",
+                        (target_user_id, other_loc["id"]),
+                    )
+
+            # -- birthday: keep the newest date --
+            cursor.execute(
+                "SELECT * FROM user_birthday WHERE user_id IN (%s,%s) "
+                "ORDER BY birth_date DESC",
+                (target_user_id, current_user_id),
+            )
+            bd_rows = cursor.fetchall()
+            if bd_rows:
+                keep = bd_rows[0]
+                if keep["user_id"] != target_user_id:
+                    cursor.execute(
+                        "UPDATE user_birthday SET user_id=%s, birth_date=%s, "
+                        "verified=%s, mentionable=%s, registered=%s WHERE id=%s",
+                        (
+                            target_user_id,
+                            keep["birth_date"],
+                            keep["verified"],
+                            keep["mentionable"],
+                            keep["registered"],
+                            keep["id"],
+                        ),
+                    )
+                for row in bd_rows[1:]:
+                    cursor.execute(
+                        "DELETE FROM user_birthday WHERE id=%s",
+                        (row["id"],),
+                    )
+
+            # -- warnings --
+            cursor.execute(
+                "UPDATE warnings SET user_id=%s WHERE user_id=%s",
+                (target_user_id, current_user_id),
+            )
+
+            # -- events --
+            cursor.execute(
+                "UPDATE events SET host_user_id=%s WHERE host_user_id=%s",
+                (target_user_id, current_user_id),
+            )
+
+            # -- records: keep largest values per server --
+            cursor.execute(
+                "SELECT * FROM user_records WHERE user_id IN (%s,%s)",
+                (target_user_id, current_user_id),
+            )
+            rec_rows = cursor.fetchall() or []
+            rec_map = {}
+            for row in rec_rows:
+                key = row["server_guild_id"]
+                if key not in rec_map:
+                    rec_map[key] = row
+                else:
+                    old = rec_map[key]
+                    voice_time = max(row.get("voice_time", 0), old.get("voice_time", 0))
+                    if row.get("game_time", 0) > old.get("game_time", 0):
+                        game_time = row.get("game_time")
+                        game_name = row.get("game_name")
+                    else:
+                        game_time = old.get("game_time")
+                        game_name = old.get("game_name")
+                    rec_map[key] = {
+                        "server_guild_id": key,
+                        "voice_time": voice_time,
+                        "game_time": game_time,
+                        "game_name": game_name,
+                    }
+            for server_id, data in rec_map.items():
+                cursor.execute(
+                    """INSERT INTO user_records (user_id, server_guild_id, voice_time, game_time, game_name)
+                    VALUES (%s,%s,%s,%s,%s)
+                    ON DUPLICATE KEY UPDATE
+                        voice_time = IF(%s > voice_time, %s, voice_time),
+                        game_time = IF(%s > game_time, %s, game_time),
+                        game_name = IF(%s > game_time, %s, game_name)""",
+                    (
+                        target_user_id,
+                        server_id,
+                        data.get("voice_time"),
+                        data.get("game_time"),
+                        data.get("game_name"),
+                        data.get("voice_time"),
+                        data.get("voice_time"),
+                        data.get("game_time"),
+                        data.get("game_time"),
+                        data.get("game_time"),
+                        data.get("game_name"),
+                    ),
+                )
+            cursor.execute(
+                "DELETE FROM user_records WHERE user_id=%s",
+                (current_user_id,),
+            )
+
+            # -- custom roles --
+            cursor.execute(
+                "SELECT id, user_id FROM user_custom_roles WHERE user_id IN (%s,%s)",
+                (target_user_id, current_user_id),
+            )
+            role_rows = cursor.fetchall()
+            target_role = next((r for r in role_rows if r["user_id"] == target_user_id), None)
+            other_role = next((r for r in role_rows if r["user_id"] == current_user_id), None)
+            if other_role:
+                if target_role:
+                    cursor.execute(
+                        "DELETE FROM user_custom_roles WHERE id=%s",
+                        (other_role["id"],),
+                    )
+                else:
+                    cursor.execute(
+                        "UPDATE user_custom_roles SET user_id=%s WHERE id=%s",
+                        (target_user_id, other_role["id"]),
+                    )
+
+            # -- economy: sum balances per server --
+            cursor.execute(
+                "SELECT * FROM user_economy WHERE user_id IN (%s,%s)",
+                (target_user_id, current_user_id),
+            )
+            eco_rows = cursor.fetchall() or []
+            eco_map = {}
+            for row in eco_rows:
+                key = row["server_guild_id"]
+                if key in eco_map:
+                    eco_map[key]["bank_balance"] += row.get("bank_balance", 0)
+                else:
+                    eco_map[key] = row
+            for row in eco_map.values():
+                cursor.execute(
+                    """INSERT INTO user_economy (user_id, server_guild_id, bank_balance)
+                        VALUES (%s,%s,%s)
+                        ON DUPLICATE KEY UPDATE bank_balance=%s""",
+                    (
+                        target_user_id,
+                        row["server_guild_id"],
+                        row.get("bank_balance", 0),
+                        row.get("bank_balance", 0),
+                    ),
+                )
+            cursor.execute(
+                "DELETE FROM user_economy WHERE user_id=%s",
+                (current_user_id,),
+            )
+
+            # -- level: keep highest total_xp per server --
+            cursor.execute(
+                "SELECT * FROM user_level WHERE user_id IN (%s,%s)",
+                (target_user_id, current_user_id),
+            )
+            lvl_rows = cursor.fetchall() or []
+            lvl_map = {}
+            for row in lvl_rows:
+                key = row["server_guild_id"]
+                if key not in lvl_map or row.get("total_xp", 0) > lvl_map[key].get("total_xp", 0):
+                    lvl_map[key] = row
+            for row in lvl_map.values():
+                cursor.execute(
+                    """INSERT INTO user_level (user_id, server_guild_id, total_xp, current_level)
+                        VALUES (%s,%s,%s,%s)
+                        ON DUPLICATE KEY UPDATE
+                            total_xp = IF(%s>total_xp, %s, total_xp),
+                            current_level = IF(%s>current_level, %s, current_level)""",
+                    (
+                        target_user_id,
+                        row["server_guild_id"],
+                        row.get("total_xp"),
+                        row.get("current_level"),
+                        row.get("total_xp", 0),
+                        row.get("total_xp", 0),
+                        row.get("current_level", 0),
+                        row.get("current_level", 0),
+                    ),
+                )
+            cursor.execute(
+                "DELETE FROM user_level WHERE user_id=%s",
+                (current_user_id,),
+            )
+
+            # -- telegram account --
+            cursor.execute(
+                "UPDATE telegram_user SET user_id=%s WHERE user_id=%s",
+                (target_user_id, current_user_id),
+            )
+
+            # -- final mapping and cleanup --
+            cursor.execute(
+                "UPDATE discord_user SET user_id=%s WHERE discord_user_id=%s",
+                (target_user_id, member.id),
+            )
+            cursor.execute("DELETE FROM users WHERE id=%s", (current_user_id,))
+
+            return True
+        except Exception as e:
+            logging.error(e)
+            return False
     
 
 def assignTempRole(guild_id:int, discord_user:discord.Member, role_id:str, expiring_date:datetime, reason:str):
