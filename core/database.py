@@ -939,19 +939,30 @@ def mergeDiscordAccounts(
             return True
 
         try:
-            # -- community status: keep the oldest member_since --
+            # -- community status: keep the oldest member_since and merge approval data --
             cursor.execute(
-                "SELECT id, user_id, member_since FROM user_community_status "
-                "WHERE user_id IN (%s,%s) ORDER BY member_since ASC",
+                "SELECT id, user_id, member_since, approved, approved_at "
+                "FROM user_community_status WHERE user_id IN (%s,%s) "
+                "ORDER BY member_since ASC",
                 (target_user_id, current_user_id),
             )
             status_rows = cursor.fetchall()
             if status_rows:
                 keep = status_rows[0]
-                if keep["user_id"] != target_user_id:
+                # Determine final approved_at and approved values
+                final_approved_at = keep["approved_at"]
+                final_approved = keep["approved"]
+                for row in status_rows[1:]:
+                    if row["approved_at"] and (
+                        final_approved_at is None or row["approved_at"] < final_approved_at
+                    ):
+                        final_approved_at = row["approved_at"]
+                    if row["approved"]:
+                        final_approved = 1
+                if keep["user_id"] != target_user_id or keep["approved"] != final_approved or keep["approved_at"] != final_approved_at:
                     cursor.execute(
-                        "UPDATE user_community_status SET user_id=%s WHERE id=%s",
-                        (target_user_id, keep["id"]),
+                        "UPDATE user_community_status SET user_id=%s, approved=%s, approved_at=%s WHERE id=%s",
+                        (target_user_id, final_approved, final_approved_at, keep["id"]),
                     )
                 for row in status_rows[1:]:
                     cursor.execute(
