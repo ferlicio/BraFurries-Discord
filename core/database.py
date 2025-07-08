@@ -11,7 +11,7 @@ from core.utilities import snake_to_camel
 from mysql.connector import pooling
 import mysql.connector
 from datetime import date, datetime
-from typing import Union
+from typing import Union, Optional
 import discord
 import os.path
 import dotenv
