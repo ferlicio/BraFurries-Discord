@@ -308,7 +308,8 @@ def includeUser(user: Union[discord.Member, discord.User, str], guildId: int = o
         user_id = cursor.lastrowid
         if not user_id:
             cursor.execute("SELECT id FROM users WHERE username = %s", (db_username,))
-            user_id = cursor.fetchone()["id"]
+            row = cursor.fetchone()
+            user_id = row.get("id") if row else None
 
         cursor.execute(
             "SELECT community_id FROM discord_servers WHERE guild_id = %s",
@@ -909,9 +910,14 @@ def admConnectTelegramAccount(discord_user:discord.Member, telegram_user:str):
 
 
 def mergeDiscordAccounts(
-    guild_id: int, member: discord.Member, existing_member: discord.Member
+    guild_id: int,
+    member: Union[discord.Member, discord.User],
+    existing_member: Union[discord.Member, discord.User],
 ) -> bool:
     """Link ``member`` to ``existing_member``'s user entry.
+
+    Both parameters may be :class:`discord.Member` or :class:`discord.User`,
+    allowing the association of accounts that are no longer in the server.
 
     All information tied to ``member`` is transferred so no data is lost. If
     duplicate rows exist in tables that should only contain one record per user,
@@ -939,7 +945,7 @@ def mergeDiscordAccounts(
                         target_user_id,
                         member.id,
                         normalize_text(member.name),
-                        normalize_text(member.display_name),
+                        normalize_text(member.display_name if isinstance(member, discord.Member) else member.name),
                     ),
                 )
                 return True
@@ -972,15 +978,19 @@ def mergeDiscordAccounts(
                     if row["approved"]:
                         final_approved = 1
                 if keep["user_id"] != target_user_id or keep["approved"] != final_approved or keep["approved_at"] != final_approved_at:
-                    cursor.execute(
-                        "UPDATE user_community_status SET user_id=%s, approved=%s, approved_at=%s WHERE id=%s",
-                        (target_user_id, final_approved, final_approved_at, keep["id"]),
-                    )
+                    keep_id = keep.get("id")
+                    if keep_id is not None:
+                        cursor.execute(
+                            "UPDATE user_community_status SET user_id=%s, approved=%s, approved_at=%s WHERE id=%s",
+                            (target_user_id, final_approved, final_approved_at, keep_id),
+                        )
                 for row in status_rows[1:]:
-                    cursor.execute(
-                        "DELETE FROM user_community_status WHERE id=%s",
-                        (row["id"],),
-                    )
+                    row_id = row.get("id")
+                    if row_id is not None:
+                        cursor.execute(
+                            "DELETE FROM user_community_status WHERE id=%s",
+                            (row_id,),
+                        )
 
             # -- locale: prefer existing member --
             cursor.execute(
@@ -991,16 +1001,19 @@ def mergeDiscordAccounts(
             target_loc = next((r for r in loc_rows if r["user_id"] == target_user_id), None)
             other_loc = next((r for r in loc_rows if r["user_id"] == current_user_id), None)
             if other_loc:
+                other_id = other_loc.get("id")
                 if target_loc:
-                    cursor.execute(
-                        "DELETE FROM user_locale WHERE id=%s",
-                        (other_loc["id"],),
-                    )
+                    if other_id is not None:
+                        cursor.execute(
+                            "DELETE FROM user_locale WHERE id=%s",
+                            (other_id,),
+                        )
                 else:
-                    cursor.execute(
-                        "UPDATE user_locale SET user_id=%s WHERE id=%s",
-                        (target_user_id, other_loc["id"]),
-                    )
+                    if other_id is not None:
+                        cursor.execute(
+                            "UPDATE user_locale SET user_id=%s WHERE id=%s",
+                            (target_user_id, other_id),
+                        )
 
             # -- birthday: keep the newest date --
             cursor.execute(
@@ -1012,23 +1025,27 @@ def mergeDiscordAccounts(
             if bd_rows:
                 keep = bd_rows[0]
                 if keep["user_id"] != target_user_id:
-                    cursor.execute(
-                        "UPDATE user_birthday SET user_id=%s, birth_date=%s, "
-                        "verified=%s, mentionable=%s, registered=%s WHERE id=%s",
-                        (
-                            target_user_id,
-                            keep["birth_date"],
-                            keep["verified"],
-                            keep["mentionable"],
-                            keep["registered"],
-                            keep["id"],
-                        ),
-                    )
+                    keep_id = keep.get("id")
+                    if keep_id is not None:
+                        cursor.execute(
+                            "UPDATE user_birthday SET user_id=%s, birth_date=%s, "
+                            "verified=%s, mentionable=%s, registered=%s WHERE id=%s",
+                            (
+                                target_user_id,
+                                keep["birth_date"],
+                                keep["verified"],
+                                keep["mentionable"],
+                                keep["registered"],
+                                keep_id,
+                            ),
+                        )
                 for row in bd_rows[1:]:
-                    cursor.execute(
-                        "DELETE FROM user_birthday WHERE id=%s",
-                        (row["id"],),
-                    )
+                    row_id = row.get("id")
+                    if row_id is not None:
+                        cursor.execute(
+                            "DELETE FROM user_birthday WHERE id=%s",
+                            (row_id,),
+                        )
 
             # -- warnings --
             cursor.execute(
@@ -1104,16 +1121,19 @@ def mergeDiscordAccounts(
             target_role = next((r for r in role_rows if r["user_id"] == target_user_id), None)
             other_role = next((r for r in role_rows if r["user_id"] == current_user_id), None)
             if other_role:
+                other_id = other_role.get("id")
                 if target_role:
-                    cursor.execute(
-                        "DELETE FROM user_custom_roles WHERE id=%s",
-                        (other_role["id"],),
-                    )
+                    if other_id is not None:
+                        cursor.execute(
+                            "DELETE FROM user_custom_roles WHERE id=%s",
+                            (other_id,),
+                        )
                 else:
-                    cursor.execute(
-                        "UPDATE user_custom_roles SET user_id=%s WHERE id=%s",
-                        (target_user_id, other_role["id"]),
-                    )
+                    if other_id is not None:
+                        cursor.execute(
+                            "UPDATE user_custom_roles SET user_id=%s WHERE id=%s",
+                            (target_user_id, other_id),
+                        )
 
             # -- economy: sum balances per server --
             cursor.execute(

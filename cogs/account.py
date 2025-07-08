@@ -1,4 +1,4 @@
-from discord import Interaction, Member, app_commands
+from discord import Interaction, Member, User, app_commands
 from discord.ext import commands
 from core.database import admConnectTelegramAccount, mergeDiscordAccounts
 
@@ -17,7 +17,7 @@ class AccountCog(commands.Cog):
             return await ctx.followup.send(content='Não foi possível conectar sua conta! você já está conectado?', ephemeral=True)
 
     @app_commands.command(name='adm-associar_membro', description='Associa dois perfis do discord ao mesmo usuário do banco')
-    async def linkDiscordUsers(self, ctx: Interaction, membro: Member, usuario_existente: Member):
+    async def linkDiscordUsers(self, ctx: Interaction, membro: User, usuario_existente: User):
         await ctx.response.defer()
         result = mergeDiscordAccounts(ctx.guild.id, membro, usuario_existente)
         if result:
