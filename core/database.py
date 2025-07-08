@@ -387,15 +387,16 @@ def includeBirthday(
             else None
         )
 
-        if birthday:
-            update_date = (
-                birthday["verified"] == 0 and birthday["date"] != date and date > birthday["date"]
-            )
-            if (
-                birthday["registered"] == 0
-                or birthday["mentionable"] != mentionable
-                or update_date
-            ):
+    if birthday:
+        update_date = (
+            birthday["verified"] == 0 and birthday["date"] != date and date > birthday["date"]
+        )
+        if (
+            birthday["registered"] == 0
+            or birthday["mentionable"] != mentionable
+            or update_date
+        ):
+            with pooled_connection() as cursor:    
                 cursor.execute(
                     "SELECT approved_at FROM user_community_status WHERE user_id = %s",
                     (user_id,),
@@ -428,23 +429,23 @@ def includeBirthday(
                 params.append(user_id)
                 cursor.execute(query, tuple(params))
 
-                if birthday["registered"] == 1:
-                    raise Exception("Changed Entry")
-                return True
-
             if birthday["registered"] == 1:
-                raise Exception("Duplicate entry")
-
-            return False
-
-        try:
-            cursor.execute(
-                "INSERT INTO user_birthday (user_id, birth_date, verified, mentionable, registered) VALUES (%s, %s, FALSE, %s, %s)",
-                (user_id, date, mentionable, registered),
-            )
+                raise Exception("Changed Entry")
             return True
-        except Exception:
-            return False
+
+        if birthday["registered"] == 1:
+            raise Exception("Duplicate entry")
+
+        return False
+
+    try:
+        cursor.execute(
+            "INSERT INTO user_birthday (user_id, birth_date, verified, mentionable, registered) VALUES (%s, %s, FALSE, %s, %s)",
+            (user_id, date, mentionable, registered),
+        )
+        return True
+    except Exception:
+        return False
 
 def getAllBirthdays():
     with pooled_connection() as cursor:
