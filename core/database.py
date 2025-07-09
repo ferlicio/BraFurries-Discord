@@ -502,7 +502,7 @@ def getUserInfo(user: Union[discord.Member, discord.User], guildId: int, userId:
 
         userToReturn = User(
             id=user_id,
-            discordId=dbUser["discord_user_id"],
+            discordId=user.id,
             username=user.name,
             displayName=getattr(user, 'display_name', user.name),
             memberSince=dbUser["member_since"],
@@ -532,7 +532,7 @@ def getUserInfo(user: Union[discord.Member, discord.User], guildId: int, userId:
         return userToReturn
 
 
-def getAltAccounts(member: discord.Member) -> list[int]:
+def getAltAccounts(member: discord.Member | discord.User) -> list[int]:
     """Return a list of other Discord IDs linked to the same user."""
     user_id = getUserId(member.id)
     if user_id is None:

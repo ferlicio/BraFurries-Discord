@@ -81,7 +81,7 @@ class ModerationCog(commands.Cog):
         await ctx.response.defer()
         guild_member = ctx.guild.get_member(member.id)
         memberProfile = getUserInfo(guild_member if guild_member else member, ctx.guild.id)
-        profileDescription = generateUserDescription(memberProfile)
+        profileDescription = generateUserDescription(memberProfile, guild_member is not None)
 
         voice_record = getVoiceRecordPosition(ctx.guild.id, member)
         if voice_record and voice_record["rank"] <= 10:
@@ -104,12 +104,17 @@ class ModerationCog(commands.Cog):
         embedUserProfile.set_author(
             name=(guild_member.display_name if guild_member else member.name)+f' (level {memberProfile.level})',
             icon_url=guild_member.guild_avatar.url if guild_member and guild_member.guild_avatar != None else member.avatar.url)
-        if guild_member:
-            alt_ids = getAltAccounts(guild_member)
-            if alt_ids:
-                mentions = ', '.join(f'<@{uid}>' for uid in alt_ids)
-                embedUserProfile.add_field(name='Contas alternativas', value=mentions, inline=False)
-            embedUserProfile.set_footer(text=f'{len(memberProfile.warnings)} Warns{"  -  Ultimo warn em "+now().strftime("%d/%m/%Y") if len(memberProfile.warnings) > 0 else ""}{"  -  >> DE CASTIGO <<" if guild_member.is_timed_out() else ""}')
+        alt_ids = getAltAccounts(guild_member if guild_member else member)
+        if alt_ids:
+            mentions = ', '.join(f'<@{uid}>' for uid in alt_ids)
+            embedUserProfile.add_field(name='Contas alternativas', value=mentions, inline=False)
+
+        footer_text = f'{len(memberProfile.warnings)} Warns'
+        if len(memberProfile.warnings) > 0:
+            footer_text += f'  -  Ultimo warn em {now().strftime("%d/%m/%Y")}'
+        if guild_member and guild_member.is_timed_out():
+            footer_text += '  -  >> DE CASTIGO <<'
+        embedUserProfile.set_footer(text=footer_text)
         await ctx.followup.send(embed=embedUserProfile)
 
 
