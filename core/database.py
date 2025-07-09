@@ -1550,3 +1550,52 @@ def addGameToBlacklist(guild_id: int, game_name: str) -> bool:
         except mysql.connector.Error as err:
             logging.error(f"Database error occurred: {err}")
             return False
+
+
+def getVoiceRecordPosition(guild_id: int, discord_user: discord.Member | discord.User):
+    """Return a member's voice record rank and value in seconds."""
+    user_id = includeUser(discord_user, guild_id)
+    with pooled_connection() as cursor:
+        cursor.execute(
+            "SELECT voice_time FROM user_records WHERE user_id = %s AND server_guild_id = %s",
+            (user_id, guild_id),
+        )
+        row = cursor.fetchone()
+        if not row or row["voice_time"] is None:
+            return None
+        voice_time = row["voice_time"]
+        cursor.execute(
+            "SELECT COUNT(*) AS better FROM user_records WHERE server_guild_id = %s AND voice_time > %s",
+            (guild_id, voice_time),
+        )
+        rank = cursor.fetchone()["better"] + 1
+        return {"rank": rank, "seconds": voice_time}
+
+
+def getGameRecordPosition(
+    guild_id: int,
+    discord_user: discord.Member | discord.User,
+    blacklist: list[str] | None = None,
+):
+    """Return a member's game record rank, value in seconds and game name."""
+    user_id = includeUser(discord_user, guild_id)
+    with pooled_connection() as cursor:
+        exclusion = ""
+        if blacklist:
+            names = "', '".join(name.replace("'", "\\'") for name in blacklist)
+            exclusion = f" AND game_name NOT IN ('{names}')"
+        cursor.execute(
+            f"SELECT game_time, game_name FROM user_records WHERE user_id = %s AND server_guild_id = %s{exclusion}",
+            (user_id, guild_id),
+        )
+        row = cursor.fetchone()
+        if not row or row["game_time"] is None:
+            return None
+        game_time = row["game_time"]
+        game_name = row["game_name"]
+        cursor.execute(
+            f"SELECT COUNT(*) AS better FROM user_records WHERE server_guild_id = %s{exclusion} AND game_time > %s",
+            (guild_id, game_time),
+        )
+        rank = cursor.fetchone()["better"] + 1
+        return {"rank": rank, "seconds": game_time, "game": game_name}
