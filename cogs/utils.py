@@ -43,10 +43,8 @@ class UtilsCog(commands.Cog):
             duration = timedelta(days=int(duration[:-1]) * 30)
         expiration_date = now() + duration
         await ctx.response.send_message(content='Adicionando o cargo...', ephemeral=True)
-        roleAssignment = assignTempRole(ctx.guild_id, member, role.id, expiration_date, reason)
+        roleAssignment = await assignTempRole(ctx.guild_id, member, role.id, expiration_date, reason)
         if roleAssignment:
-            await member.add_roles(role)
             await ctx.edit_original_response(content=f'O membro <@{member.id}> agora tem o cargo {role.name} por {duration}!')
             
-async def setup(bot: commands.Bot):
-    await bot.add_cog(UtilsCog(bot))
+async def setup(bot: commands.Bot):    await bot.add_cog(UtilsCog(bot))

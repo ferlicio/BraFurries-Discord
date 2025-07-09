@@ -324,9 +324,7 @@ async def sendBirthdayMessages(bot:MyBot):
     if users != []:
         for user in users:
             member = guild.get_member(user.DiscordId)
-            await member.add_roles(guild.get_role(774439314015780926))
-            with pooled_connection() as cursor:
-                assignTempRole(guild.id, member, 774439314015780926, now() + timedelta(days=3), "Aniversário")
+            await assignTempRole(guild.id, member, 774439314015780926, now() + timedelta(days=3), "Aniversário")
         usersForMessage = [f'<@{user.DiscordId}>' for user in users]
         messageToSend = message.replace('{users}', ', '.join(usersForMessage[:-1]) + ' e ' if usersForMessage.__len__()> 1 else '' + usersForMessage[-1])
         await bot.get_channel(799761052375449610).send(messageToSend)

@@ -1222,23 +1222,57 @@ def mergeDiscordAccounts(
             return False
     
 
-def assignTempRole(guild_id:int, discord_user:discord.Member, role_id:str, expiring_date:datetime, reason:str):
+async def assignTempRole(
+    guild_id: int,
+    discord_user: discord.Member,
+    role_id: int | str,
+    expiring_date: datetime,
+    reason: str,
+) -> bool:
+    """Add a temporary role to ``discord_user`` and persist it in the database."""
     with pooled_connection() as cursor:
-        query = f"""SELECT id FROM discord_servers WHERE guild_id = '{guild_id}';"""
-        cursor.execute(query)
-        discord_community_id = cursor.fetchone()["id"]
-        user_id = includeUser(discord_user, guild_id)
-        query = f"""SELECT id FROM discord_user WHERE user_id = '{user_id}';"""
-        cursor.execute(query)
-        discord_user_id = cursor.fetchone()["id"]
-        try:
-            query = f"""INSERT INTO temp_roles (disc_community_id, disc_user_id, role_id, expiring_date, reason)
-            VALUES ('{discord_community_id}', '{discord_user_id}', '{role_id}', '{expiring_date}', '{reason}');"""
-            cursor.execute(query)
-            return True
-        except Exception as e:
-            print(e)
+        cursor.execute(
+            "SELECT id FROM discord_servers WHERE guild_id = %s", (guild_id,)
+        )
+        row = cursor.fetchone()
+        if not row:
+            logging.error("Servidor %s não encontrado ao registrar temp role", guild_id)
             return False
+        discord_community_id = row["id"]
+
+        user_id = includeUser(discord_user, guild_id)
+        cursor.execute("SELECT id FROM discord_user WHERE user_id = %s", (user_id,))
+        row = cursor.fetchone()
+        if not row:
+            logging.error(
+                "Usuário %s não encontrado ao registrar temp role", discord_user.id
+            )
+            return False
+        discord_user_id = row["id"]
+
+        try:
+            cursor.execute(
+                "INSERT INTO temp_roles (disc_community_id, disc_user_id, role_id, expiring_date, reason)"
+                " VALUES (%s, %s, %s, %s, %s)",
+                (
+                    discord_community_id,
+                    discord_user_id,
+                    int(role_id),
+                    expiring_date,
+                    reason,
+                ),
+            )
+        except Exception as e:
+            logging.error("Erro ao registrar temp role: %s", e)
+            return False
+
+    try:
+        await discord_user.add_roles(discord_user.guild.get_role(int(role_id)))
+    except Exception as e:
+        logging.error("Erro ao adicionar cargo temporário: %s", e)
+        return False
+
+    return True
     
 def getExpiringTempRoles(guild_id:int):
     with pooled_connection() as cursor:

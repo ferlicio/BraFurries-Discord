@@ -188,20 +188,17 @@ async def bumpReward():
         for idx, membro in enumerate([member for member in topBumpers if member not in alreadyVipMembers]):
             with pooled_connection() as cursor:
                 if idx == 0:
-                    await membro.add_roles(guild.get_role(DISCORD_VIP_ROLES_ID[1]))
-                    assignTempRole(guild.id, membro, DISCORD_VIP_ROLES_ID[1], (now()+timedelta(days=21)).replace(tzinfo=None), "Bump Reward")
+                    await assignTempRole(guild.id, membro, DISCORD_VIP_ROLES_ID[1], (now()+timedelta(days=21)).replace(tzinfo=None), "Bump Reward")
                     await membro.send(f"""Parabéns! Você foi um dos top 3 bumpers do mês passado no servidor da BraFurries e ganhou o cargo VIP {guild.get_role(DISCORD_VIP_ROLES_ID[1]).name} por 3 semanas!""")
                     (f"""
     Junto com o cargo, você também ganhou 1 nivel de VIP e algumas moedas! (em implementação)""")
                 if idx == 1:
-                    await membro.add_roles(guild.get_role(DISCORD_VIP_ROLES_ID[1]))
-                    assignTempRole(guild.id, membro, DISCORD_VIP_ROLES_ID[1], (now()+timedelta(days=14)).replace(tzinfo=None), "Bump Reward")
+                    await assignTempRole(guild.id, membro, DISCORD_VIP_ROLES_ID[1], (now()+timedelta(days=14)).replace(tzinfo=None), "Bump Reward")
                     await membro.send(f"""Parabéns! Você foi um dos top 3 bumpers do mês passado no servidor da BraFurries e ganhou o cargo VIP {guild.get_role(DISCORD_VIP_ROLES_ID[1]).name} por 2 semanas!""")
                     (f"""
     Junto com o cargo, você também ganhou algumas moedas! (em implementação)""")
                 if idx == 2:
-                    await membro.add_roles(guild.get_role(DISCORD_VIP_ROLES_ID[1]))
-                    assignTempRole(guild.id, membro, DISCORD_VIP_ROLES_ID[1], (now()+timedelta(days=7)).replace(tzinfo=None), "Bump Reward")
+                    await assignTempRole(guild.id, membro, DISCORD_VIP_ROLES_ID[1], (now()+timedelta(days=7)).replace(tzinfo=None), "Bump Reward")
                     await membro.send(f"Parabéns! Você foi um dos top 3 bumpers do mês passado no servidor da BraFurries e ganhou o cargo VIP {guild.get_role(DISCORD_VIP_ROLES_ID[1]).name} por 1 semana!")
 
         with pooled_connection() as cursor:     
