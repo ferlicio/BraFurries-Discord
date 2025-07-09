@@ -248,42 +248,46 @@ Você pode não ter sido um dos top 3 bumpers, mas saiba que sua ajuda é muito 
 
 
 
-@tasks.loop(hours=24) #0.16   10 minutos
+@tasks.loop(hours=24)
 async def configForVips():
-    guild = bot.get_guild(DISCORD_GUILD_ID)  # Substitua ID_DO_SERVIDOR pelo ID do seu servidor
-    VIPRoles = getVIPConfigurations(guild)['VIPRoles']
-    VIPMembers = getVIPMembers(guild)
-    if VIPRoles:
-        for role in guild.roles:
-            if role.name.__contains__(DISCORD_VIP_CUSTOM_ROLE_PREFIX):
-                if role.color == discord.Color.default() and role.display_icon == None:
-                    await role.delete()
-                else:
-                    member = None
-                    for serverMember in role.members:
-                        if not VIPMembers.__contains__(serverMember):
-                            member = serverMember
-                            await serverMember.remove_roles(role)
-                    if role.members.__len__() == 0:
-                        regex = rf'(?:{DISCORD_VIP_CUSTOM_ROLE_PREFIX} )(.*)'
-                        pattern = re.compile(regex)
-                        MemberName = pattern.search(role.name).group(1)
-                        member = guild.get_member_named(MemberName)
-                        if member == None: 
-                            await role.delete()
-                            continue
-                    hexColor = '#%02x%02x%02x' % (role.color.r, role.color.g, role.color.b)
-                    roleSaved = saveCustomRole(guild.id, member, int(str(hexColor).replace('#','0x'),16))
-                    if roleSaved: await role.delete()
-        VIPMembers = [obj.name for obj in VIPMembers] #transforma a lista de membros em uma lista de nomes
-        print('Membros VIPs encontrados:')
-        print(VIPMembers)
-        
-        getAllCustomRoles(guild.id)
-        return
-                
-    else:
+    guild = bot.get_guild(DISCORD_GUILD_ID)
+    vip_roles = getVIPConfigurations(guild)['VIPRoles']
+    vip_role_ids = [r.id for r in vip_roles]
+
+    if not vip_roles:
         print(f'Não foi possível encontrar um cargo VIP no servidor {guild.name}')
+        return
+
+    for role in guild.roles:
+        if DISCORD_VIP_CUSTOM_ROLE_PREFIX in role.name:
+            if role.color == discord.Color.default() and role.display_icon is None:
+                await role.delete()
+                continue
+
+            for serverMember in list(role.members):
+                member_role_ids = [r.id for r in serverMember.roles]
+                if not any(vip_id in member_role_ids for vip_id in vip_role_ids):
+                    await serverMember.remove_roles(role)
+
+            if len(role.members) == 0:
+                match = re.search(rf'{re.escape(DISCORD_VIP_CUSTOM_ROLE_PREFIX)} (.*)', role.name)
+                member = guild.get_member_named(match.group(1)) if match else None
+                if member and any(vip_id in [r.id for r in member.roles] for vip_id in vip_role_ids):
+                    await member.add_roles(role)
+                else:
+                    await role.delete()
+                    continue
+            else:
+                member = role.members[0]
+                for extra in role.members[1:]:
+                    await extra.remove_roles(role)
+
+            expected_name = f"{DISCORD_VIP_CUSTOM_ROLE_PREFIX} {member.name}"
+            if role.name != expected_name:
+                await role.edit(name=expected_name)
+
+            hexColor = '#%02x%02x%02x' % (role.color.r, role.color.g, role.color.b)
+            saveCustomRole(guild.id, member, int(str(hexColor).replace('#','0x'),16))
 
 
 @bot.tree.command(name=f'testes', description=f'teste')
