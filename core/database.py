@@ -502,7 +502,7 @@ def getUserInfo(user: Union[discord.Member, discord.User], guildId: int, userId:
 
         userToReturn = User(
             id=user_id,
-            discordId=dbUser["discord_user_id"],
+            discordId=user.id,
             username=user.name,
             displayName=getattr(user, 'display_name', user.name),
             memberSince=dbUser["member_since"],
