@@ -284,7 +284,7 @@ async def checkTicketsState(bot:commands.Bot):
                         await channel.edit(name=f'{channel.name}-❌')
 
 
-def generateUserDescription(member: User):
+def generateUserDescription(member: User, in_guild: bool = True):
     userDescription = f'## Membro '
     if member.isPartner or member.isVip:
         userDescription += f'VIP' if member.isPartner else ''
@@ -295,8 +295,11 @@ def generateUserDescription(member: User):
         userDescription += f'Comum'
     userDescription += f'\n<@{member.discordId}>'
     userDescription += f'\n**Tipo de VIF:** {member.vipType}' if member.isVip else ''
-    userDescription += f'\n**Entrou em:** {member.memberSince.strftime("%d/%m/%Y")}'
-    userDescription += f'\n**Aprovado em:** {member.approvedAt.strftime("%d/%m/%Y") + (f" (a {(datetime.now()-member.approvedAt).days} dias)" if (datetime.now()-member.approvedAt).days < 45 else "") if member.approvedAt else "Desconhecido" if member.approved==1 else "Não aprovado"}'
+    if in_guild:
+        userDescription += f'\n**Entrou em:** {member.memberSince.strftime("%d/%m/%Y")}'
+        userDescription += f'\n**Aprovado em:** {member.approvedAt.strftime("%d/%m/%Y") + (f" (a {(datetime.now()-member.approvedAt).days} dias)" if (datetime.now()-member.approvedAt).days < 45 else "") if member.approvedAt else "Desconhecido" if member.approved==1 else "Não aprovado"}'
+    else:
+        userDescription += f'\n**Não está no servidor**'
     userDescription += f'\n**Aniversário:** {member.birthday.strftime("%d/%m/%Y")} ({math.floor((datetime.now().date()-member.birthday).days/365.2425)} anos)' if member.birthday != None else ''
     userDescription += f'\n'
     if member.locale or member.coins or member.inventory:
