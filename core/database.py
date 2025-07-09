@@ -1210,6 +1210,10 @@ def mergeDiscordAccounts(
                 "UPDATE discord_user SET user_id=%s WHERE discord_user_id=%s",
                 (target_user_id, member.id),
             )
+            cursor.execute(
+                "DELETE FROM user_birthday WHERE user_id=%s",
+                (current_user_id,),
+            )
             cursor.execute("DELETE FROM users WHERE id=%s", (current_user_id,))
 
             return True
