@@ -19,7 +19,10 @@ from settings import DISCORD_GUILD_ID
 class TrendingCog(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
-        self.sessions: dict[int, tuple[datetime, str]] = {}
+        # Store active game sessions by guild and member
+        # Key is a tuple (guild_id, user_id) so presence updates from
+        # different servers do not overwrite each other.
+        self.sessions: dict[tuple[int, int], tuple[datetime, str]] = {}
         super().__init__()
         self.save_activity.start()
         self.cleanup_weekly.start()
@@ -88,38 +91,45 @@ class TrendingCog(commands.Cog):
     async def on_presence_update(self, before: discord.Member, after: discord.Member):
         before_game = next((a.name for a in before.activities if a.type == discord.ActivityType.playing), None)
         after_game = next((a.name for a in after.activities if a.type == discord.ActivityType.playing), None)
+
+        # Ignore updates outside the configured guild
+        if after.guild is None or after.guild.id != DISCORD_GUILD_ID:
+            return
+
+        key = (after.guild.id, after.id)
+
         if before_game is None and after_game is not None:
-            self.sessions[after.id] = (now(), after_game)
+            self.sessions[key] = (now(), after_game)
         elif before_game is not None and after_game is None:
-            session = self.sessions.pop(after.id, None)
+            session = self.sessions.pop(key, None)
             if session:
                 start, game_name = session
                 seconds = int((now() - start).total_seconds())
                 add_time(game_name, seconds, after.guild.id)
         elif before_game != after_game:
-            session = self.sessions.pop(after.id, None)
+            session = self.sessions.pop(key, None)
             if session:
                 start, game_name = session
                 seconds = int((now() - start).total_seconds())
                 add_time(game_name, seconds, after.guild.id)
             if after_game is not None:
-                self.sessions[after.id] = (now(), after_game)
+                self.sessions[key] = (now(), after_game)
 
     @tasks.loop(minutes=5)
     async def save_activity(self):
         if not self.sessions:
             return
-        guild = self.bot.get_guild(DISCORD_GUILD_ID)
-        if guild is None:
-            return
-        for user_id, (start, game_name) in list(self.sessions.items()):
+        for (guild_id, user_id), (start, game_name) in list(self.sessions.items()):
+            guild = self.bot.get_guild(guild_id)
+            if guild is None:
+                continue
             member = guild.get_member(user_id)
             if member is None:
                 continue
             seconds = int((now() - start).total_seconds())
             if seconds > 0:
                 add_time(game_name, seconds, guild.id)
-                self.sessions[user_id] = (now(), game_name)
+                self.sessions[(guild_id, user_id)] = (now(), game_name)
 
     @tasks.loop(hours=24)
     async def cleanup_weekly(self):
