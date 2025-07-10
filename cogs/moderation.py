@@ -226,11 +226,11 @@ class ModerationCog(commands.Cog):
 
         if (now().date() - member.created_at.date()).days < 30:
             await ctx.response.send_message(content=f'Atribuindo carteirinha provisória...', ephemeral=True)
-            await member.add_roles(carteirinhaProvisoria, cargoVisitante)
+            await member.add_roles(cargoVisitante)
             await member.remove_roles(carteirinhaCargos)
             expiration_date = now() + timedelta(days=15)
             await ctx.edit_original_response(content=f'O membro <@{member.id}> entrará no servidor com **carteirinha provisória** e terá acesso restrito ao servidor por sua conta ter **menos de 30 dias**. \nLembre de avisar o membro sobre isso')
-            assignTempRole(ctx.guild_id, member, carteirinhaProvisoria.id, expiration_date, 'Carteirinha provisória')
+            await assignTempRole(ctx.guild_id, member, carteirinhaProvisoria.id, expiration_date, 'Carteirinha provisória')
             await channel.edit(name=f'{channel.name}-provisória' if 'provisória' not in channel.name else channel.name, category=provisoriaCategory)
             return
 
