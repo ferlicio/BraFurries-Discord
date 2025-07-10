@@ -19,10 +19,14 @@ from settings import DISCORD_GUILD_ID
 class TrendingCog(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
-        # Store active game sessions by guild and member
-        # Key is a tuple (guild_id, user_id) so presence updates from
-        # different servers do not overwrite each other.
-        self.sessions: dict[tuple[int, int], tuple[datetime, str]] = {}
+        # Track game sessions by guild and member. Each entry maps a
+        # ``(guild_id, user_id)`` pair to a list of session tuples
+        # ``(start, game_name, end)``. ``end`` will be ``None`` while the
+        # game is still being played. Sessions are periodically written
+        # to the database by ``save_activity``.
+        self.sessions: dict[
+            tuple[int, int], list[tuple[datetime, str, datetime | None]]
+        ] = {}
         super().__init__()
         self.save_activity.start()
         self.cleanup_weekly.start()
@@ -97,39 +101,56 @@ class TrendingCog(commands.Cog):
             return
 
         key = (after.guild.id, after.id)
+        now_dt = now()
 
         if before_game is None and after_game is not None:
-            self.sessions[key] = (now(), after_game)
+            # Start tracking a new game session
+            self.sessions.setdefault(key, []).append((now_dt, after_game, None))
         elif before_game is not None and after_game is None:
-            session = self.sessions.pop(key, None)
-            if session:
-                start, game_name = session
-                seconds = int((now() - start).total_seconds())
-                add_time(game_name, seconds, after.guild.id)
+            # Mark the current session as finished
+            sessions = self.sessions.get(key)
+            if sessions:
+                start, game_name, end_time = sessions[-1]
+                if end_time is None:
+                    sessions[-1] = (start, game_name, now_dt)
         elif before_game != after_game:
-            session = self.sessions.pop(key, None)
-            if session:
-                start, game_name = session
-                seconds = int((now() - start).total_seconds())
-                add_time(game_name, seconds, after.guild.id)
+            # Finish the previous game and start tracking the new one
+            sessions = self.sessions.get(key)
+            if sessions:
+                start, game_name, end_time = sessions[-1]
+                if end_time is None:
+                    sessions[-1] = (start, game_name, now_dt)
             if after_game is not None:
-                self.sessions[key] = (now(), after_game)
+                self.sessions.setdefault(key, []).append((now_dt, after_game, None))
 
     @tasks.loop(minutes=5)
     async def save_activity(self):
         if not self.sessions:
             return
-        for (guild_id, user_id), (start, game_name) in list(self.sessions.items()):
+        for key, session_list in list(self.sessions.items()):
+            guild_id, user_id = key
             guild = self.bot.get_guild(guild_id)
             if guild is None:
                 continue
             member = guild.get_member(user_id)
             if member is None:
                 continue
-            seconds = int((now() - start).total_seconds())
-            if seconds > 0:
-                add_time(game_name, seconds, guild.id)
-                self.sessions[(guild_id, user_id)] = (now(), game_name)
+
+            remove_indices: list[int] = []
+            for idx, (start, game_name, end_time) in enumerate(session_list):
+                end_dt = end_time or now()
+                seconds = int((end_dt - start).total_seconds())
+                if seconds > 0:
+                    add_time(game_name, seconds, guild.id, end_time=end_dt)
+                if end_time is not None:
+                    remove_indices.append(idx)
+                else:
+                    session_list[idx] = (end_dt, game_name, None)
+
+            for idx in reversed(remove_indices):
+                session_list.pop(idx)
+            if not session_list:
+                self.sessions.pop(key, None)
 
     @tasks.loop(hours=24)
     async def cleanup_weekly(self):
