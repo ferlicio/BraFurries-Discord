@@ -28,70 +28,23 @@ def previous_months(amount: int) -> List[str]:
     return months
 
 
-def add_time(
-    game: str,
-    seconds: int,
-    guild_id: int,
-    month: str | None = None,
-    week: str | None = None,
-    end_time: datetime | None = None,
-) -> None:
-    """Record play time for a game for a guild.
-
-    ``seconds`` represents the time elapsed since the last presence update. The
-    ``end_time`` parameter is used together with the stored ``last_update``
-    timestamp to ensure that only the real time difference is added to the
-    accumulated total. This allows missing time to be recovered when the bot was
-    offline and presence events were lost.
-    """
-
+def add_time(game: str, seconds: int, guild_id: int, month: str = None, week: str = None) -> None:
+    """Record play time for a game in the given month and week for a guild."""
     month = month or current_month()
     week = week or current_week()
-    end_dt = end_time or datetime.now()
-
     with pooled_connection() as cursor:
-        # Retrieve previous update times
-        cursor.execute(
-            "SELECT last_update FROM stats_monthly_game_activity "
-            "WHERE server_guild_id = %s AND month = %s AND game_name = %s;",
-            (guild_id, month, game),
-        )
-        row = cursor.fetchone()
-        month_diff = seconds
-        if row and row["last_update"]:
-            month_diff = int((end_dt - row["last_update"]).total_seconds())
-            if month_diff < 0:
-                month_diff = 0
-
-        cursor.execute(
-            "SELECT last_update FROM stats_weekly_game_activity "
-            "WHERE server_guild_id = %s AND week = %s AND game_name = %s;",
-            (guild_id, week, game),
-        )
-        row = cursor.fetchone()
-        week_diff = seconds
-        if row and row["last_update"]:
-            week_diff = int((end_dt - row["last_update"]).total_seconds())
-            if week_diff < 0:
-                week_diff = 0
-
         sql_month = """
-        INSERT INTO stats_monthly_game_activity (server_guild_id, month, game_name, seconds, last_update)
-        VALUES (%s, %s, %s, %s, %s)
-        ON DUPLICATE KEY UPDATE
-            seconds = seconds + VALUES(seconds),
-            last_update = VALUES(last_update);
+        INSERT INTO stats_monthly_game_activity (server_guild_id, month, game_name, seconds)
+        VALUES (%s, %s, %s, %s)
+        ON DUPLICATE KEY UPDATE seconds = seconds + VALUES(seconds);
         """
-        cursor.execute(sql_month, (guild_id, month, game, month_diff, end_dt))
-
+        cursor.execute(sql_month, (guild_id, month, game, seconds))
         sql_week = """
-        INSERT INTO stats_weekly_game_activity (server_guild_id, week, game_name, seconds, last_update)
-        VALUES (%s, %s, %s, %s, %s)
-        ON DUPLICATE KEY UPDATE
-            seconds = seconds + VALUES(seconds),
-            last_update = VALUES(last_update);
+        INSERT INTO stats_weekly_game_activity (server_guild_id, week, game_name, seconds)
+        VALUES (%s, %s, %s, %s)
+        ON DUPLICATE KEY UPDATE seconds = seconds + VALUES(seconds);
         """
-        cursor.execute(sql_week, (guild_id, week, game, week_diff, end_dt))
+        cursor.execute(sql_week, (guild_id, week, game, seconds))
 
 
 def get_trending_games(guild_id: int, month: str = None) -> Dict[str, int]:
