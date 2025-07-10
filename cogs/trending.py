@@ -115,7 +115,7 @@ class TrendingCog(commands.Cog):
             if after_game is not None:
                 self.sessions[key] = (now(), after_game)
 
-    @tasks.loop(minutes=5)
+    @tasks.loop(minutes=1)
     async def save_activity(self):
         if not self.sessions:
             return
