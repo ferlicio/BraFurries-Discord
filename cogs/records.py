@@ -11,6 +11,7 @@ from core.database import (
     getBlacklistedGames,
     addGameToBlacklist,
 )
+from core.monthly_bumps import get_monthly_bump_records
 from schemas.types.record_types import RecordTypes
 from settings import DISCORD_GUILD_ID
 
@@ -78,10 +79,33 @@ class RecordsCog(commands.Cog):
                 )
 
             await ctx.followup.send(embed=embed)
+        elif tipo == "Bumps":
+            records = get_monthly_bump_records(ctx.guild.id, limit=10)
+            if not records:
+                await ctx.followup.send(content='Nenhum recorde registrado.')
+                return
+
+            embed = discord.Embed(
+                title='Recordes de bumps do mês',
+                color=discord.Color.blue(),
+            )
+
+            for index, record in enumerate(records, start=1):
+                member = ctx.guild.get_member(record['user_id'])
+                if member is None:
+                    continue
+                embed.add_field(
+                    name=f'{index}. {member.display_name}',
+                    value=str(record['bumps']),
+                    inline=False
+                )
+
+            await ctx.followup.send(embed=embed)
         else:
             voice_records = getAllVoiceRecords(ctx.guild.id, limit=3)
             game_records = getAllGameRecords(ctx.guild.id, limit=3, blacklist=list(self.blacklisted_games))
-            if not voice_records and not game_records:
+            bump_records = get_monthly_bump_records(ctx.guild.id, limit=3)
+            if not voice_records and not game_records and not bump_records:
                 await ctx.followup.send(content='Nenhum recorde registrado.')
                 return
 
@@ -115,6 +139,18 @@ class RecordsCog(commands.Cog):
                     embed.add_field(
                         name=f'{index}. {display}',
                         value=duration,
+                        inline=False
+                    )
+
+            if bump_records:
+                embed.add_field(name='Bumps', value='\u200b', inline=False)
+                for index, record in enumerate(bump_records, start=1):
+                    member = ctx.guild.get_member(record['user_id'])
+                    if member is None:
+                        continue
+                    embed.add_field(
+                        name=f'{index}. {member.display_name}',
+                        value=str(record['bumps']),
                         inline=False
                     )
 

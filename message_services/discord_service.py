@@ -244,6 +244,9 @@ Você pode não ter sido um dos top 3 bumpers, mas saiba que sua ajuda é muito 
             # se for o ultimo membro adiciona \n no final
             message += f"{member}: {bumpersNames[member]}"+ ("" if list(bumpersNames.keys())[-1] == member else "\n")
         await titio.send(message)
+
+        from core.monthly_bumps import save_monthly_bumps
+        save_monthly_bumps(guild.id, bumpers)
         
 
 
