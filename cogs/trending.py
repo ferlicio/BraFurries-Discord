@@ -2,7 +2,8 @@ from discord.ext import commands, tasks
 import discord
 from discord import app_commands
 from datetime import datetime, timedelta
-from typing import Literal
+from typing import Literal, Dict, Tuple
+from dataclasses import dataclass
 
 from core.time_functions import now
 from core.monthly_activity import (
@@ -16,13 +17,21 @@ from core.monthly_activity import (
 )
 from settings import DISCORD_GUILD_ID
 
+
+@dataclass
+class GameSession:
+    start: datetime
+    last_update: datetime
+    game_name: str
+    end_time: datetime | None = None
+
 class TrendingCog(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
         # Store active game sessions by guild and member
-        # Key is a tuple (guild_id, user_id) so presence updates from
+        # Key is a tuple ``(guild_id, user_id)`` so presence updates from
         # different servers do not overwrite each other.
-        self.sessions: dict[tuple[int, int], tuple[datetime, str]] = {}
+        self.sessions: Dict[Tuple[int, int], GameSession] = {}
         super().__init__()
         self.save_activity.start()
         self.cleanup_weekly.start()
@@ -99,37 +108,47 @@ class TrendingCog(commands.Cog):
         key = (after.guild.id, after.id)
 
         if before_game is None and after_game is not None:
-            self.sessions[key] = (now(), after_game)
+            # Start a new session for the game
+            now_time = now()
+            self.sessions[key] = GameSession(now_time, now_time, after_game)
         elif before_game is not None and after_game is None:
-            session = self.sessions.pop(key, None)
+            # Mark the session as finished; saving happens in ``save_activity``
+            session = self.sessions.get(key)
             if session:
-                start, game_name = session
-                seconds = int((now() - start).total_seconds())
-                add_time(game_name, seconds, after.guild.id)
+                session.end_time = now()
         elif before_game != after_game:
-            session = self.sessions.pop(key, None)
+            # Finish current session and possibly start another
+            session = self.sessions.get(key)
             if session:
-                start, game_name = session
-                seconds = int((now() - start).total_seconds())
-                add_time(game_name, seconds, after.guild.id)
+                session.end_time = now()
             if after_game is not None:
-                self.sessions[key] = (now(), after_game)
+                now_time = now()
+                self.sessions[key] = GameSession(now_time, now_time, after_game)
+            else:
+                self.sessions.pop(key, None)
 
     @tasks.loop(minutes=1)
     async def save_activity(self):
         if not self.sessions:
             return
-        for (guild_id, user_id), (start, game_name) in list(self.sessions.items()):
+        current = now()
+        for key, session in list(self.sessions.items()):
+            guild_id, user_id = key
             guild = self.bot.get_guild(guild_id)
             if guild is None:
                 continue
             member = guild.get_member(user_id)
             if member is None:
+                # member left the guild; drop the session
+                self.sessions.pop(key, None)
                 continue
-            seconds = int((now() - start).total_seconds())
+            reference_time = session.end_time or current
+            seconds = int((reference_time - session.last_update).total_seconds())
             if seconds > 0:
-                add_time(game_name, seconds, guild.id)
-                self.sessions[(guild_id, user_id)] = (now(), game_name)
+                add_time(session.game_name, seconds, guild.id, update_time=reference_time)
+                session.last_update = reference_time
+            if session.end_time is not None:
+                self.sessions.pop(key, None)
 
     @tasks.loop(hours=24)
     async def cleanup_weekly(self):
