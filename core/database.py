@@ -106,7 +106,7 @@ def getConfig(guild:discord.Guild):
                 query = f"""INSERT IGNORE INTO discord_servers (community_id, name, guild_id)
     VALUES ('{community[-1]["id"]}', '{guild.name}', '{guild.id}');"""
                 cursor.execute(query)
-        query = f"""INSERT IGNORE INTO server_settings (server_guild_id) 
+        query = f"""INSERT IGNORE INTO config_server_settings (server_guild_id) 
     VALUES ('{guild.id}');"""
         cursor.execute(query)
         
@@ -114,7 +114,7 @@ def getConfig(guild:discord.Guild):
         cursor.execute("""
         SELECT COLUMN_NAME
           FROM INFORMATION_SCHEMA.COLUMNS
-         WHERE TABLE_NAME = 'server_settings'
+         WHERE TABLE_NAME = 'config_server_settings'
         """)
         todas_colunas = cursor.fetchall()
 
@@ -124,7 +124,7 @@ def getConfig(guild:discord.Guild):
             if row['COLUMN_NAME'] not in ('server_guild_id', 'id')
         ]
 
-        extras = ", ".join(f"server_settings.{col} AS {snake_to_camel(col)}" for col in nomes)
+        extras = ", ".join(f"config_server_settings.{col} AS {snake_to_camel(col)}" for col in nomes)
 
         # 4) monta a query completa
         dynamic_query = f"""
@@ -133,8 +133,8 @@ def getConfig(guild:discord.Guild):
             discord_servers.guild_id AS guildId
             {',' if extras else ''}{extras}
             FROM discord_servers
-            LEFT JOIN server_settings
-            ON discord_servers.guild_id = server_settings.server_guild_id
+            LEFT JOIN config_server_settings
+            ON discord_servers.guild_id = config_server_settings.server_guild_id
             WHERE discord_servers.guild_id = %s
         """
 
@@ -155,7 +155,7 @@ def hasGPTEnabled(guild:discord.Guild):
         query = f"""
         SELECT  has_gpt_enabled AS enabled, 
                 gpt_model AS model
-        FROM server_settings
+        FROM config_server_settings
         WHERE server_guild_id = '{guild.id}';"""
         cursor.execute(query)
         return cursor.fetchone()
@@ -495,7 +495,7 @@ def getUserInfo(user: Union[discord.Member, discord.User], guildId: int, userId:
             "LEFT JOIN user_level ON user_level.user_id = users.id AND user_level.server_guild_id = %s "
             "LEFT JOIN user_locale ON user_locale.user_id = users.id "
             "LEFT JOIN locale ON locale.id = user_locale.locale_id "
-            "LEFT JOIN warnings ON warnings.user_id = users.id "
+            "LEFT JOIN user_warnings ON user_warnings.user_id = users.id "
             "LEFT JOIN user_economy ON user_economy.user_id = users.id AND user_economy.server_guild_id = %s "
             "WHERE discord_user.user_id = %s"
         )
@@ -525,8 +525,8 @@ def getUserInfo(user: Union[discord.Member, discord.User], guildId: int, userId:
         )
 
         cursor.execute(
-            "SELECT warnings.date, warnings.reason, warnings.expired "
-            "FROM warnings JOIN users ON warnings.user_id = users.id "
+            "SELECT user_warnings.date, user_warnings.reason, user_warnings.expired "
+            "FROM user_warnings JOIN users ON user_warnings.user_id = users.id "
             "WHERE users.id = %s",
             (user_id,),
         )
@@ -1053,7 +1053,7 @@ def mergeDiscordAccounts(
 
             # -- warnings --
             cursor.execute(
-                "UPDATE warnings SET user_id=%s WHERE user_id=%s",
+                "UPDATE user_warnings SET user_id=%s WHERE user_id=%s",
                 (target_user_id, current_user_id),
             )
 
@@ -1311,10 +1311,10 @@ def warnMember(guild_id:int, discord_user:discord.Member, reason:str):
         community_id = cursor.fetchone()["community_id"]
         date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         try:
-            query = f"""INSERT INTO warnings (user_id, community_id, date, reason, expired)
+            query = f"""INSERT INTO user_warnings (user_id, community_id, date, reason, expired)
             VALUES ('{user_id}', '{community_id}', '{date}', '{reason}', FALSE);"""
             cursor.execute(query)
-            query = f"""SELECT COUNT(*) FROM warnings
+            query = f"""SELECT COUNT(*) FROM user_warnings
     WHERE user_id = '{user_id}'
     AND community_id = '{community_id}';"""
             cursor.execute(query)
@@ -1335,7 +1335,7 @@ def getMemberWarnings(guild_id:int, discord_user:discord.Member) -> list[Warning
         query = f"""SELECT community_id FROM discord_servers WHERE guild_id = '{guild_id}';"""
         cursor.execute(query)
         community_id = cursor.fetchone()["community_id"]
-        query = f"""SELECT date, reason, expired FROM warnings
+        query = f"""SELECT date, reason, expired FROM user_warnings
     WHERE user_id = '{user_id}'
     AND community_id = '{community_id}';"""
         cursor.execute(query)
@@ -1345,7 +1345,7 @@ def getMemberWarnings(guild_id:int, discord_user:discord.Member) -> list[Warning
 
 def getStaffRoles(guild_id:int):
     with pooled_connection() as cursor:
-        query = f"""SELECT staff_roles FROM server_settings WHERE server_guild_id = '{guild_id}';"""
+        query = f"""SELECT staff_roles FROM config_server_settings WHERE server_guild_id = '{guild_id}';"""
         cursor.execute(query)
         return cursor.fetchall()
 
