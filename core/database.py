@@ -248,7 +248,7 @@ def includeUser(user: Union[discord.Member, discord.User, str], guildId: int = o
             member_since = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             approved = 0
             cursor.execute(
-                "SELECT user_id, display_name FROM telegram_user WHERE username = %s",
+                "SELECT user_id, display_name FROM user_telegram WHERE username = %s",
                 (user,),
             )
             result = cursor.fetchone()
@@ -259,7 +259,7 @@ def includeUser(user: Union[discord.Member, discord.User, str], guildId: int = o
             user_id = result["user_id"]
 
             if result["display_name"] != db_display_name:
-                table = "discord_user" if isinstance(user, discord.Member) else "telegram_user"
+                table = "discord_user" if isinstance(user, discord.Member) else "user_telegram"
                 cursor.execute(
                     f"UPDATE {table} SET display_name = %s WHERE user_id = %s",
                     (db_display_name, user_id),
@@ -330,7 +330,7 @@ def includeUser(user: Union[discord.Member, discord.User, str], guildId: int = o
                 )
             else:
                 cursor.execute(
-                    "INSERT IGNORE INTO telegram_user (user_id, username, display_name) VALUES (%s, %s, %s)",
+                    "INSERT IGNORE INTO user_telegram (user_id, username, display_name) VALUES (%s, %s, %s)",
                     (user_id, db_username, db_display_name),
                 )
         except Exception as e:
@@ -893,18 +893,18 @@ def updateDateEvent(event, new_starting_datetime:datetime, user:str, isNextEvent
         except HttpError as error:
             print('An error occurred: %s' % error)
 
-def admConnectTelegramAccount(discord_user:discord.Member, telegram_user:str):
+def admConnectTelegramAccount(discord_user:discord.Member, user_telegram:str):
     with pooled_connection() as cursor:
         #checa se o usuário já está cadastrado no banco de dados
         user_id = includeUser(discord_user)
-        #checa se o telegram_user já está cadastrado no banco de dados
-        query = f"""SELECT * FROM telegram_user WHERE user_id = '{user_id}';"""
+        #checa se o user_telegram já está cadastrado no banco de dados
+        query = f"""SELECT * FROM user_telegram WHERE user_id = '{user_id}';"""
         cursor.execute(query)
         myresult = cursor.fetchall()
         if myresult == []:
             try:
-                query = f"""INSERT INTO telegram_user (user_id, username, display_name, banned)
-            VALUES ('{user_id}', '{telegram_user}', '{discord_user.nick}', 'FALSE');"""
+                query = f"""INSERT INTO user_telegram (user_id, username, display_name, banned)
+            VALUES ('{user_id}', '{user_telegram}', '{discord_user.nick}', 'FALSE');"""
                 cursor.execute(query)
                 return True
             except:
@@ -1205,7 +1205,7 @@ def mergeDiscordAccounts(
 
             # -- telegram account --
             cursor.execute(
-                "UPDATE telegram_user SET user_id=%s WHERE user_id=%s",
+                "UPDATE user_telegram SET user_id=%s WHERE user_id=%s",
                 (target_user_id, current_user_id),
             )
 
