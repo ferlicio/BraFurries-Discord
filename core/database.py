@@ -455,13 +455,14 @@ def includeBirthday(
         return False
 
     try:
-        cursor.execute(
-            "INSERT INTO user_birthday (user_id, birth_date, verified, mentionable, registered) VALUES (%s, %s, FALSE, %s, %s)",
-            (user_id, date, mentionable, registered),
-        )
-        return True
+        with pooled_connection() as cursor:
+            cursor.execute(
+                "INSERT INTO user_birthday (user_id, birth_date, verified, mentionable, registered) VALUES (%s, %s, FALSE, %s, %s)",
+                (user_id, date, mentionable, registered),
+            )
+            return True
     except Exception as e:
-        raise RuntimeError("Erro ao registrar aniversário") from e
+        raise e
 
 def getAllBirthdays():
     with pooled_connection() as cursor:
@@ -1366,10 +1367,10 @@ def registerUser(guild_id: int, discord_user: discord.Member, birthday: date, ap
             discord_user,
             False,
             user_id,
-            True,
+            False,
         )
     except Exception as e:
-        raise RuntimeError("Erro ao registrar aniversário") from e
+        raise RuntimeError("Erro ao registrar aniversário: " + str(e)) from e
 
     if not birthdayRegistered:
         raise RuntimeError("Não foi possível registrar o aniversário")
