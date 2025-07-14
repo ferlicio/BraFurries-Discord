@@ -204,7 +204,7 @@ def getUserId(discord_user_id: int):
     """Fetch the internal user id for a Discord member."""
     with pooled_connection() as cursor:
         cursor.execute(
-            "SELECT user_id FROM discord_user WHERE discord_user_id = %s",
+            "SELECT user_id FROM user_discord WHERE discord_user_id = %s",
             (discord_user_id,)
         )
         row = cursor.fetchone()
@@ -224,7 +224,7 @@ def includeUser(user: Union[discord.Member, discord.User, str], guildId: int = o
             member_since = user.joined_at.strftime("%Y-%m-%d %H:%M:%S")
             approved = 0 if discord.utils.get(user.guild.roles, id=860453882323927060) in user.roles else 1
             cursor.execute(
-                "SELECT user_id, display_name FROM discord_user WHERE discord_user_id = %s",
+                "SELECT user_id, display_name FROM user_discord WHERE discord_user_id = %s",
                 (user.id,),
             )
             result = cursor.fetchone()
@@ -236,7 +236,7 @@ def includeUser(user: Union[discord.Member, discord.User, str], guildId: int = o
             member_since = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             approved = 0
             cursor.execute(
-                "SELECT user_id, display_name FROM discord_user WHERE discord_user_id = %s",
+                "SELECT user_id, display_name FROM user_discord WHERE discord_user_id = %s",
                 (user.id,),
             )
             result = cursor.fetchone()
@@ -259,7 +259,7 @@ def includeUser(user: Union[discord.Member, discord.User, str], guildId: int = o
             user_id = result["user_id"]
 
             if result["display_name"] != db_display_name:
-                table = "discord_user" if isinstance(user, discord.Member) else "user_telegram"
+                table = "user_discord" if isinstance(user, discord.Member) else "user_telegram"
                 cursor.execute(
                     f"UPDATE {table} SET display_name = %s WHERE user_id = %s",
                     (db_display_name, user_id),
@@ -325,7 +325,7 @@ def includeUser(user: Union[discord.Member, discord.User, str], guildId: int = o
         try:
             if isinstance(user, discord.Member) or isinstance(user, discord.User):
                 cursor.execute(
-                    "INSERT INTO discord_user (user_id, discord_user_id, username, display_name) VALUES (%s, %s, %s, %s)",
+                    "INSERT INTO user_discord (user_id, discord_user_id, username, display_name) VALUES (%s, %s, %s, %s)",
                     (user_id, user.id, db_username, normalize_text(user.nick) if isinstance(user, discord.Member) and user.nick else db_display_name),
                 )
             else:
@@ -466,9 +466,9 @@ def includeBirthday(
 
 def getAllBirthdays():
     with pooled_connection() as cursor:
-        query = f"""SELECT discord_user.discord_user_id, user_birthday.birth_date
-    FROM discord_user
-    JOIN user_birthday ON discord_user.user_id = user_birthday.user_id
+        query = f"""SELECT user_discord.discord_user_id, user_birthday.birth_date
+    FROM user_discord
+    JOIN user_birthday ON user_discord.user_id = user_birthday.user_id
     WHERE user_birthday.mentionable = 1;"""
         cursor.execute(query)
         myresult = cursor.fetchall()
@@ -482,14 +482,14 @@ def getUserInfo(user: Union[discord.Member, discord.User], guildId: int, userId:
 
     with pooled_connection(True) as cursor:
         query = (
-            "SELECT discord_user.discord_user_id, discord_user.display_name, "
+            "SELECT user_discord.discord_user_id, user_discord.display_name, "
             "user_community_status.member_since, user_community_status.approved, "
             "user_community_status.approved_at, user_community_status.is_vip, "
             "user_community_status.is_partner, user_level.current_level, "
             "user_birthday.birth_date, user_birthday.verified, locale.locale_name, "
             "user_economy.bank_balance "
             "FROM users "
-            "LEFT JOIN discord_user ON users.id = discord_user.user_id "
+            "LEFT JOIN user_discord ON users.id = user_discord.user_id "
             "LEFT JOIN user_community_status ON users.id = user_community_status.user_id "
             "LEFT JOIN user_birthday ON user_birthday.user_id = users.id "
             "LEFT JOIN user_level ON user_level.user_id = users.id AND user_level.server_guild_id = %s "
@@ -497,7 +497,7 @@ def getUserInfo(user: Union[discord.Member, discord.User], guildId: int, userId:
             "LEFT JOIN locale ON locale.id = user_locale.locale_id "
             "LEFT JOIN user_warnings ON user_warnings.user_id = users.id "
             "LEFT JOIN user_economy ON user_economy.user_id = users.id AND user_economy.server_guild_id = %s "
-            "WHERE discord_user.user_id = %s"
+            "WHERE user_discord.user_id = %s"
         )
         cursor.execute(query, (guildId, guildId, user_id))
         dbUser = cursor.fetchone()
@@ -544,7 +544,7 @@ def getAltAccounts(member: discord.Member | discord.User) -> list[int]:
 
     with pooled_connection() as cursor:
         cursor.execute(
-            "SELECT discord_user_id FROM discord_user WHERE user_id = %s AND discord_user_id <> %s",
+            "SELECT discord_user_id FROM user_discord WHERE user_id = %s AND discord_user_id <> %s",
             (user_id, member.id),
         )
         rows = cursor.fetchall() or []
@@ -943,7 +943,7 @@ def mergeDiscordAccounts(
         if current_user_id is None:
             try:
                 cursor.execute(
-                    "INSERT INTO discord_user (user_id, discord_user_id, username, display_name)"
+                    "INSERT INTO user_discord (user_id, discord_user_id, username, display_name)"
                     " VALUES (%s, %s, %s, %s)",
                     (
                         target_user_id,
@@ -1211,7 +1211,7 @@ def mergeDiscordAccounts(
 
             # -- final mapping and cleanup --
             cursor.execute(
-                "UPDATE discord_user SET user_id=%s WHERE discord_user_id=%s",
+                "UPDATE user_discord SET user_id=%s WHERE discord_user_id=%s",
                 (target_user_id, member.id),
             )
             cursor.execute(
@@ -1245,7 +1245,7 @@ async def assignTempRole(
         discord_community_id = row["id"]
 
         user_id = includeUser(discord_user, guild_id)
-        cursor.execute("SELECT id FROM discord_user WHERE user_id = %s", (user_id,))
+        cursor.execute("SELECT id FROM user_discord WHERE user_id = %s", (user_id,))
         row = cursor.fetchone()
         if not row:
             logging.error(
@@ -1256,7 +1256,7 @@ async def assignTempRole(
 
         try:
             cursor.execute(
-                "INSERT INTO temp_roles (disc_community_id, disc_user_id, role_id, expiring_date, reason)"
+                "INSERT INTO user_temp_roles (disc_community_id, disc_user_id, role_id, expiring_date, reason)"
                 " VALUES (%s, %s, %s, %s, %s)",
                 (
                     discord_community_id,
@@ -1283,10 +1283,10 @@ def getExpiringTempRoles(guild_id:int):
         query = f"""SELECT id FROM discord_servers WHERE guild_id = '{guild_id}';"""
         cursor.execute(query)
         discord_community_id = cursor.fetchone()["id"]
-        query = f"""SELECT temp_roles.id, temp_roles.role_id, discord_user.discord_user_id AS user_id FROM temp_roles
-    JOIN discord_user ON temp_roles.disc_user_id = discord_user.id
-    WHERE temp_roles.disc_community_id = '{discord_community_id}'
-    AND temp_roles.expiring_date <= NOW();
+        query = f"""SELECT user_temp_roles.id, user_temp_roles.role_id, user_discord.discord_user_id AS user_id FROM user_temp_roles
+    JOIN user_discord ON user_temp_roles.disc_user_id = user_discord.id
+    WHERE user_temp_roles.disc_community_id = '{discord_community_id}'
+    AND user_temp_roles.expiring_date <= NOW();
         """
         cursor.execute(query)
         expiredTempRoles = cursor.fetchall()
@@ -1295,7 +1295,7 @@ def getExpiringTempRoles(guild_id:int):
 def deleteTempRole(tempRoleDBId:int):
     with pooled_connection() as cursor:
         try:
-            query = f"""DELETE FROM temp_roles
+            query = f"""DELETE FROM user_temp_roles
         WHERE id = {tempRoleDBId}"""
             cursor.execute(query)
             return True
@@ -1407,8 +1407,8 @@ def saveCustomRole(guild_id:int, discord_user:discord.Member, color:str=None, ic
 
 def getAllCustomRoles(guild_id:int):
     with pooled_connection() as cursor:
-        query = f"""SELECT discord_user.discord_user_id, user_custom_roles.color, user_custom_roles.icon_id FROM user_custom_roles
-    JOIN discord_user ON user_custom_roles.user_id = discord_user.user_id
+        query = f"""SELECT user_discord.discord_user_id, user_custom_roles.color, user_custom_roles.icon_id FROM user_custom_roles
+    JOIN user_discord ON user_custom_roles.user_id = user_discord.user_id
     WHERE user_custom_roles.server_guild_id = '{guild_id}'
         """
         cursor.execute(query)
@@ -1475,8 +1475,8 @@ def setServerMessage(guild_id:int, messageType:ServerMessagesEnum, message:str):
 
 def getTodayBirthdays(guild_id:int):
     with pooled_connection() as cursor:
-        query = f"""SELECT discord_user.discord_user_id, user_birthday.birth_date FROM user_birthday
-    JOIN discord_user ON user_birthday.user_id = discord_user.user_id
+        query = f"""SELECT user_discord.discord_user_id, user_birthday.birth_date FROM user_birthday
+    JOIN user_discord ON user_birthday.user_id = user_discord.user_id
     WHERE MONTH(birth_date) = MONTH(NOW())
     AND DAY(birth_date) = DAY(NOW())
     AND mentionable = 1;"""
@@ -1517,9 +1517,9 @@ def getVoiceTime(guild_id:int, discord_user:discord.Member) -> int:
 def getAllVoiceRecords(guild_id: int, limit: int = 10):
     """Retrieve top voice call records for a guild sorted by duration"""
     with pooled_connection() as cursor:
-        query = f"""SELECT discord_user.discord_user_id, user_records.voice_time
+        query = f"""SELECT user_discord.discord_user_id, user_records.voice_time
     FROM user_records
-    JOIN discord_user ON discord_user.user_id = user_records.user_id
+    JOIN user_discord ON user_discord.user_id = user_records.user_id
     WHERE user_records.server_guild_id = {guild_id}
     ORDER BY user_records.voice_time DESC
     LIMIT {limit};"""
@@ -1571,9 +1571,9 @@ def getAllGameRecords(guild_id: int, limit: int = 10, blacklist: list[str] = Non
         if blacklist:
             names = "', '".join(name.replace("'", "\\'") for name in blacklist)
             exclusion = f" AND user_records.game_name NOT IN ('{names}')"
-        query = f"""SELECT discord_user.discord_user_id, user_records.game_time, user_records.game_name
+        query = f"""SELECT user_discord.discord_user_id, user_records.game_time, user_records.game_name
     FROM user_records
-    JOIN discord_user ON discord_user.user_id = user_records.user_id
+    JOIN user_discord ON user_discord.user_id = user_records.user_id
     WHERE user_records.server_guild_id = {guild_id}{exclusion}
     ORDER BY user_records.game_time DESC
     LIMIT {limit};"""

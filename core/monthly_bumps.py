@@ -21,9 +21,9 @@ def get_monthly_bump_records(
     """Return top bump records sorted by bump count."""
     with pooled_connection() as cursor:
         sql = (
-            "SELECT discord_user.discord_user_id, r.bumps AS bumps "
+            "SELECT user_discord.discord_user_id, r.bumps AS bumps "
             "FROM user_records AS r "
-            "JOIN discord_user ON discord_user.user_id = r.user_id "
+            "JOIN user_discord ON user_discord.user_id = r.user_id "
             "WHERE r.server_guild_id = %s AND r.bumps IS NOT NULL "
             "ORDER BY r.bumps DESC "
             "LIMIT %s;"
