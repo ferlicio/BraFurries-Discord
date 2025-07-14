@@ -4,6 +4,7 @@ from typing import Dict, List
 from dateutil import relativedelta
 
 from core.database import pooled_connection
+from core.time_functions import now
 
 
 def current_month() -> str:
@@ -28,23 +29,35 @@ def previous_months(amount: int) -> List[str]:
     return months
 
 
-def add_time(game: str, seconds: int, guild_id: int, month: str = None, week: str = None) -> None:
+def add_time(
+    game: str,
+    seconds: int,
+    guild_id: int,
+    month: str | None = None,
+    week: str | None = None,
+    update_time: datetime | None = None,
+) -> None:
     """Record play time for a game in the given month and week for a guild."""
     month = month or current_month()
     week = week or current_week()
+    update_time = update_time or now()
     with pooled_connection() as cursor:
         sql_month = """
-        INSERT INTO stats_monthly_game_activity (server_guild_id, month, game_name, seconds)
-        VALUES (%s, %s, %s, %s)
-        ON DUPLICATE KEY UPDATE seconds = seconds + VALUES(seconds);
+        INSERT INTO stats_monthly_game_activity (server_guild_id, month, game_name, seconds, last_update)
+        VALUES (%s, %s, %s, %s, %s)
+        ON DUPLICATE KEY UPDATE
+            seconds = seconds + VALUES(seconds),
+            last_update = VALUES(last_update);
         """
-        cursor.execute(sql_month, (guild_id, month, game, seconds))
+        cursor.execute(sql_month, (guild_id, month, game, seconds, update_time))
         sql_week = """
-        INSERT INTO stats_weekly_game_activity (server_guild_id, week, game_name, seconds)
-        VALUES (%s, %s, %s, %s)
-        ON DUPLICATE KEY UPDATE seconds = seconds + VALUES(seconds);
+        INSERT INTO stats_weekly_game_activity (server_guild_id, week, game_name, seconds, last_update)
+        VALUES (%s, %s, %s, %s, %s)
+        ON DUPLICATE KEY UPDATE
+            seconds = seconds + VALUES(seconds),
+            last_update = VALUES(last_update);
         """
-        cursor.execute(sql_week, (guild_id, week, game, seconds))
+        cursor.execute(sql_week, (guild_id, week, game, seconds, update_time))
 
 
 def get_trending_games(guild_id: int, month: str = None) -> Dict[str, int]:
