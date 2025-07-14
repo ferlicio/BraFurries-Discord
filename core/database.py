@@ -409,38 +409,41 @@ def includeBirthday(
             or birthday["mentionable"] != mentionable
             or update_date
         ):
-            with pooled_connection() as cursor:    
-                cursor.execute(
-                    "SELECT approved_at FROM user_community_status WHERE user_id = %s",
-                    (user_id,),
-                )
-                approved_row = cursor.fetchone()
-                approved_at = approved_row["approved_at"] if approved_row else None
-                if approved_at and not isinstance(approved_at, datetime):
-                    approved_at = datetime.strptime(str(approved_at), "%Y-%m-%d %H:%M:%S")
+            try:
+                with pooled_connection() as cursor:
+                    cursor.execute(
+                        "SELECT approved_at FROM user_community_status WHERE user_id = %s",
+                        (user_id,),
+                    )
+                    approved_row = cursor.fetchone()
+                    approved_at = approved_row["approved_at"] if approved_row else None
+                    if approved_at and not isinstance(approved_at, datetime):
+                        approved_at = datetime.strptime(str(approved_at), "%Y-%m-%d %H:%M:%S")
 
-                verified_sql = (
-                    ", verified = 1"
-                    if approved_at
-                    and (datetime.now() - approved_at).days > 40
-                    and date == birthday["date"]
-                    else ""
-                )
+                    verified_sql = (
+                        ", verified = 1"
+                        if approved_at
+                        and (datetime.now() - approved_at).days > 40
+                        and date == birthday["date"]
+                        else ""
+                    )
 
-                set_clauses = []
-                params: list = []
-                if update_date:
-                    set_clauses.append("birth_date = %s")
-                    params.append(date)
-                set_clauses.append("mentionable = %s")
-                params.append(mentionable)
-                set_clauses.append("registered = 1")
+                    set_clauses = []
+                    params: list = []
+                    if update_date:
+                        set_clauses.append("birth_date = %s")
+                        params.append(date)
+                    set_clauses.append("mentionable = %s")
+                    params.append(mentionable)
+                    set_clauses.append("registered = 1")
 
-                query = (
-                    f"UPDATE user_birthday SET {', '.join(set_clauses)}{verified_sql} WHERE user_id = %s"
-                )
-                params.append(user_id)
-                cursor.execute(query, tuple(params))
+                    query = (
+                        f"UPDATE user_birthday SET {', '.join(set_clauses)}{verified_sql} WHERE user_id = %s"
+                    )
+                    params.append(user_id)
+                    cursor.execute(query, tuple(params))
+            except Exception as e:
+                raise RuntimeError("Erro ao atualizar aniversário") from e
 
             if birthday["registered"] == 1:
                 raise Exception("Changed Entry")
@@ -457,8 +460,8 @@ def includeBirthday(
             (user_id, date, mentionable, registered),
         )
         return True
-    except Exception:
-        return False
+    except Exception as e:
+        raise RuntimeError("Erro ao registrar aniversário") from e
 
 def getAllBirthdays():
     with pooled_connection() as cursor:
@@ -1346,17 +1349,32 @@ def getStaffRoles(guild_id:int):
         return cursor.fetchall()
 
 def registerUser(guild_id: int, discord_user: discord.Member, birthday: date, approved_date: date = None) -> bool:
-    """Register a member in the database and saves the birthday."""
-    user_id = includeUser(discord_user, guild_id, datetime.now() if approved_date is None else approved_date)
-    birthdayRegistered = False
+    """Register a member in the database and save the birthday."""
+    user_id = includeUser(
+        discord_user,
+        guild_id,
+        datetime.now() if approved_date is None else approved_date,
+    )
+
+    if user_id is None:
+        raise RuntimeError("Não foi possível registrar o usuário")
+
     try:
-        birthdayRegistered = includeBirthday(guild_id, birthday, discord_user, False, user_id)
+        birthdayRegistered = includeBirthday(
+            guild_id,
+            birthday,
+            discord_user,
+            False,
+            user_id,
+            True,
+        )
     except Exception as e:
-        if not e.args[0].__contains__('Duplicate entry'):
-            print(e)
-        else:
-            birthdayRegistered = True
-    return user_id is not None and birthdayRegistered
+        raise RuntimeError("Erro ao registrar aniversário") from e
+
+    if not birthdayRegistered:
+        raise RuntimeError("Não foi possível registrar o aniversário")
+
+    return True
 
 def saveCustomRole(guild_id:int, discord_user:discord.Member, color:str=None, iconId:int=None):
     if color == None and iconId == None: return False

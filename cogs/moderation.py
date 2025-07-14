@@ -125,11 +125,12 @@ class ModerationCog(commands.Cog):
         await ctx.response.send_message(content='Registrando usuário...',ephemeral=True)
         if not data_aprovacao: return await ctx.edit_original_response(content='Data de aprovação no formato errado! use o formato dd/MM/YYYY')
         if not aniversario: return await ctx.edit_original_response(content='Data de aniversário no formato errado! use o formato dd/MM/YYYY')
-        registered = registerUser(ctx.guild.id, member, aniversario, data_aprovacao)
-        if registered:
+        try:
+            registerUser(ctx.guild.id, member, aniversario, data_aprovacao)
+        except Exception as e:
+            return await ctx.edit_original_response(content=f'Erro ao registrar o usuário: {e}')
+        else:
             return await ctx.edit_original_response(content='Membro registrado com sucesso!')
-        else: 
-            return await ctx.edit_original_response(content='Não foi possível registrar o usuário')
         
         
     @app_commands.command(name=f'liberar_acesso_nsfw', description=f'Libera o acesso NSFW para o membro')
