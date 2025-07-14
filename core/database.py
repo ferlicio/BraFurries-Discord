@@ -84,7 +84,7 @@ def getConfig(guild:discord.Guild):
             query = f"""INSERT IGNORE INTO communities (name)
     VALUES ('{botOriginalGuildName}');"""
             cursor.execute(query)
-            query = f"""INSERT IGNORE INTO discord_servers (community_id, name, guild_id)
+            query = f"""INSERT IGNORE INTO community_discord (community_id, name, guild_id)
     VALUES ('{cursor.lastrowid}', '{guild.name}', '{guild.id}');"""
             cursor.execute(query)
         else:
@@ -92,7 +92,7 @@ def getConfig(guild:discord.Guild):
             for community in communities:
                 if community["name"] in guild.name:
                     existInCommunities = True
-                    query = f"""INSERT IGNORE INTO discord_servers (community_id, name, guild_id) 
+                    query = f"""INSERT IGNORE INTO community_discord (community_id, name, guild_id) 
                 VALUES ('{community['id']}', '{guild.name}', '{guild.id}');"""
                 cursor.execute(query)
                 continue
@@ -103,7 +103,7 @@ def getConfig(guild:discord.Guild):
                 query = f"""SELECT * FROM communities"""
                 cursor.execute(query)
                 community = cursor.fetchall()
-                query = f"""INSERT IGNORE INTO discord_servers (community_id, name, guild_id)
+                query = f"""INSERT IGNORE INTO community_discord (community_id, name, guild_id)
     VALUES ('{community[-1]["id"]}', '{guild.name}', '{guild.id}');"""
                 cursor.execute(query)
         query = f"""INSERT IGNORE INTO config_server_settings (server_guild_id) 
@@ -129,13 +129,13 @@ def getConfig(guild:discord.Guild):
         # 4) monta a query completa
         dynamic_query = f"""
             SELECT
-            discord_servers.name,
-            discord_servers.guild_id AS guildId
+            community_discord.name,
+            community_discord.guild_id AS guildId
             {',' if extras else ''}{extras}
-            FROM discord_servers
+            FROM community_discord
             LEFT JOIN config_server_settings
-            ON discord_servers.guild_id = config_server_settings.server_guild_id
-            WHERE discord_servers.guild_id = %s
+            ON community_discord.guild_id = config_server_settings.server_guild_id
+            WHERE community_discord.guild_id = %s
         """
 
         cursor.execute(dynamic_query, (guild.id,))
@@ -282,7 +282,7 @@ def includeUser(user: Union[discord.Member, discord.User, str], guildId: int = o
                     )
             else:
                 cursor.execute(
-                    "SELECT community_id FROM discord_servers WHERE guild_id = %s",
+                    "SELECT community_id FROM community_discord WHERE guild_id = %s",
                     (guildId,),
                 )
                 community_id = cursor.fetchone()["community_id"]
@@ -312,7 +312,7 @@ def includeUser(user: Union[discord.Member, discord.User, str], guildId: int = o
             user_id = row.get("id") if row else None
 
         cursor.execute(
-            "SELECT community_id FROM discord_servers WHERE guild_id = %s",
+            "SELECT community_id FROM community_discord WHERE guild_id = %s",
             (guildId,),
         )
         community_id = cursor.fetchone()["community_id"]
@@ -1236,7 +1236,7 @@ async def assignTempRole(
     """Add a temporary role to ``discord_user`` and persist it in the database."""
     with pooled_connection() as cursor:
         cursor.execute(
-            "SELECT id FROM discord_servers WHERE guild_id = %s", (guild_id,)
+            "SELECT id FROM community_discord WHERE guild_id = %s", (guild_id,)
         )
         row = cursor.fetchone()
         if not row:
@@ -1280,7 +1280,7 @@ async def assignTempRole(
     
 def getExpiringTempRoles(guild_id:int):
     with pooled_connection() as cursor:
-        query = f"""SELECT id FROM discord_servers WHERE guild_id = '{guild_id}';"""
+        query = f"""SELECT id FROM community_discord WHERE guild_id = '{guild_id}';"""
         cursor.execute(query)
         discord_community_id = cursor.fetchone()["id"]
         query = f"""SELECT user_temp_roles.id, user_temp_roles.role_id, user_discord.discord_user_id AS user_id FROM user_temp_roles
@@ -1306,7 +1306,7 @@ def deleteTempRole(tempRoleDBId:int):
 def warnMember(guild_id:int, discord_user:discord.Member, reason:str):
     with pooled_connection() as cursor:
         user_id = includeUser(discord_user, guild_id)
-        query = f"""SELECT community_id FROM discord_servers WHERE guild_id = '{guild_id}';"""
+        query = f"""SELECT community_id FROM community_discord WHERE guild_id = '{guild_id}';"""
         cursor.execute(query)
         community_id = cursor.fetchone()["community_id"]
         date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
@@ -1332,7 +1332,7 @@ def warnMember(guild_id:int, discord_user:discord.Member, reason:str):
 def getMemberWarnings(guild_id:int, discord_user:discord.Member) -> list[Warning]:
     with pooled_connection() as cursor:
         user_id = includeUser(discord_user, guild_id)
-        query = f"""SELECT community_id FROM discord_servers WHERE guild_id = '{guild_id}';"""
+        query = f"""SELECT community_id FROM community_discord WHERE guild_id = '{guild_id}';"""
         cursor.execute(query)
         community_id = cursor.fetchone()["community_id"]
         query = f"""SELECT date, reason, expired FROM user_warnings
