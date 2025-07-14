@@ -7,6 +7,7 @@ from core.database import includeLocale, getAllLocals, getUsersByLocale
 from core.database import includeBirthday, getAllBirthdays
 from core.database import pooled_connection
 from schemas.models.locals import stateLetterCodes
+from core.verifications import verifyDate
 
 
 class InfoCog(commands.Cog):
@@ -49,11 +50,10 @@ class InfoCog(commands.Cog):
 
     @app_commands.command(name='registrar_aniversario', description='Registra seu aniversário')
     async def registerBirthday(self, ctx: discord.Interaction, data: str, mencionavel: Literal["sim", "não"]):
-        try:
-            datetime.strptime(data, "%d/%m/%Y")
-        except ValueError:
-            return await ctx.response.send_message(content='''Data de nascimento inválida! você informou uma data no formato "dd/mm/aaaa"? <:catsip:851024825333186560>''', ephemeral=True)
-        birthdayAsDate = datetime.strptime(data, '%d/%m/%Y').date()
+        birthdayAsDate = verifyDate(data)
+        if not birthdayAsDate:
+            return await ctx.response.send_message(content='''Data de nascimento inválida! Você informou uma data no formato "dd/mm/aaaa"? <:catsip:851024825333186560>''', ephemeral=True)
+
         mencionavel = True if mencionavel == "sim" else False
         await ctx.response.defer()
         try:
@@ -62,6 +62,9 @@ class InfoCog(commands.Cog):
                 return await ctx.followup.send(content=f'você foi registrado com o aniversário {birthdayAsDate.day:02}/{birthdayAsDate.month:02}!', ephemeral=False)
             else:
                 return await ctx.followup.send(content=f'Algo deu errado... Avise o titio!', ephemeral=False)
+        except ValueError as e:
+            # invalid birthdate range or type
+            return await ctx.followup.send(content=f'Data de nascimento inválida! {e}', ephemeral=True)
         except Exception as e:
             if str(e).__contains__('Duplicate entry'):
                 return await ctx.followup.send(content=f'Você ja está registrado. Caso o seu aniversário não esteja aparecendo na lista, tente usar /{ctx.command.name} com mencionável = Sim', ephemeral=True)
