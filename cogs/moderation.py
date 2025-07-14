@@ -100,10 +100,11 @@ class ModerationCog(commands.Cog):
             color=discord.Color.from_str('#febf10'),
             title='{0} - ID {1:64}'.format(member.name, str(member.id)),
             description=profileDescription)
-        embedUserProfile.set_thumbnail(url=member.avatar.url)
+        avatar_url = member.avatar.url if member.avatar else member.default_avatar.url
+        embedUserProfile.set_thumbnail(url=avatar_url)
         embedUserProfile.set_author(
             name=(guild_member.display_name if guild_member else member.name)+f' (level {memberProfile.level})',
-            icon_url=guild_member.guild_avatar.url if guild_member and guild_member.guild_avatar != None else member.avatar.url)
+            icon_url=guild_member.guild_avatar.url if guild_member and guild_member.guild_avatar != None else avatar_url)
         alt_ids = getAltAccounts(guild_member if guild_member else member)
         if alt_ids:
             mentions = ', '.join(f'<@{uid}>' for uid in alt_ids)
