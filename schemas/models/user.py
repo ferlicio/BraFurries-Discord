@@ -29,7 +29,32 @@ class Item():
 
 
 class User():
-    def __init__(self, displayName, discordId:int, memberSince:datetime, approved = None, approvedAt:datetime = None, id:int = None, username:str = None,isVip:bool=False, isPartner:bool=False, level:int=0, locale=None, birthday:datetime=None, birthdayVerified:bool=False, vipType=None, vipSince=None, warnings:list[Warning]=[], xp=0, coins=0, inventory:list[Item]=[], staffOf:list[Event]=[]):
+    def __init__(
+        self,
+        displayName,
+        discordId: int,
+        memberSince: datetime,
+        approved=None,
+        approvedAt: datetime = None,
+        id: int = None,
+        username: str = None,
+        isVip: bool = False,
+        isPartner: bool = False,
+        level: int = 0,
+        locale=None,
+        birthday: datetime = None,
+        birthdayVerified: bool = False,
+        vipType=None,
+        vipSince=None,
+        warnings: list[Warning] = [],
+        xp=0,
+        coins=0,
+        inventory: list[Item] = [],
+        staffOf: list[Event] = [],
+        altAccounts: list[int] | None = None,
+        voiceRecord: dict | None = None,
+        gameRecord: dict | None = None,
+    ):
         self.id = id
         self.discordId = discordId
         self.displayName = displayName
@@ -51,6 +76,9 @@ class User():
         self.staffOf = staffOf
         self.username = username
         self.warnings = warnings
+        self.altAccounts = altAccounts or []
+        self.voiceRecord = voiceRecord
+        self.gameRecord = gameRecord
 
     def __str__(self):
         return f'Name: {self.name}'
