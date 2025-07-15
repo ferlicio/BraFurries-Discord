@@ -3,7 +3,7 @@ from colormath.color_conversions import convert_color
 from colormath.color_diff import _get_lab_color1_vector, _get_lab_color2_matrix
 from colormath import color_diff_matrix
 from core.AI_Functions.terceiras.openAI import retornaRespostaGPT
-import discord, asyncio, re, random, pytz, math
+import discord, asyncio, re, random, math
 from discord.ext import commands
 from core.database import *
 from schemas.models.bot import Config
@@ -13,10 +13,6 @@ from datetime import datetime, timedelta, timezone
 
 timezone_offset = -3.0  # Pacific Standard Time (UTC−08:00)
 def now() -> datetime: return (datetime.now(timezone(timedelta(hours=timezone_offset)))).replace(tzinfo=None)
-
-def getServerConfigurations(bot):
-    guild = bot.get_guild(DISCORD_GUILD_ID)
-    bot.config = Config(getConfig(guild))
 
 def getServerLevelConfig():
     levelConfig = getLevelConfig(DISCORD_GUILD_ID)

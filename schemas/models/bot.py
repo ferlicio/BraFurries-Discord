@@ -16,7 +16,7 @@ class Config:
 
 
 class MyBot(commands.Bot):
-    def __init__(self, config:Config, *args, **kwargs):
+    def __init__(self, config:list[Config], *args, **kwargs):
         super(MyBot, self).__init__(*args, **kwargs)
         self.config = config
         

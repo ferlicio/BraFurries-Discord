@@ -22,31 +22,48 @@ MONTHS = ['00','janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julh
 intents = discord.Intents.default()
 for DISCORD_INTENT in DISCORD_INTENTS:
     setattr(intents, DISCORD_INTENT, True)
-bot = MyBot(config=None,command_prefix=DISCORD_BOT_PREFIX, intents=discord.Intents.all())
+bot = MyBot(config=[],command_prefix=DISCORD_BOT_PREFIX, intents=discord.Intents.all())
 levelConfig = None
 timezone_offset = -3.0  # Pacific Standard Time (UTC−08:00)
 def now() -> datetime: return (datetime.now(timezone(timedelta(hours=timezone_offset)))).replace(tzinfo=None)
+initialized = False
 
+async def load_cogs():
+    for filename in os.listdir('cogs'):
+        if filename.endswith('.py'):
+            try:
+                await bot.load_extension(f'cogs.{filename[:-3]}')
+                print(f'Cog {filename} carregada com sucesso!')
+            except Exception as e:
+                print(f'Erro ao carregar cog {filename}: {e}')
 
-
-@bot.event
-async def on_ready():
-    print(f'Logado como {bot.user}')
+async def initialize_bot():
+    global initialized
+    if initialized: return
+    
+    guild = bot.get_guild(DISCORD_GUILD_ID)
+    bot.config.append(Config(getConfig(guild)))
+    await load_cogs()
     try:
         synced = await bot.tree.sync()
         print(f'{len(synced)} Comandos sincronizados com sucesso!')
     except Exception as e:
         print(e)
-    guild = bot.get_guild(DISCORD_GUILD_ID)
-    bot.config = Config(getConfig(guild))
-    print(bot.config)
+    print(bot.config[0])
     if DISCORD_BUMP_WARN: bumpWarning.start()
     if DISCORD_HAS_BUMP_REWARD: bumpReward.start()
     cronJobs12h.start()
     cronJobs2h.start()
     cronJobs30m.start()
     timeSpecificTasks.start()
-    configForVips.start()
+    initialized = True
+
+
+@bot.event
+async def on_ready():
+    print(f'Logado como {bot.user}')
+    await initialize_bot()
+    
     
 @bot.tree.error
 async def on_app_command_error(ctx, error):
@@ -108,8 +125,7 @@ async def cronJobs2h():
 
 @tasks.loop(minutes=30)
 async def cronJobs30m():
-    getServerConfigurations(bot)
-    if bot.config.hasLevels != False: 
+    if bot.config[0].hasLevels != False: 
         print('Configurações de níveis não encontradas')
         pass
     
@@ -247,63 +263,10 @@ Você pode não ter sido um dos top 3 bumpers, mas saiba que sua ajuda é muito 
         
 
 
-
-@tasks.loop(hours=24)
-async def configForVips():
-    guild = bot.get_guild(DISCORD_GUILD_ID)
-    vip_roles = getVIPConfigurations(guild)['VIPRoles']
-    vip_role_ids = [r.id for r in vip_roles]
-
-    if not vip_roles:
-        print(f'Não foi possível encontrar um cargo VIP no servidor {guild.name}')
-        return
-
-    for role in guild.roles:
-        if DISCORD_VIP_CUSTOM_ROLE_PREFIX in role.name:
-            if role.color == discord.Color.default() and role.display_icon is None:
-                await role.delete()
-                continue
-
-            for serverMember in list(role.members):
-                member_role_ids = [r.id for r in serverMember.roles]
-                if not any(vip_id in member_role_ids for vip_id in vip_role_ids):
-                    await serverMember.remove_roles(role)
-
-            if len(role.members) == 0:
-                match = re.search(rf'{re.escape(DISCORD_VIP_CUSTOM_ROLE_PREFIX)} (.*)', role.name)
-                member = guild.get_member_named(match.group(1)) if match else None
-                if member and any(vip_id in [r.id for r in member.roles] for vip_id in vip_role_ids):
-                    await member.add_roles(role)
-                else:
-                    await role.delete()
-                    continue
-            else:
-                member = role.members[0]
-                for extra in role.members[1:]:
-                    await extra.remove_roles(role)
-
-            expected_name = f"{DISCORD_VIP_CUSTOM_ROLE_PREFIX} {member.name}"
-            if role.name != expected_name:
-                await role.edit(name=expected_name)
-
-            hexColor = '#%02x%02x%02x' % (role.color.r, role.color.g, role.color.b)
-            saveCustomRole(guild.id, member, int(str(hexColor).replace('#','0x'),16))
-
-
 @bot.tree.command(name=f'testes', description=f'teste')
 async def test(ctx: discord.Interaction):
     pass
-        
-async def load_cogs():
-    for filename in os.listdir('cogs'):
-        if filename.endswith('.py'):
-            try:
-                await bot.load_extension(f'cogs.{filename[:-3]}')
-                print(f'Cog {filename} carregada com sucesso!')
-            except Exception as e:
-                print(f'Erro ao carregar cog {filename}: {e}')
 
 def run_discord_client(chatBot):
-    asyncio.run(load_cogs())
     bot.chatBot = chatBot
     bot.run(os.getenv('DISCORD_TOKEN'))

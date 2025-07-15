@@ -88,9 +88,7 @@ class ModerationCog(commands.Cog):
             duration = str(timedelta(seconds=voice_record["seconds"]))
             profileDescription += f"\n**Recorde em call:** {duration} (#{voice_record['rank']})"
 
-        game_record = getGameRecordPosition(
-            ctx.guild.id, member, blacklist=getBlacklistedGames(ctx.guild.id)
-        )
+        game_record = getGameRecordPosition(ctx.guild.id, member)
         if game_record and game_record["rank"] <= 10:
             duration = str(timedelta(seconds=game_record["seconds"]))
             game_name = game_record.get("game")
