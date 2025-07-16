@@ -317,6 +317,5 @@ async def test(ctx: discord.Interaction):
     pass
 
 def run_discord_client(chatBot):
-    asyncio.run(load_cogs())
     bot.chatBot = chatBot
     bot.run(os.getenv('DISCORD_TOKEN'))
