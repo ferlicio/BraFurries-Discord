@@ -295,7 +295,8 @@ def generateUserDescription(member: User, in_guild: bool = True):
     userDescription += f'\n'
     voice_record = member.voiceRecord
     game_record = member.gameRecord
-    if voice_record or game_record:
+    if (voice_record and voice_record["rank"] <= 10 or
+         game_record and game_record["rank"] <= 10):
         userDescription += f'\n**Recordes:**'
         if voice_record and voice_record["rank"] <= 10:
                 duration = str(timedelta(seconds=voice_record["seconds"]))
