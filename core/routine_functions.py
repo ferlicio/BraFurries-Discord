@@ -299,12 +299,12 @@ def generateUserDescription(member: User, in_guild: bool = True):
         userDescription += f'\n**Recordes:**'
         if voice_record and voice_record["rank"] <= 10:
                 duration = str(timedelta(seconds=voice_record["seconds"]))
-                profileDescription += f"\n**Recorde em call:** {duration} (#{voice_record['rank']})"
+                userDescription += f"\n**Recorde em call:** {duration} (#{voice_record['rank']})"
         if game_record and game_record["rank"] <= 10:
             duration = str(timedelta(seconds=game_record["seconds"]))
             game_name = game_record.get("game")
             game_info = f" - {game_name}" if game_name else ""
-            profileDescription += f"\n**Recorde em jogo:** {duration}{game_info} (#{game_record['rank']})"
+            userDescription += f"\n**Recorde em jogo:** {duration}{game_info} (#{game_record['rank']})"
         userDescription += f'\n'
     if member.locale or member.coins or member.inventory:
         userDescription += f'\nRegistrado em **{member.locale}**' if member.locale else ''
