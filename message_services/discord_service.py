@@ -27,19 +27,30 @@ levelConfig = None
 timezone_offset = -3.0  # Pacific Standard Time (UTC−08:00)
 def now() -> datetime: return (datetime.now(timezone(timedelta(hours=timezone_offset)))).replace(tzinfo=None)
 
+async def load_cogs():
+    for filename in os.listdir('cogs'):
+        if filename.endswith('.py'):
+            try:
+                await bot.load_extension(f'cogs.{filename[:-3]}')
+                print(f'Cog {filename} carregada com sucesso!')
+            except Exception as e:
+                print(f'Erro ao carregar cog {filename}: {e}')
 
 
-@bot.event
-async def on_ready():
-    print(f'Logado como {bot.user}')
+async def initialize_bot():
+    global initialized
+    if initialized: return
+
+    guild = bot.get_guild(DISCORD_GUILD_ID)
+    bot.config.append(Config(getConfig(guild)))
+    await load_cogs()
     try:
         synced = await bot.tree.sync()
         print(f'{len(synced)} Comandos sincronizados com sucesso!')
     except Exception as e:
         print(e)
-    guild = bot.get_guild(DISCORD_GUILD_ID)
-    bot.config = Config(getConfig(guild))
     print(bot.config)
+    print(bot.config[0])
     if DISCORD_BUMP_WARN: bumpWarning.start()
     if DISCORD_HAS_BUMP_REWARD: bumpReward.start()
     cronJobs12h.start()
@@ -47,6 +58,14 @@ async def on_ready():
     cronJobs30m.start()
     timeSpecificTasks.start()
     configForVips.start()
+    initialized = True
+
+
+@bot.event
+async def on_ready():
+    print(f'Logado como {bot.user}')
+    await initialize_bot()
+
     
 @bot.tree.error
 async def on_app_command_error(ctx, error):
@@ -293,15 +312,6 @@ async def configForVips():
 @bot.tree.command(name=f'testes', description=f'teste')
 async def test(ctx: discord.Interaction):
     pass
-        
-async def load_cogs():
-    for filename in os.listdir('cogs'):
-        if filename.endswith('.py'):
-            try:
-                await bot.load_extension(f'cogs.{filename[:-3]}')
-                print(f'Cog {filename} carregada com sucesso!')
-            except Exception as e:
-                print(f'Erro ao carregar cog {filename}: {e}')
 
 def run_discord_client(chatBot):
     asyncio.run(load_cogs())
