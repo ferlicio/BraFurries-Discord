@@ -130,7 +130,7 @@ async def cronJobs2h():
 
 @tasks.loop(minutes=30)
 async def cronJobs30m():
-    getServerConfigurations(bot)
+    # getServerConfigurations(bot)
     if bot.config.hasLevels != False: 
         print('Configurações de níveis não encontradas')
         pass
