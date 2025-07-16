@@ -83,29 +83,16 @@ class ModerationCog(commands.Cog):
         if not memberProfile:
             return await ctx.followup.send("Usuário não encontrado.")
 
-        alt_ids = memberProfile.altAccounts
-        voice_record = memberProfile.voiceRecord
-        game_record = memberProfile.gameRecord
         profileDescription = generateUserDescription(memberProfile, guild_member is not None)
-
-        if voice_record and voice_record["rank"] <= 10:
-            duration = str(timedelta(seconds=voice_record["seconds"]))
-            profileDescription += f"\n**Recorde em call:** {duration} (#{voice_record['rank']})"
-
-        if game_record and game_record["rank"] <= 10:
-            duration = str(timedelta(seconds=game_record["seconds"]))
-            game_name = game_record.get("game")
-            game_info = f" - {game_name}" if game_name else ""
-            profileDescription += f"\n**Recorde em jogo:** {duration}{game_info} (#{game_record['rank']})"
         embedUserProfile = discord.Embed(
             color=discord.Color.from_str('#febf10'),
-            title='{0} - ID {1:64}'.format(member.name, str(member.id)),
             description=profileDescription)
         avatar_url = member.avatar.url if member.avatar else member.default_avatar.url
         embedUserProfile.set_thumbnail(url=avatar_url)
         embedUserProfile.set_author(
             name=(guild_member.display_name if guild_member else member.name)+f' (level {memberProfile.level})',
             icon_url=guild_member.guild_avatar.url if guild_member and guild_member.guild_avatar != None else avatar_url)
+        alt_ids = memberProfile.altAccounts
         if alt_ids:
             mentions = ', '.join(f'<@{uid}>' for uid in alt_ids)
             embedUserProfile.add_field(name='Contas alternativas', value=mentions, inline=False)

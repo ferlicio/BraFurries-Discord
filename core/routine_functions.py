@@ -3,7 +3,7 @@ from colormath.color_conversions import convert_color
 from colormath.color_diff import _get_lab_color1_vector, _get_lab_color2_matrix
 from colormath import color_diff_matrix
 from core.AI_Functions.terceiras.openAI import retornaRespostaGPT
-import discord, asyncio, re, random, pytz, math
+import discord, asyncio, re, random, math
 from discord.ext import commands
 from core.database import *
 from schemas.models.bot import Config
@@ -13,10 +13,6 @@ from datetime import datetime, timedelta, timezone
 
 timezone_offset = -3.0  # Pacific Standard Time (UTC−08:00)
 def now() -> datetime: return (datetime.now(timezone(timedelta(hours=timezone_offset)))).replace(tzinfo=None)
-
-def getServerConfigurations(bot):
-    guild = bot.get_guild(DISCORD_GUILD_ID)
-    bot.config = Config(getConfig(guild))
 
 def getServerLevelConfig():
     levelConfig = getLevelConfig(DISCORD_GUILD_ID)
@@ -285,14 +281,9 @@ async def checkTicketsState(bot:commands.Bot):
 
 
 def generateUserDescription(member: User, in_guild: bool = True):
-    userDescription = f'## Membro '
-    if member.isPartner or member.isVip:
-        userDescription += f'VIP' if member.isPartner else ''
-        userDescription += f' - ' if member.isPartner and member.isVip else ''
-        userDescription += f'Parceiro Oficial' if member.isVip else ''
-        userDescription += f'Criador da BraFurries' if member.discordId == 167436511787220992 else ''
-    else:
-        userDescription += f'Comum'
+    userDescription = ''
+    userDescription += f'## Criador da BraFurries' if member.discordId == 167436511787220992 else ''
+    userDescription += '### ID {0:64} - {1}'.format(str(member.id), member.name)
     userDescription += f'\n<@{member.discordId}>'
     userDescription += f'\n**Tipo de VIF:** {member.vipType}' if member.isVip else ''
     if in_guild:
@@ -302,6 +293,19 @@ def generateUserDescription(member: User, in_guild: bool = True):
         userDescription += f'\n**Não está no servidor**'
     userDescription += f'\n**Aniversário:** {member.birthday.strftime("%d/%m/%Y")} ({math.floor((datetime.now().date()-member.birthday).days/365.2425)} anos)' if member.birthday != None else ''
     userDescription += f'\n'
+    voice_record = member.voiceRecord
+    game_record = member.gameRecord
+    if voice_record or game_record:
+        userDescription += f'\n**Recordes:**'
+        if voice_record and voice_record["rank"] <= 10:
+                duration = str(timedelta(seconds=voice_record["seconds"]))
+                profileDescription += f"\n**Recorde em call:** {duration} (#{voice_record['rank']})"
+        if game_record and game_record["rank"] <= 10:
+            duration = str(timedelta(seconds=game_record["seconds"]))
+            game_name = game_record.get("game")
+            game_info = f" - {game_name}" if game_name else ""
+            profileDescription += f"\n**Recorde em jogo:** {duration}{game_info} (#{game_record['rank']})"
+        userDescription += f'\n'
     if member.locale or member.coins or member.inventory:
         userDescription += f'\nRegistrado em **{member.locale}**' if member.locale else ''
         userDescription += f'\n**Moedas: ** {member.coins}' if member.coins else ''
