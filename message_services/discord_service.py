@@ -26,6 +26,7 @@ bot = MyBot(config=None,command_prefix=DISCORD_BOT_PREFIX, intents=discord.Inten
 levelConfig = None
 timezone_offset = -3.0  # Pacific Standard Time (UTC−08:00)
 def now() -> datetime: return (datetime.now(timezone(timedelta(hours=timezone_offset)))).replace(tzinfo=None)
+initialized = False
 
 async def load_cogs():
     for filename in os.listdir('cogs'):
