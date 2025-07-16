@@ -283,7 +283,7 @@ async def checkTicketsState(bot:commands.Bot):
 def generateUserDescription(member: User, in_guild: bool = True):
     userDescription = ''
     userDescription += f'## Criador da BraFurries' if member.discordId == 167436511787220992 else ''
-    userDescription += '### ID {0:64} - {1}'.format(str(member.id), member.name)
+    userDescription += '### ID {0:64} - {1}'.format(str(member.discordId), member.username)
     userDescription += f'\n<@{member.discordId}>'
     userDescription += f'\n**Tipo de VIF:** {member.vipType}' if member.isVip else ''
     if in_guild:
