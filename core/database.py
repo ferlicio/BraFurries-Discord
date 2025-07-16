@@ -58,7 +58,7 @@ def normalize_text(text: Optional[str]) -> str:
     return unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode("ascii")
 
 @contextmanager
-def pooled_connection(buffered: bool = False):
+def pooled_connection(buffered: bool = True):
     connection = connection_pool.get_connection()
     cursor: MySQLCursorAbstract = connection.cursor(dictionary=True, buffered=buffered)
     try:
@@ -476,11 +476,11 @@ def getAllBirthdays():
         myresult = [{'user_id': i["discord_user_id"], 'birth_date': i["birth_date"]} for i in myresult]
         return myresult
 
-def getUserInfo(user: Union[discord.Member, discord.User], guildId: int, userId: int = None, create_if_missing: bool = True) -> User :
+def getUserInfo(user: Union[discord.Member, discord.User], guildId: int, userId: int = None) -> User :
     """Retrieve a user from the database. Optionally registers the user if missing."""
     user_id = includeUser(user, guildId)
 
-    with pooled_connection(True) as cursor:
+    with pooled_connection() as cursor:
         query = (
             "SELECT user_discord.discord_user_id, user_discord.display_name, "
             "user_community_status.member_since, user_community_status.approved, "
@@ -1608,47 +1608,182 @@ def addGameToBlacklist(guild_id: int, game_name: str) -> bool:
 def getVoiceRecordPosition(guild_id: int, discord_user: discord.Member | discord.User):
     """Return a member's voice record rank and value in seconds."""
     user_id = includeUser(discord_user, guild_id)
+    sql = """
+    SELECT voice_time, rank
+    FROM (
+      SELECT
+        user_id,
+        voice_time,
+        RANK() OVER (
+          PARTITION BY server_guild_id
+          ORDER BY voice_time DESC
+        ) AS rank
+      FROM user_records
+      WHERE server_guild_id = %s
+    ) AS ranked
+    WHERE user_id = %s
+    """
     with pooled_connection() as cursor:
-        cursor.execute(
-            "SELECT voice_time FROM user_records WHERE user_id = %s AND server_guild_id = %s",
-            (user_id, guild_id),
-        )
+        cursor.execute(sql, (guild_id, user_id))
         row = cursor.fetchone()
         if not row or row["voice_time"] is None:
             return None
-        voice_time = row["voice_time"]
-        cursor.execute(
-            "SELECT COUNT(*) AS better FROM user_records WHERE server_guild_id = %s AND voice_time > %s",
-            (guild_id, voice_time),
-        )
-        rank = cursor.fetchone()["better"] + 1
-        return {"rank": rank, "seconds": voice_time}
+        return {"rank": row["rank"], "seconds": row["voice_time"]}
 
 
 def getGameRecordPosition(
     guild_id: int,
     discord_user: discord.Member | discord.User,
-    blacklist: list[str] | None = None,
+    user_id: int | None = None,
 ):
     """Return a member's game record rank, value in seconds and game name."""
-    user_id = includeUser(discord_user, guild_id)
+    user_id = includeUser(discord_user, guild_id) if user_id is None else user_id
+    sql = """
+    SELECT
+      ur.game_time,
+      ur.game_name,
+      (
+        SELECT COUNT(*) + 1
+          FROM user_records u2
+         WHERE u2.server_guild_id = ur.server_guild_id
+           AND u2.game_time > ur.game_time
+           AND NOT EXISTS (
+             SELECT 1
+               FROM blacklisted_games bg2
+              WHERE bg2.server_guild_id = u2.server_guild_id
+                AND bg2.game_name     = u2.game_name
+           )
+      ) AS rank
+    FROM user_records ur
+    WHERE ur.server_guild_id = %s
+      AND ur.user_id        = %s
+      AND NOT EXISTS (
+        SELECT 1
+          FROM blacklisted_games bg
+         WHERE bg.server_guild_id = ur.server_guild_id
+           AND bg.game_name       = ur.game_name
+      )
+    """
     with pooled_connection() as cursor:
-        exclusion = ""
-        if blacklist:
-            names = "', '".join(name.replace("'", "\\'") for name in blacklist)
-            exclusion = f" AND game_name NOT IN ('{names}')"
-        cursor.execute(
-            f"SELECT game_time, game_name FROM user_records WHERE user_id = %s AND server_guild_id = %s{exclusion}",
-            (user_id, guild_id),
-        )
+        cursor.execute(sql, (guild_id, user_id))
         row = cursor.fetchone()
         if not row or row["game_time"] is None:
             return None
-        game_time = row["game_time"]
-        game_name = row["game_name"]
-        cursor.execute(
-            f"SELECT COUNT(*) AS better FROM user_records WHERE server_guild_id = %s{exclusion} AND game_time > %s",
-            (guild_id, game_time),
+        return {
+            "rank":    row["rank"],
+            "seconds": row["game_time"],
+            "game":    row["game_name"]
+        }
+
+
+def getProfileData(guild_id: int, user: discord.Member | discord.User):
+    """Return a :class:`User` object with all profile information for the ``/perfil`` command using a single connection."""
+
+    user_id = includeUser(user, guild_id)
+
+    with pooled_connection() as cursor:
+        info_query = (
+            "SELECT user_discord.discord_user_id, user_discord.display_name, "
+            "user_community_status.member_since, user_community_status.approved, "
+            "user_community_status.approved_at, user_community_status.is_vip, "
+            "user_community_status.is_partner, user_level.current_level, "
+            "user_birthday.birth_date, user_birthday.verified, locale.locale_name, "
+            "user_economy.bank_balance "
+            "FROM users "
+            "LEFT JOIN user_discord ON users.id = user_discord.user_id "
+            "LEFT JOIN user_community_status ON users.id = user_community_status.user_id "
+            "LEFT JOIN user_birthday ON user_birthday.user_id = users.id "
+            "LEFT JOIN user_level ON user_level.user_id = users.id AND user_level.server_guild_id = %s "
+            "LEFT JOIN user_locale ON user_locale.user_id = users.id "
+            "LEFT JOIN locale ON locale.id = user_locale.locale_id "
+            "LEFT JOIN user_economy ON user_economy.user_id = users.id AND user_economy.server_guild_id = %s "
+            "WHERE user_discord.user_id = %s"
         )
-        rank = cursor.fetchone()["better"] + 1
-        return {"rank": rank, "seconds": game_time, "game": game_name}
+
+        cursor.execute(info_query, (guild_id, guild_id, user_id))
+        db_user = cursor.fetchone()
+        if not db_user:
+            return None
+
+        profile = User(
+            id=user_id,
+            discordId=user.id,
+            username=user.name,
+            displayName=getattr(user, "display_name", user.name),
+            memberSince=db_user["member_since"],
+            approved=db_user["approved"],
+            approvedAt=db_user["approved_at"],
+            isVip=db_user["is_vip"],
+            isPartner=db_user["is_partner"],
+            level=db_user["current_level"],
+            birthday=db_user["birth_date"],
+            birthdayVerified=db_user["verified"],
+            locale=db_user["locale_name"],
+            coins=db_user["bank_balance"],
+            warnings=[],
+            inventory=[],
+            staffOf=[],
+        )
+
+        cursor.execute(
+            "SELECT user_warnings.date, user_warnings.reason, user_warnings.expired "
+            "FROM user_warnings JOIN users ON user_warnings.user_id = users.id "
+            "WHERE users.id = %s",
+            (user_id,),
+        )
+        warnings = cursor.fetchall() or []
+        profile.warnings = [Warning(i["date"], i["reason"], i["expired"]) for i in warnings]
+
+        cursor.execute(
+            "SELECT discord_user_id FROM user_discord WHERE user_id = %s AND discord_user_id <> %s",
+            (user_id, user.id),
+        )
+        alt_rows = cursor.fetchall() or []
+        profile.altAccounts = [row["discord_user_id"] for row in alt_rows]
+
+        voice_sql = (
+            "SELECT voice_time, rank "
+            "FROM ("
+            "  SELECT user_id, voice_time, "
+            "    RANK() OVER (PARTITION BY server_guild_id ORDER BY voice_time DESC) AS rank "
+            "  FROM user_records "
+            "  WHERE server_guild_id = %s"
+            ") AS ranked "
+            "WHERE user_id = %s"
+        )
+        cursor.execute(voice_sql, (guild_id, user_id))
+        row = cursor.fetchone()
+        profile.voiceRecord = (
+            {"rank": row["rank"], "seconds": row["voice_time"]} if row and row["voice_time"] is not None else None
+        )
+
+        game_sql = (
+            "SELECT ur.game_time, ur.game_name, ("
+            "    SELECT COUNT(*) + 1"
+            "      FROM user_records u2"
+            "     WHERE u2.server_guild_id = ur.server_guild_id"
+            "       AND u2.game_time > ur.game_time"
+            "       AND NOT EXISTS ("
+            "         SELECT 1"
+            "           FROM blacklisted_games bg2"
+            "          WHERE bg2.server_guild_id = u2.server_guild_id"
+            "            AND bg2.game_name     = u2.game_name"
+            "       )"
+            ") AS rank "
+            "FROM user_records ur "
+            "WHERE ur.server_guild_id = %s "
+            "  AND ur.user_id        = %s "
+            "  AND NOT EXISTS ("
+            "    SELECT 1 FROM blacklisted_games bg "
+            "    WHERE bg.server_guild_id = ur.server_guild_id "
+            "      AND bg.game_name       = ur.game_name"
+            "  )"
+        )
+        cursor.execute(game_sql, (guild_id, user_id))
+        row = cursor.fetchone()
+        if row and row["game_time"] is not None:
+            profile.gameRecord = {"rank": row["rank"], "seconds": row["game_time"], "game": row["game_name"]}
+        else:
+            profile.gameRecord = None
+
+        return profile

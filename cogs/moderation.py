@@ -4,8 +4,7 @@ from discord.ext import commands
 from datetime import timedelta, datetime
 from dateutil import relativedelta
 from core.time_functions import now
-from core.database import getUserInfo
-from core.database import assignTempRole, getAltAccounts
+from core.database import assignTempRole, getProfileData
 from core.verifications import verifyDate
 from core.database import *
 from core.time_functions import MONTHS
@@ -80,17 +79,19 @@ class ModerationCog(commands.Cog):
     async def profile(self, ctx: discord.Interaction, member: discord.User):
         await ctx.response.defer()
         guild_member = ctx.guild.get_member(member.id)
-        memberProfile = getUserInfo(guild_member if guild_member else member, ctx.guild.id)
+        memberProfile = getProfileData(ctx.guild.id, guild_member if guild_member else member)
+        if not memberProfile:
+            return await ctx.followup.send("Usuário não encontrado.")
+
+        alt_ids = memberProfile.altAccounts
+        voice_record = memberProfile.voiceRecord
+        game_record = memberProfile.gameRecord
         profileDescription = generateUserDescription(memberProfile, guild_member is not None)
 
-        voice_record = getVoiceRecordPosition(ctx.guild.id, member)
         if voice_record and voice_record["rank"] <= 10:
             duration = str(timedelta(seconds=voice_record["seconds"]))
             profileDescription += f"\n**Recorde em call:** {duration} (#{voice_record['rank']})"
 
-        game_record = getGameRecordPosition(
-            ctx.guild.id, member, blacklist=getBlacklistedGames(ctx.guild.id)
-        )
         if game_record and game_record["rank"] <= 10:
             duration = str(timedelta(seconds=game_record["seconds"]))
             game_name = game_record.get("game")
@@ -105,7 +106,6 @@ class ModerationCog(commands.Cog):
         embedUserProfile.set_author(
             name=(guild_member.display_name if guild_member else member.name)+f' (level {memberProfile.level})',
             icon_url=guild_member.guild_avatar.url if guild_member and guild_member.guild_avatar != None else avatar_url)
-        alt_ids = getAltAccounts(guild_member if guild_member else member)
         if alt_ids:
             mentions = ', '.join(f'<@{uid}>' for uid in alt_ids)
             embedUserProfile.add_field(name='Contas alternativas', value=mentions, inline=False)
