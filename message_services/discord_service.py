@@ -41,16 +41,18 @@ async def initialize_bot():
     global initialized
     if initialized: return
 
-    guild = bot.get_guild(DISCORD_GUILD_ID)
-    bot.config.append(Config(getConfig(guild)))
+    # guild = bot.get_guild(DISCORD_GUILD_ID)
+    # bot.config.append(Config(getConfig(guild)))
     await load_cogs()
+    guild = bot.get_guild(DISCORD_GUILD_ID)
+    bot.config = Config(getConfig(guild))
     try:
         synced = await bot.tree.sync()
         print(f'{len(synced)} Comandos sincronizados com sucesso!')
     except Exception as e:
         print(e)
     print(bot.config)
-    print(bot.config[0])
+    # print(bot.config[0])
     if DISCORD_BUMP_WARN: bumpWarning.start()
     if DISCORD_HAS_BUMP_REWARD: bumpReward.start()
     cronJobs12h.start()
