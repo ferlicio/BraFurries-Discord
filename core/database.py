@@ -48,7 +48,10 @@ def getCredentials():
     return creds
     
 connection_pool = pooling.MySQLConnectionPool(
-    pool_name="Discord", pool_size=5, **db_config
+    pool_name="Discord", 
+    pool_size=10, 
+    pool_reset_session=False,
+    **db_config
 )
 
 def normalize_text(text: Optional[str]) -> str:

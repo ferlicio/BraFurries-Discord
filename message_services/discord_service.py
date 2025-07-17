@@ -35,9 +35,7 @@ async def load_cogs():
         if filename.endswith('.py'):
             try:
                 await bot.load_extension(f'cogs.{filename[:-3]}')
-                print(f'Cog {filename} carregada com sucesso!')
             except Exception as e:
-                print(f'Erro ao carregar cog {filename}: {e}')
                 errors.append((filename, e))
     return errors
 
@@ -56,6 +54,7 @@ async def initialize_bot():
         for filename, err in errors:
             print(f' - {filename}: {err}')
     else:
+        print('Todas as cogs carregadas com sucesso!')
         try:
             synced = await bot.tree.sync()
             print(f'{len(synced)} Comandos sincronizados com sucesso!')
@@ -185,11 +184,11 @@ async def bumpReward():
     if now().day == 1:
         #pegas as mensagens do ultimo mês no canal de bump
         channel = bot.get_channel(853971735514316880)
-        guild = bot.get_guild(DISCORD_GUILD_ID)
+        guild = channel.guild
         vipRoles = getVIPConfigurations(guild)['VIPRoles']
         bumpers = {}
         bumpersNames = {}
-        async for msg in channel.history(after=now()-timedelta(days=30)):
+        async for msg in channel.history(after=now() - relativedelta.relativedelta(months=1)):
             # se a mensagem for do bot e for do mês passado, conta como bump
             if msg.author.id == 302050872383242240:
                 # agora vamos criar uma key para cada membro que deu bump
@@ -279,46 +278,47 @@ Você pode não ter sido um dos top 3 bumpers, mas saiba que sua ajuda é muito 
 
 
 
-@tasks.loop(hours=24)
+@tasks.loop(hours=1)
 async def configForVips():
-    guild = bot.get_guild(DISCORD_GUILD_ID)
-    vip_roles = getVIPConfigurations(guild)['VIPRoles']
-    vip_role_ids = [r.id for r in vip_roles]
+    if now().hour == 3:
+        guild = bot.get_guild(DISCORD_GUILD_ID)
+        vip_roles = getVIPConfigurations(guild)['VIPRoles']
+        vip_role_ids = [r.id for r in vip_roles]
 
-    if not vip_roles:
-        print(f'Não foi possível encontrar um cargo VIP no servidor {guild.name}')
-        return
+        if not vip_roles:
+            print(f'Não foi possível encontrar um cargo VIP no servidor {guild.name}')
+            return
 
-    for role in guild.roles:
-        if DISCORD_VIP_CUSTOM_ROLE_PREFIX in role.name:
-            if role.color == discord.Color.default() and role.display_icon is None:
-                await role.delete()
-                continue
-
-            for serverMember in list(role.members):
-                member_role_ids = [r.id for r in serverMember.roles]
-                if not any(vip_id in member_role_ids for vip_id in vip_role_ids):
-                    await serverMember.remove_roles(role)
-
-            if len(role.members) == 0:
-                match = re.search(rf'{re.escape(DISCORD_VIP_CUSTOM_ROLE_PREFIX)} (.*)', role.name)
-                member = guild.get_member_named(match.group(1)) if match else None
-                if member and any(vip_id in [r.id for r in member.roles] for vip_id in vip_role_ids):
-                    await member.add_roles(role)
-                else:
+        for role in guild.roles:
+            if DISCORD_VIP_CUSTOM_ROLE_PREFIX in role.name:
+                if role.color == discord.Color.default() and role.display_icon is None:
                     await role.delete()
                     continue
-            else:
-                member = role.members[0]
-                for extra in role.members[1:]:
-                    await extra.remove_roles(role)
 
-            expected_name = f"{DISCORD_VIP_CUSTOM_ROLE_PREFIX} {member.name}"
-            if role.name != expected_name:
-                await role.edit(name=expected_name)
+                for serverMember in list(role.members):
+                    member_role_ids = [r.id for r in serverMember.roles]
+                    if not any(vip_id in member_role_ids for vip_id in vip_role_ids):
+                        await serverMember.remove_roles(role)
 
-            hexColor = '#%02x%02x%02x' % (role.color.r, role.color.g, role.color.b)
-            saveCustomRole(guild.id, member, int(str(hexColor).replace('#','0x'),16))
+                if len(role.members) == 0:
+                    match = re.search(rf'{re.escape(DISCORD_VIP_CUSTOM_ROLE_PREFIX)} (.*)', role.name)
+                    member = guild.get_member_named(match.group(1)) if match else None
+                    if member and any(vip_id in [r.id for r in member.roles] for vip_id in vip_role_ids):
+                        await member.add_roles(role)
+                    else:
+                        await role.delete()
+                        continue
+                else:
+                    member = role.members[0]
+                    for extra in role.members[1:]:
+                        await extra.remove_roles(role)
+
+                expected_name = f"{DISCORD_VIP_CUSTOM_ROLE_PREFIX} {member.name}"
+                if role.name != expected_name:
+                    await role.edit(name=expected_name)
+
+                hexColor = '#%02x%02x%02x' % (role.color.r, role.color.g, role.color.b)
+                saveCustomRole(guild.id, member, int(str(hexColor).replace('#','0x'),16))
 
 
 @bot.tree.command(name=f'testes', description=f'teste')

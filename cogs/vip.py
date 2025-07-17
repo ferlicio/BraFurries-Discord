@@ -2,6 +2,7 @@ from discord.ext import commands
 from discord import app_commands
 import discord
 import re
+from core.auxiliar_functions import edit_role_colors
 from core.routine_functions import colorIsAvailable, addVipRole
 from core.database import saveCustomRole
 from settings import DISCORD_VIP_ROLES_ID
@@ -48,6 +49,45 @@ class VipCog(commands.Cog):
                 print(e)
                 return await ctx.response.send_message(content='''Algo deu errado, avise o titio sobre!''', ephemeral=True)
         return await ctx.response.send_message(content='Você não é vip! você não pode fazer isso', ephemeral=True)
+    
+    @app_commands.command(name='vip-customizar', description='customiza o cargo VIP do membro')
+    async def customizeVipRole(self, ctx: discord.Interaction, cor: str = None, cor2: str = None, icone: str = None):
+        if cor is None and cor2 is None and icone is None:
+            return await ctx.response.send_message(content='Você precisa informar pelo menos uma cor ou um ícone para customizar o cargo VIP', ephemeral=True)
+        userVipRoles = [role.id for role in ctx.user.roles if DISCORD_VIP_ROLES_ID.__contains__(role.id)]
+        if userVipRoles:
+            if cor is not None:
+                if not re.match(r'^#(?:[a-fA-F0-9]{3}){1,2}$', cor):
+                    return await ctx.response.send_message(content='''# Cor invalida!\nVocê precisa informar uma cor no formato Hex (#000000).\nVocê pode procurar por uma cor em https://htmlcolorcodes.com/color-picker/ e testa-la usando o comando "?color #000000"''', ephemeral=False)
+                if not await colorIsAvailable(cor):
+                    return await ctx.response.send_message(content='''Cor inválida! você precisa informar uma cor que não seja muito parecida com a cor de algum cargo da staff''', ephemeral=True)
+            if icone is not None:
+                if '<' in icone or '>' in icone or ':' in icone:
+                    try:
+                        emoji = ctx.guild.get_emoji(int(icone.replace('<','').replace('>','').split(':')[2]))
+                    except:
+                        return await ctx.response.send_message(content='''Ícone inválido! apenas emojis do servidor são permitidos''', ephemeral=True)
+                    icone_bytes = await emoji.read()
+            await ctx.response.defer()
+            customRole = await addVipRole(ctx)
+            colors = [cor, cor2]
+            colors = [c for c in colors if c is not None]
+            if colors:
+                try:
+                    await edit_role_colors(self.bot, customRole, colors)
+                except Exception as e:
+                    print(e)
+                    return await ctx.followup.send(content='''Algo deu errado ao mudar a cor do cargo VIP, avise o titio sobre!''', ephemeral=False)
+            if icone is not None:
+                try:
+                    await customRole.edit(display_icon=icone_bytes)
+                except Exception as e:
+                    print(e)
+                    return await ctx.followup.send(content='''Algo deu errado ao mudar o ícone do cargo VIP, avise o titio sobre!''', ephemeral=False)
+            await ctx.followup.send(content=f'Cargo VIP personalizado com sucesso! \n- Cores: {colors}, \n- Ícone: {icone}', ephemeral=False)
+            return saveCustomRole(ctx.guild_id, ctx.user, color=colors, iconId=emoji.id if 'emoji' in locals() and emoji is not None else None)
+        return
+        
 
 
 async def setup(bot: commands.Bot):
