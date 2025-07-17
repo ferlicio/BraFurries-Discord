@@ -29,6 +29,8 @@ def now() -> datetime: return (datetime.now(timezone(timedelta(hours=timezone_of
 initialized = False
 
 async def load_cogs():
+    """Carrega todas as cogs do bot e retorna uma lista de erros."""
+    errors = []
     for filename in os.listdir('cogs'):
         if filename.endswith('.py'):
             try:
@@ -36,6 +38,8 @@ async def load_cogs():
                 print(f'Cog {filename} carregada com sucesso!')
             except Exception as e:
                 print(f'Erro ao carregar cog {filename}: {e}')
+                errors.append((filename, e))
+    return errors
 
 
 async def initialize_bot():
@@ -44,14 +48,19 @@ async def initialize_bot():
 
     # guild = bot.get_guild(DISCORD_GUILD_ID)
     # bot.config.append(Config(getConfig(guild)))
-    await load_cogs()
+    errors = await load_cogs()
     guild = bot.get_guild(DISCORD_GUILD_ID)
     bot.config = Config(getConfig(guild))
-    try:
-        synced = await bot.tree.sync()
-        print(f'{len(synced)} Comandos sincronizados com sucesso!')
-    except Exception as e:
-        print(e)
+    if errors:
+        print('Falha ao carregar todas as cogs. Sincronização de comandos cancelada.')
+        for filename, err in errors:
+            print(f' - {filename}: {err}')
+    else:
+        try:
+            synced = await bot.tree.sync()
+            print(f'{len(synced)} Comandos sincronizados com sucesso!')
+        except Exception as e:
+            print(e)
     print(bot.config)
     # print(bot.config[0])
     if DISCORD_BUMP_WARN: bumpWarning.start()
