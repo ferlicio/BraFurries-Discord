@@ -42,22 +42,59 @@ def add_time(
     week = week or current_week()
     update_time = update_time or now()
     with pooled_connection() as cursor:
-        sql_month = """
-        INSERT INTO stats_monthly_game_activity (server_guild_id, month, game_name, seconds, last_update)
-        VALUES (%s, %s, %s, %s, %s)
-        ON DUPLICATE KEY UPDATE
-            seconds = seconds + VALUES(seconds),
-            last_update = VALUES(last_update);
-        """
-        cursor.execute(sql_month, (guild_id, month, game, seconds, update_time))
-        sql_week = """
-        INSERT INTO stats_weekly_game_activity (server_guild_id, week, game_name, seconds, last_update)
-        VALUES (%s, %s, %s, %s, %s)
-        ON DUPLICATE KEY UPDATE
-            seconds = seconds + VALUES(seconds),
-            last_update = VALUES(last_update);
-        """
-        cursor.execute(sql_week, (guild_id, week, game, seconds, update_time))
+        cursor.execute(
+            """
+            SELECT id FROM stats_monthly_game_activity
+             WHERE server_guild_id = %s AND month = %s AND game_name = %s
+            """,
+            (guild_id, month, game),
+        )
+        if cursor.fetchone():
+            cursor.execute(
+                """
+                UPDATE stats_monthly_game_activity
+                   SET seconds = seconds + %s,
+                       last_update = %s
+                 WHERE server_guild_id = %s AND month = %s AND game_name = %s
+                """,
+                (seconds, update_time, guild_id, month, game),
+            )
+        else:
+            cursor.execute(
+                """
+                INSERT INTO stats_monthly_game_activity
+                    (server_guild_id, month, game_name, seconds, last_update)
+                VALUES (%s, %s, %s, %s, %s)
+                """,
+                (guild_id, month, game, seconds, update_time),
+            )
+
+        cursor.execute(
+            """
+            SELECT id FROM stats_weekly_game_activity
+             WHERE server_guild_id = %s AND week = %s AND game_name = %s
+            """,
+            (guild_id, week, game),
+        )
+        if cursor.fetchone():
+            cursor.execute(
+                """
+                UPDATE stats_weekly_game_activity
+                   SET seconds = seconds + %s,
+                       last_update = %s
+                 WHERE server_guild_id = %s AND week = %s AND game_name = %s
+                """,
+                (seconds, update_time, guild_id, week, game),
+            )
+        else:
+            cursor.execute(
+                """
+                INSERT INTO stats_weekly_game_activity
+                    (server_guild_id, week, game_name, seconds, last_update)
+                VALUES (%s, %s, %s, %s, %s)
+                """,
+                (guild_id, week, game, seconds, update_time),
+            )
 
 
 def get_trending_games(guild_id: int, month: str = None) -> Dict[str, int]:
