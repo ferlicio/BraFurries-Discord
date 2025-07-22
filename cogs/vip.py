@@ -12,6 +12,7 @@ class VipCog(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
         super().__init__()
+        self.configForVips.start()
         
     @app_commands.command(name='vip-mudar_cor', description='Muda a cor do cargo VIP do membro')
     async def changeVipColor(self, ctx: discord.Interaction, cor: str):
@@ -87,7 +88,48 @@ class VipCog(commands.Cog):
             await ctx.followup.send(content=f'Cargo VIP personalizado com sucesso! \n- Cores: {colors}, \n- Ícone: {icone}', ephemeral=False)
             return saveCustomRole(ctx.guild_id, ctx.user, color=colors, iconId=emoji.id if 'emoji' in locals() and emoji is not None else None)
         return
-        
+
+    @tasks.loop(hours=1)
+    async def configForVips():
+        if now().hour == 3:
+            guild = bot.get_guild(DISCORD_GUILD_ID)
+            vip_roles = getVIPConfigurations(guild)['VIPRoles']
+            vip_role_ids = [r.id for r in vip_roles]
+
+            if not vip_roles:
+                print(f'Não foi possível encontrar um cargo VIP no servidor {guild.name}')
+                return
+
+            for role in guild.roles:
+                if DISCORD_VIP_CUSTOM_ROLE_PREFIX in role.name:
+                    if role.color == discord.Color.default() and role.display_icon is None:
+                        await role.delete()
+                        continue
+
+                    for serverMember in list(role.members):
+                        member_role_ids = [r.id for r in serverMember.roles]
+                        if not any(vip_id in member_role_ids for vip_id in vip_role_ids):
+                            await serverMember.remove_roles(role)
+
+                    if len(role.members) == 0:
+                        match = re.search(rf'{re.escape(DISCORD_VIP_CUSTOM_ROLE_PREFIX)} (.*)', role.name)
+                        member = guild.get_member_named(match.group(1)) if match else None
+                        if member and any(vip_id in [r.id for r in member.roles] for vip_id in vip_role_ids):
+                            await member.add_roles(role)
+                        else:
+                            await role.delete()
+                            continue
+                    else:
+                        member = role.members[0]
+                        for extra in role.members[1:]:
+                            await extra.remove_roles(role)
+
+                    expected_name = f"{DISCORD_VIP_CUSTOM_ROLE_PREFIX} {member.name}"
+                    if role.name != expected_name:
+                        await role.edit(name=expected_name)
+
+                    hexColor = '#%02x%02x%02x' % (role.color.r, role.color.g, role.color.b)
+                    saveCustomRole(guild.id, member, int(str(hexColor).replace('#','0x'),16))
 
 
 async def setup(bot: commands.Bot):
