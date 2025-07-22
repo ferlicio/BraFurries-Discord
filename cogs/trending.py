@@ -127,7 +127,7 @@ class TrendingCog(commands.Cog):
             else:
                 self.sessions.pop(key, None)
 
-    @tasks.loop(minutes=2)
+    @tasks.loop(minutes=8)
     async def save_activity(self):
         if not self.sessions:
             return
