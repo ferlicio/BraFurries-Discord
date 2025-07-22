@@ -13,6 +13,9 @@ class VipCog(commands.Cog):
         self.bot = bot
         super().__init__()
         self.configForVips.start()
+
+    def cog_unload(self):
+        self.configForVips.cancel()
         
     @app_commands.command(name='vip-mudar_cor', description='Muda a cor do cargo VIP do membro')
     async def changeVipColor(self, ctx: discord.Interaction, cor: str):
