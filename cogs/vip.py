@@ -6,6 +6,7 @@ from core.auxiliar_functions import edit_role_colors
 from core.routine_functions import colorIsAvailable, addVipRole
 from core.database import saveCustomRole
 from settings import DISCORD_VIP_ROLES_ID
+from core.time_functions import now
 
 
 class VipCog(commands.Cog):
