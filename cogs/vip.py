@@ -93,7 +93,7 @@ class VipCog(commands.Cog):
         return
 
     @tasks.loop(hours=1)
-    async def configForVips():
+    async def configForVips(self):
         if now().hour == 3:
             guild = bot.get_guild(DISCORD_GUILD_ID)
             vip_roles = getVIPConfigurations(guild)['VIPRoles']
