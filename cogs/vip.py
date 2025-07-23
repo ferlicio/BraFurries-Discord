@@ -62,7 +62,6 @@ class VipCog(commands.Cog):
                 content=(
                     'Você precisa informar pelo menos uma cor ou um ícone para customizar o cargo VIP. '
                     'Use o valor "0" nos campos para voltar às configurações padrão. '
-                    'O cargo será deletado caso permaneça sem ícone e na cor padrão.'
                 ),
                 ephemeral=True,
             )
@@ -127,10 +126,6 @@ class VipCog(commands.Cog):
             elif raw_icone == "0":
                 changes.append("- Ícone removido")
 
-            if customRole.color == discord.Color.default() and customRole.display_icon is None:
-                await customRole.delete()
-                await ctx.followup.send(content="Cargo VIP removido por estar sem ícone e na cor padrão.", ephemeral=False)
-                return
             else:
                 await ctx.followup.send(
                     content="Cargo VIP personalizado com sucesso!\n" + "\n".join(changes),
