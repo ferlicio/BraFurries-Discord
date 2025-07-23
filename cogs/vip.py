@@ -99,7 +99,6 @@ class VipCog(commands.Cog):
                     return await ctx.followup.send(content='''Algo deu errado ao mudar a cor do cargo VIP, avise o titio sobre!''', ephemeral=False)
             elif raw_cor == "0" or raw_cor2 == "0":
                 try:
-                    await edit_role_colors(self.bot, customRole, [])
                     await customRole.edit(color=discord.Color.default())
                 except Exception as e:
                     print(e)
@@ -129,9 +128,6 @@ class VipCog(commands.Cog):
 
             if customRole.color == discord.Color.default() and customRole.display_icon is None:
                 await customRole.delete()
-                delete_role = True
-
-            if delete_role:
                 await ctx.followup.send(content="Cargo VIP removido por estar sem ícone e na cor padrão.", ephemeral=False)
                 return
             else:
