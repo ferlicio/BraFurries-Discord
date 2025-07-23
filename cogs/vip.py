@@ -58,9 +58,23 @@ class VipCog(commands.Cog):
     @app_commands.command(name='vip-customizar', description='customiza o cargo VIP do membro')
     async def customizeVipRole(self, ctx: discord.Interaction, cor: str = None, cor2: str = None, icone: str = None):
         if cor is None and cor2 is None and icone is None:
-            return await ctx.response.send_message(content='Você precisa informar pelo menos uma cor ou um ícone para customizar o cargo VIP', ephemeral=True)
+            return await ctx.response.send_message(
+                content=(
+                    'Você precisa informar pelo menos uma cor ou um ícone para customizar o cargo VIP. '
+                    'Use o valor "0" nos campos para voltar às configurações padrão. '
+                    'O cargo será deletado caso permaneça sem ícone e na cor padrão.'
+                ),
+                ephemeral=True,
+            )
         userVipRoles = [role.id for role in ctx.user.roles if DISCORD_VIP_ROLES_ID.__contains__(role.id)]
         if userVipRoles:
+            # keep raw values to detect explicit resets
+            raw_cor, raw_cor2, raw_icone = cor, cor2, icone
+            # interpret value "0" as a request to reset the field
+            cor = None if cor == "0" else cor
+            cor2 = None if cor2 == "0" else cor2
+            icone = None if icone == "0" else icone
+
             if cor is not None:
                 if not re.match(r'^#(?:[a-fA-F0-9]{3}){1,2}$', cor):
                     return await ctx.response.send_message(content='''# Cor invalida!\nVocê precisa informar uma cor no formato Hex (#000000).\nVocê pode procurar por uma cor em https://htmlcolorcodes.com/color-picker/ e testa-la usando o comando "?color #000000"''', ephemeral=False)
@@ -83,14 +97,50 @@ class VipCog(commands.Cog):
                 except Exception as e:
                     print(e)
                     return await ctx.followup.send(content='''Algo deu errado ao mudar a cor do cargo VIP, avise o titio sobre!''', ephemeral=False)
+            elif raw_cor == "0" or raw_cor2 == "0":
+                try:
+                    await customRole.edit(color=discord.Color.default())
+                except Exception as e:
+                    print(e)
+                    return await ctx.followup.send(content='''Algo deu errado ao mudar a cor do cargo VIP, avise o titio sobre!''', ephemeral=False)
             if icone is not None:
                 try:
                     await customRole.edit(display_icon=icone_bytes)
                 except Exception as e:
                     print(e)
                     return await ctx.followup.send(content='''Algo deu errado ao mudar o ícone do cargo VIP, avise o titio sobre!''', ephemeral=False)
-            await ctx.followup.send(content=f'Cargo VIP personalizado com sucesso! \n- Cores: {colors}, \n- Ícone: {icone}', ephemeral=False)
-            return saveCustomRole(ctx.guild_id, ctx.user, color=colors, iconId=emoji.id if 'emoji' in locals() and emoji is not None else None)
+            elif raw_icone == "0":
+                try:
+                    await customRole.edit(display_icon=None)
+                except Exception as e:
+                    print(e)
+                    return await ctx.followup.send(content='''Algo deu errado ao mudar o ícone do cargo VIP, avise o titio sobre!''', ephemeral=False)
+            delete_role = False
+            changes = []
+            if colors:
+                changes.append(f"- Cores: {colors}")
+            elif raw_cor == "0" or raw_cor2 == "0":
+                changes.append("- Cores removidas")
+            if icone is not None:
+                changes.append(f"- Ícone: {icone}")
+            elif raw_icone == "0":
+                changes.append("- Ícone removido")
+
+            if customRole.color == discord.Color.default() and customRole.display_icon is None:
+                await customRole.delete()
+                await ctx.followup.send(content="Cargo VIP removido por estar sem ícone e na cor padrão.", ephemeral=False)
+                return
+            else:
+                await ctx.followup.send(
+                    content="Cargo VIP personalizado com sucesso!\n" + "\n".join(changes),
+                    ephemeral=False,
+                )
+                return saveCustomRole(
+                    ctx.guild_id,
+                    ctx.user,
+                    color=colors if colors else None,
+                    iconId=emoji.id if 'emoji' in locals() and emoji is not None else None,
+                )
         return
 
     @tasks.loop(hours=1)
