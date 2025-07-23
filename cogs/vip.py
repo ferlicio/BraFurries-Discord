@@ -60,7 +60,7 @@ class VipCog(commands.Cog):
         if cor is None and cor2 is None and icone is None:
             return await ctx.response.send_message(
                 content=(
-                    'Você precisa informar pelo menos uma cor ou um ícone para customizar o cargo VIP. '
+                    'Você precisa informar pelo menos uma cor ou um ícone para customizar o cargo VIP.\n'
                     'Use o valor "0" nos campos para voltar às configurações padrão. '
                 ),
                 ephemeral=True,
