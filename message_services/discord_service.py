@@ -3,6 +3,7 @@ from core.routine_functions import *
 from core.discord_events import *
 from core.verifications import *
 from core.database import *
+from settings import DISCORD_MEMBER_NOT_VERIFIED_ROLE
 from discord.ext import tasks
 from discord import app_commands
 from schemas.models.bot import *
@@ -123,7 +124,13 @@ async def on_reaction_add(reaction, user):
 
 @bot.event
 async def on_member_update(before:discord.member.Member, after:discord.member.Member):
-    checkRolesUpdate(before, after)
+    changes = checkRolesUpdate(before, after)
+    visitor_role = after.guild.get_role(DISCORD_MEMBER_NOT_VERIFIED_ROLE)
+    if changes and visitor_role in changes.get('removidos', []):
+        try:
+            includeUser(after, after.guild.id, now())
+        except Exception as e:
+            print(f'Erro ao registrar membro aprovado: {e}')
 
 
 
