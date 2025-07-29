@@ -149,11 +149,10 @@ async def cronJobs30m():
         print('Configurações de níveis não encontradas')
         pass
     
-@tasks.loop(minutes=1)
+@tasks.loop(hours=1)
 async def timeSpecificTasks():
-    """ if now().hour == 0 and now().minute == 0:
-        resetDailyCoins()"""
-    if now().hour == 10 and now().minute == 10:
+    """Executa verificações que dependem de horários específicos."""
+    if now().hour == 12:
         await sendBirthdayMessages(bot)
 
 
