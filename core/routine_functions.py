@@ -3,7 +3,7 @@ from colormath.color_conversions import convert_color
 from colormath.color_diff import _get_lab_color1_vector, _get_lab_color2_matrix
 from colormath import color_diff_matrix
 from core.AI_Functions.terceiras.openAI import retornaRespostaGPT
-import discord, asyncio, re, random, math
+import discord, asyncio, re, random, math, logging
 from discord.ext import commands
 from core.database import *
 from schemas.models.bot import Config
@@ -239,21 +239,34 @@ async def botAnswerOnMention(bot, message:discord.Message):
             response = '''coddy está a mimir, às 8 horas eu volto 😴'''
     
     if not response:
-        #respondendo
+        gpt_properties = hasGPTEnabled(message.guild)
+        if gpt_properties['enabled']:
+            memberRoles = [role.name for role in message.author.roles]
+            memberGenre = memberRoles[(next(i for i, item in enumerate(memberRoles) if 'Gênero' in item))-1]
+            memberGenre = "ele" if "Membro" in memberGenre else "ela" if "Membra" in memberGenre else "ele/ela"
+            memberSpecies = memberRoles[(next(i for i, item in enumerate(memberRoles) if 'Espécies' in item))-1]
+            try:
+                response = await retornaRespostaGPT(
+                    inputChat,
+                    message.author.display_name if message.author.display_name else message.author.name,
+                    memberGenre,
+                    memberSpecies,
+                    bot,
+                    message.channel.id,
+                    'Discord',
+                    gpt_properties['model']
+                )
+            except Exception as e:
+                logging.error("Erro ao obter resposta do GPT", exc_info=True)
+        else:
+            response = '''Eu to desativado por enquanto, mas logo logo eu volto! \nFale com o titio derg se você quiser saber mais sobre como ajudar a me manter ativo ;3'''
+
+    if not response or not str(response).strip():
+        response = 'Desculpa, deu ruim aqui, não consegui responder agora :c'
+
+    async with message.channel.typing():
         await asyncio.sleep(2)
-        async with message.channel.typing():
-            gpt_properties = hasGPTEnabled(message.guild)
-            if gpt_properties['enabled']:
-                memberRoles = [role.name for role in message.author.roles]
-                memberGenre = memberRoles[(next(i for i, item in enumerate(memberRoles) if 'Gênero' in item))-1]
-                memberGenre = "ele" if "Membro" in memberGenre else "ela" if "Membra" in memberGenre else "ele/ela"
-                memberSpecies = memberRoles[(next(i for i, item in enumerate(memberRoles) if 'Espécies' in item))-1]
-                response = await retornaRespostaGPT(inputChat, message.author.display_name if message.author.display_name
-                                                    else message.author.name, memberGenre, memberSpecies, bot, message.channel.id, 'Discord', gpt_properties['model'])
-            else:
-                response = '''Eu to desativado por enquanto, mas logo logo eu volto! \nFale com o titio derg se você quiser saber mais sobre como ajudar a me manter ativo ;3'''
-            await asyncio.sleep(2)
-    await message.channel.send(response)
+        await message.channel.send(response)
     await bot.process_commands(message)
 
 
