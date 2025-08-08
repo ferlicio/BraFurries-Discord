@@ -93,7 +93,7 @@ async def retornaRespostaGPT(texto, usuario, genero, especie, bot:commands.Bot, 
                 }
             ],
             max_completion_tokens=150,
-            temperature=1.3,
+            temperature=1,
             frequency_penalty=0,
             top_p=1,
             presence_penalty=0,
