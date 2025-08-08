@@ -92,17 +92,17 @@ async def retornaRespostaGPT(texto, usuario, genero, especie, bot:commands.Bot, 
                     "content": texto
                 }
             ],
-            max_tokens = 150,
-            temperature = 1.3,
-            frequency_penalty = 0,
+            max_completion_tokens=150,
+            temperature=1.3,
+            frequency_penalty=0,
             top_p=1,
-            presence_penalty = 0,
+            presence_penalty=0,
             n=1
         )
         resposta = resposta.choices[0].message.content
         return resposta
     except Exception as e:
         print(e)
-        if e.__contains__('429'):
+        if getattr(e, 'status_code', None) == 429 or '429' in str(e):
             return "Eu acho que meus créditos acabaram 😢 \nFale com o titio derg se você quiser saber mais sobre como me ajudar"
-        else: return "Calma um pouquinho, acho que eu to tendo uns problemas aqui... "
+        return "Calma um pouquinho, acho que eu to tendo uns problemas aqui... "
