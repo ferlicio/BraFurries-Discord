@@ -217,6 +217,8 @@ Caso precise, as regras estão disponíveis em <#753346684695609394>''')
 
 async def botAnswerOnMention(bot, message:discord.Message):
     inputChat = message.content
+    for member in message.mentions:
+        inputChat = re.sub(rf"<@!?{member.id}>", member.display_name, inputChat)
     response = None
     #se for uma DM e não for o criador, não responde
     if isinstance(message.channel, discord.channel.DMChannel) and not message.author.id == os.getenv('CREATOR_ID'):
