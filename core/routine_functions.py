@@ -291,6 +291,27 @@ async def checkTicketsState(bot:commands.Bot):
     portariaCategory = discord.utils.get(guild.categories, id=753342674576211999)
     regex = r'<@([0-9]*)>'
     pattern = re.compile(regex)
+    ticket_pattern = re.compile(r'(\d+)')
+
+    ticket_channels = []
+    for channel in guild.text_channels:
+        match = ticket_pattern.search(channel.name)
+        if match:
+            number = int(match.group(1))
+            ticket_channels.append((number, channel))
+
+    if ticket_channels:
+        oldest_number = min(n for n, _ in ticket_channels)
+        orphan_tickets = sorted(
+            [
+                (n, ch)
+                for n, ch in ticket_channels
+                if ch.category is None
+            ],
+            key=lambda x: x[0]
+        )
+        for _, ch in orphan_tickets:
+            await ch.edit(category=portariaCategory, position=len(portariaCategory.channels)+1)
     for channel in (portariaCategory.channels+provisoriaCategory.channels):
         async for message in channel.history(limit=1, oldest_first=True):
             member = pattern.search(message.content)
