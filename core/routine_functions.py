@@ -282,6 +282,9 @@ async def checkTicketsState(bot:commands.Bot):
             if member != None:
                 member = guild.get_member(int(member.group(1)))
                 if member != None:
+                    perms = channel.permissions_for(member)
+                    if not (perms.view_channel and perms.send_messages and perms.read_message_history):
+                        await channel.set_permissions(member, view_channel=True, send_messages=True, read_message_history=True)
                     if not member.roles.__contains__(discord.utils.get(guild.roles, id=DISCORD_MEMBER_NOT_VERIFIED_ROLE)):
                         if not channel.name.__contains__('-✅'):
                             await channel.edit(name=f'{channel.name if not channel.name.__contains__("-🆔") else re.sub(r"-🆔", "", channel.name)}-✅')
