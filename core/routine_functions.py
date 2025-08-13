@@ -215,30 +215,41 @@ Caso precise, as regras estão disponíveis em <#753346684695609394>''')
                 return
             
 
-async def botAnswerOnMention(bot, message:discord.Message):
+async def handle_ai_response(bot, message: discord.Message):
+    """Responde automaticamente a menções ou respostas ao bot."""
+
     inputChat = message.content
     for member in message.mentions:
         inputChat = re.sub(rf"<@!?{member.id}>", member.display_name, inputChat)
     response = None
-    #se for uma DM e não for o criador, não responde
+
     if isinstance(message.channel, discord.channel.DMChannel) and not message.author.id == os.getenv('CREATOR_ID'):
         return
     
-    #se não menciona o bot ou se é uma DM, ou se é uma mensagem aleatória, não responde
-    if (#not message.content.lower().__contains__(bot.chatBot['name'].lower()) and  
-        not bot.user in message.mentions and 
-        not isinstance(message.channel, discord.channel.DMChannel)) or (
-        random.random() > 0.7 and now().hour < 8):
-            return 
+    is_dm = isinstance(message.channel, discord.channel.DMChannel)
+    is_mention = bot.user in message.mentions
+    is_reply = False
+    if message.reference and message.reference.message_id:
+        try:
+            replied = message.reference.resolved or await message.channel.fetch_message(message.reference.message_id)
+            is_reply = replied.author == bot.user
+        except Exception:
+            pass
+
+    if not (is_dm or is_mention or is_reply):
+        return
+
+    if now().hour < 8 and random.random() > 0.7:
+        return
 
     #se for os canais não permitidos, não responde
     allowedChannels = [753348623844114452]
-    if not message.channel.id in allowedChannels:
+    if message.channel.id not in allowedChannels:
         return
     
-    #se for horario de dormir, responde que está dormindo
+    # se for horário de dormir, responde que está dormindo
     if now().hour < 8:
-            response = '''coddy está a mimir, às 8 horas eu volto 😴'''
+        response = """coddy está a mimir, às 8 horas eu volto 😴"""
     
     if not response:
         gpt_properties = hasGPTEnabled(message.guild)
@@ -247,6 +258,7 @@ async def botAnswerOnMention(bot, message:discord.Message):
             memberGenre = memberRoles[(next(i for i, item in enumerate(memberRoles) if 'Gênero' in item))-1]
             memberGenre = "ele" if "Membro" in memberGenre else "ela" if "Membra" in memberGenre else "ele/ela"
             memberSpecies = memberRoles[(next(i for i, item in enumerate(memberRoles) if 'Espécies' in item))-1]
+            message_nature = 'direct' if is_dm or is_reply else 'mention'
             try:
                 response = await retornaRespostaGPT(
                     inputChat,
@@ -256,7 +268,8 @@ async def botAnswerOnMention(bot, message:discord.Message):
                     bot,
                     message.channel.id,
                     'Discord',
-                    gpt_properties['model']
+                    gpt_properties['model'],
+                    message_nature
                 )
             except Exception as e:
                 logging.error("Erro ao obter resposta do GPT", exc_info=True)
