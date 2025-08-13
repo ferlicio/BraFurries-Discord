@@ -289,6 +289,29 @@ async def checkTicketsState(bot:commands.Bot):
     guild = bot.get_guild(DISCORD_GUILD_ID)
     provisoriaCategory = discord.utils.get(guild.categories, id=1178531112042111016)
     portariaCategory = discord.utils.get(guild.categories, id=753342674576211999)
+    # Antes de atualizar os tickets, identifica o ticket mais antigo e
+    # garante que todos os canais de ticket estejam dentro da categoria
+    # da portaria seguindo a ordem numérica.
+    ticket_channels = [
+        c for c in guild.channels
+        if isinstance(c, discord.TextChannel) and re.match(r'^\d+', c.name)
+    ]
+    if ticket_channels:
+        oldest_channel = min(
+            ticket_channels,
+            key=lambda c: int(re.match(r'\d+', c.name).group())
+        )
+        base_number = int(re.match(r'\d+', oldest_channel.name).group())
+        out_channels = [c for c in ticket_channels if c.category_id != portariaCategory.id]
+        if out_channels:
+            ordered = sorted(
+                ticket_channels,
+                key=lambda c: int(re.match(r'\d+', c.name).group())
+            )
+            for channel in ordered:
+                ticket_number = int(re.match(r'\d+', channel.name).group())
+                position = ticket_number - base_number
+                await channel.edit(category=portariaCategory, position=position)
     regex = r'<@([0-9]*)>'
     pattern = re.compile(regex)
     for channel in (portariaCategory.channels+provisoriaCategory.channels):
