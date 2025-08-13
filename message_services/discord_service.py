@@ -9,13 +9,14 @@ from discord import app_commands
 from schemas.models.bot import *
 from schemas.models.locals import *
 from schemas.types.server_messages import *
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, time, timezone
 from dateutil import tz, relativedelta
 from typing import Literal
 import requests
 import discord
 import re
 import os
+import sys
 
 BIRTHDAY_REGEX = re.compile(r'(\d{1,2})(?:\s?(?:d[eo]|\/|\\|\.)\s?|\s?)(\d{1,2}|(?:janeiro|fevereiro|março|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro))(?:\s?(?:d[eo]|\/|\\|\.)\s?|\s?)(\d{4})')
 MONTHS = ['00','janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro']
@@ -69,6 +70,7 @@ async def initialize_bot():
     cronJobs2h.start()
     cronJobs30m.start()
     timeSpecificTasks.start()
+    dailyRestart.start()
     initialized = True
 
 
@@ -154,6 +156,12 @@ async def timeSpecificTasks():
     """Executa verificações que dependem de horários específicos."""
     if now().hour == 12:
         await sendBirthdayMessages(bot)
+
+
+@tasks.loop(time=time(hour=4, tzinfo=timezone(timedelta(hours=timezone_offset))))
+async def dailyRestart():
+    await bot.close()
+    os.execv(sys.executable, [sys.executable] + sys.argv)
 
 
 
