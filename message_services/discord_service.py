@@ -118,7 +118,7 @@ async def on_message(message: discord.Message):
     
     await mentionArtRoles(bot, message)
     await secureArtPosts(message)
-    await botAnswerOnMention(bot,message)
+    await handle_ai_response(bot, message)
 
 @bot.event
 async def on_reaction_add(reaction, user):

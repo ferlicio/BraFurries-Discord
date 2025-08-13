@@ -7,7 +7,7 @@ import pytz
 
 
 
-async def retornaRespostaGPT(texto, usuario, genero, especie, bot:commands.Bot, channelID, app, gptModel):
+async def retornaRespostaGPT(texto, usuario, genero, especie, bot:commands.Bot, channelID, app, gptModel, message_nature):
     try:
         client = AsyncOpenAI(api_key=os.getenv('OPENAI_TOKEN'))
         creator_id = os.getenv('CREATOR_ID')
@@ -37,8 +37,9 @@ Use o histórico do canal para manter o contexto e responder de forma que pareç
 O importante é ser espontâneo, divertido, fofo e autêntico como Coddy — o lobo-guará que todo mundo queria de pet.
 Para formatar o texto, use sempre que possível a linguagem Markdown do Discord.
 você pode usar negrito, itálico, sublinhado, tachado, spoiler, citações e listas.
-Quem falou com você agora foi {usuario}, pronome {genero} e espécie {especie} e a mensagem dele foi enviada às 
-{datetime.now(pytz.timezone('America/Sao_Paulo')).strftime("%H:%M:%S")}.
+Quem falou com você agora foi {usuario}, pronome {genero} e espécie {especie}.
+Esta mensagem foi {'uma resposta direta a você' if message_nature == 'direct' else 'uma menção ao seu nome'} e foi enviada às {datetime.now(pytz.timezone('America/Sao_Paulo')).strftime("%H:%M:%S")}.
+Responda {'como se estivessem falando com você diretamente.' if message_nature == 'direct' else 'como alguém que foi apenas citado na conversa.'}
 Seu horário de dormir é das 00:00 às 08:00, então sempre que for próximo desse horário, você sempre diz que está
 cansado e que precisa dormir.
 Use o histórico de mensagens do canal para se situar na conversa e manter a conversa fluindo:
