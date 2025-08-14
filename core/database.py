@@ -19,6 +19,7 @@ import dotenv
 from contextlib import contextmanager
 import logging
 import unicodedata
+from settings import DISCORD_MEMBER_NOT_VERIFIED_ROLE
 
 dotenv_file = dotenv.find_dotenv()
 dotenv.load_dotenv(dotenv_file)
@@ -1726,13 +1727,25 @@ def getProfileData(guild_id: int, user: discord.Member | discord.User):
         if not db_user:
             return None
 
+        approved = db_user["approved"]
+        if isinstance(user, discord.Member):
+            has_unverified_role = any(
+                role.id == DISCORD_MEMBER_NOT_VERIFIED_ROLE for role in user.roles
+            )
+            approved = not has_unverified_role
+            if approved != db_user["approved"]:
+                cursor.execute(
+                    "UPDATE user_community_status SET approved = %s WHERE user_id = %s",
+                    (1 if approved else 0, user_id),
+                )
+
         profile = User(
             id=user_id,
             discordId=user.id,
             username=user.name,
             displayName=getattr(user, "display_name", user.name),
             memberSince=db_user["member_since"],
-            approved=db_user["approved"],
+            approved=approved,
             approvedAt=db_user["approved_at"],
             isVip=db_user["is_vip"],
             isPartner=db_user["is_partner"],
