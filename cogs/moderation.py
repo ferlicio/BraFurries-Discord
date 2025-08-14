@@ -108,7 +108,7 @@ class ModerationCog(commands.Cog):
         if profile:
             info_lines.append('Perfil: ' + generateUserDescription(profile, True))
         member_info = '\n'.join(info_lines)
-        gpt_properties = hasGPTEnabled(message.guild)
+        gpt_properties = hasGPTEnabled(ctx.guild.id)
         if gpt_properties or gpt_properties['enabled']:
             gpt_model = gpt_properties['model'] if 'model' in gpt_properties else 'gpt-3.5-turbo'
             analysis = await analisaTicketPortaria(transcript_text, member_info, gpt_model)
