@@ -223,9 +223,9 @@ async def handle_ai_response(bot, message: discord.Message):
         inputChat = re.sub(rf"<@!?{member.id}>", member.display_name, inputChat)
     response = None
 
-    if isinstance(message.channel, discord.channel.DMChannel) and not message.author.id == os.getenv('CREATOR_ID'):
+    if isinstance(message.channel, discord.channel.DMChannel) and message.author.id not in DISCORD_ADMINS:
         return
-    
+
     is_dm = isinstance(message.channel, discord.channel.DMChannel)
     is_mention = bot.user in message.mentions
     is_reply = False
@@ -242,9 +242,10 @@ async def handle_ai_response(bot, message: discord.Message):
     if now().hour < 8 and random.random() > 0.7:
         return
 
-    #se for os canais não permitidos, não responde
+    # responde apenas em canais permitidos ou se for o administrador
     allowedChannels = [753348623844114452]
-    if message.channel.id not in allowedChannels:
+    admin_override = message.author.id in DISCORD_ADMINS and (is_dm or is_mention or is_reply)
+    if message.channel.id not in allowedChannels and not admin_override:
         return
     
     # se for horário de dormir, responde que está dormindo
