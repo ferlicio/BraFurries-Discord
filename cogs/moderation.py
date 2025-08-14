@@ -108,15 +108,19 @@ class ModerationCog(commands.Cog):
         if profile:
             info_lines.append('Perfil: ' + generateUserDescription(profile, True))
         member_info = '\n'.join(info_lines)
-        gpt_model = getattr(self.bot.config, 'gptModel', {}).get('analysis', 'gpt-4o-mini') if hasattr(self.bot, 'config') else 'gpt-4o-mini'
-        analysis = await analisaTicketPortaria(transcript_text, member_info, gpt_model)
-        embed = discord.Embed(title='Análise do Ticket', color=discord.Color.blurple())
-        embed.add_field(name='Membro', value=f'{member.mention} ({member.id})', inline=False)
-        embed.add_field(name='Conta criada', value=member.created_at.strftime('%d/%m/%Y'), inline=True)
-        if member.joined_at:
-            embed.add_field(name='Entrou no servidor', value=member.joined_at.strftime('%d/%m/%Y'), inline=True)
-        embed.add_field(name='Cargos', value=roles or 'Nenhum', inline=False)
-        await ctx.edit_original_response(content=f'**Análise:**\n{analysis}', embed=embed)
+        gpt_properties = hasGPTEnabled(message.guild)
+        if gpt_properties or gpt_properties['enabled']:
+            gpt_model = gpt_properties['model'] if 'model' in gpt_properties else 'gpt-3.5-turbo'
+            analysis = await analisaTicketPortaria(transcript_text, member_info, gpt_model)
+            embed = discord.Embed(title='Análise do Ticket', color=discord.Color.blurple())
+            embed.add_field(name='Membro', value=f'{member.mention} ({member.id})', inline=False)
+            embed.add_field(name='Conta criada', value=member.created_at.strftime('%d/%m/%Y'), inline=True)
+            if member.joined_at:
+                embed.add_field(name='Entrou no servidor', value=member.joined_at.strftime('%d/%m/%Y'), inline=True)
+            embed.add_field(name='Cargos', value=roles or 'Nenhum', inline=False)
+            await ctx.edit_original_response(content=f'**Análise:**\n{analysis}', embed=embed)
+        else:
+            return await ctx.edit_original_response(content='A análise por IA não está habilitada neste servidor.')
 
     @app_commands.command(name=f'perfil', description=f'Mostra o perfil de um membro')
     async def profile(self, ctx: discord.Interaction, member: discord.User):
