@@ -63,3 +63,27 @@ Não responda igual sua ultima resposta, que foi:
         if getattr(e, 'status_code', None) == 429 or '429' in str(e):
             return "Eu acho que meus créditos acabaram 😢 \nFale com o titio derg se você quiser saber mais sobre como me ajudar"
         return "Calma um pouquinho, acho que eu to tendo uns problemas aqui... "
+
+
+async def analisaTicketPortaria(transcript: str, member_info: str, gptModel: str):
+    try:
+        client = AsyncOpenAI(api_key=os.getenv('OPENAI_TOKEN'))
+        instructions = (
+            "Você é um assistente que avalia o histórico de um ticket da portaria de um servidor Discord. "
+            "Considere todas as informações do perfil do membro e o conteúdo do ticket para verificar a consistência das "
+            "informações e o linguajar utilizado. Responda se os dados parecem confiáveis ou duvidosos e destaque os pontos mais relevantes."
+        )
+        content = f"Perfil do membro:\n{member_info}\n\nHistórico do ticket:\n{transcript}"
+        resposta = await client.responses.create(
+            model=gptModel,
+            instructions=instructions,
+            input=content,
+            reasoning={"effort": "medium"},
+            text={"format": {"type": "text"}, "verbosity": "medium"},
+            tools=[],
+            store=True,
+        )
+        return resposta.output_text
+    except Exception as e:
+        print(e)
+        return "Não foi possível gerar a análise no momento."

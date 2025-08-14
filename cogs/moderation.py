@@ -1,4 +1,5 @@
 from core.routine_functions import generateUserDescription
+from core.AI_Functions.terceiras.openAI import analisaTicketPortaria
 from discord import Interaction, Member, Role, app_commands
 from discord.ext import commands
 from datetime import timedelta, datetime
@@ -74,6 +75,48 @@ class ModerationCog(commands.Cog):
             await ctx.edit_original_response(content='Erro ao gerar o relatório!')
         pass
 
+
+    @app_commands.command(name='portaria_analisar', description='Analisa um ticket da portaria')
+    @app_commands.describe(canal='Canal do ticket a ser analisado')
+    async def portariaAnalyze(self, ctx: discord.Interaction, canal: discord.TextChannel | None = None):
+        portariaCategory = discord.utils.get(ctx.guild.categories, id=753342674576211999)
+        channel = canal or ctx.channel
+        if channel.category != portariaCategory:
+            return await ctx.response.send_message(content='Este canal não é um ticket da portaria.', ephemeral=True)
+        await ctx.response.send_message(content='Analisando ticket...', ephemeral=True)
+        first_message = None
+        async for msg in channel.history(limit=1, oldest_first=True):
+            first_message = msg
+            break
+        if first_message is None:
+            return await ctx.edit_original_response(content='Não foi possível coletar o histórico do ticket.')
+        member = first_message.author
+        transcript = []
+        async for msg in channel.history(limit=None, oldest_first=True):
+            content = msg.content.replace('\n', ' ')
+            transcript.append(f"{msg.author.display_name}: {content}")
+        transcript_text = '\n'.join(transcript)
+        roles = ', '.join(r.name for r in member.roles if r != ctx.guild.default_role)
+        info_lines = [
+            f'Nome: {member.display_name}',
+            f'ID: {member.id}',
+            f'Conta criada em: {member.created_at.strftime("%d/%m/%Y")}',
+            f'Entrou no servidor em: {member.joined_at.strftime("%d/%m/%Y") if member.joined_at else "N/A"}',
+            f'Cargos: {roles or "Nenhum"}',
+        ]
+        profile = getProfileData(ctx.guild.id, member)
+        if profile:
+            info_lines.append('Perfil: ' + generateUserDescription(profile, True))
+        member_info = '\n'.join(info_lines)
+        gpt_model = getattr(self.bot.config, 'gptModel', {}).get('analysis', 'gpt-4o-mini') if hasattr(self.bot, 'config') else 'gpt-4o-mini'
+        analysis = await analisaTicketPortaria(transcript_text, member_info, gpt_model)
+        embed = discord.Embed(title='Análise do Ticket', color=discord.Color.blurple())
+        embed.add_field(name='Membro', value=f'{member.mention} ({member.id})', inline=False)
+        embed.add_field(name='Conta criada', value=member.created_at.strftime('%d/%m/%Y'), inline=True)
+        if member.joined_at:
+            embed.add_field(name='Entrou no servidor', value=member.joined_at.strftime('%d/%m/%Y'), inline=True)
+        embed.add_field(name='Cargos', value=roles or 'Nenhum', inline=False)
+        await ctx.edit_original_response(content=f'**Análise:**\n{analysis}', embed=embed)
 
     @app_commands.command(name=f'perfil', description=f'Mostra o perfil de um membro')
     async def profile(self, ctx: discord.Interaction, member: discord.User):
