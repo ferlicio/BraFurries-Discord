@@ -4,7 +4,7 @@ from discord.ext import commands
 from datetime import timedelta, datetime
 from dateutil import relativedelta
 from core.time_functions import now
-from core.database import assignTempRole, getProfileData
+from core.database import assignTempRole, getProfileData, getCommandVisibleChannels
 from core.verifications import verifyDate
 from core.database import *
 from core.time_functions import MONTHS
@@ -77,7 +77,9 @@ class ModerationCog(commands.Cog):
 
     @app_commands.command(name=f'perfil', description=f'Mostra o perfil de um membro')
     async def profile(self, ctx: discord.Interaction, member: discord.User):
-        await ctx.response.defer()
+        visible_channels = getCommandVisibleChannels("perfil")
+        is_visible = ctx.channel.id in visible_channels
+        await ctx.response.defer(ephemeral=not is_visible)
         guild_member = ctx.guild.get_member(member.id)
         memberProfile = getProfileData(ctx.guild.id, guild_member if guild_member else member)
         if not memberProfile:
@@ -103,7 +105,7 @@ class ModerationCog(commands.Cog):
         if guild_member and guild_member.is_timed_out():
             footer_text += '  -  >> DE CASTIGO <<'
         embedUserProfile.set_footer(text=footer_text)
-        await ctx.followup.send(embed=embedUserProfile)
+        await ctx.followup.send(embed=embedUserProfile, ephemeral=not is_visible)
 
 
     @app_commands.command(name=f'registrar_usuario', description=f'Registra um membro')
