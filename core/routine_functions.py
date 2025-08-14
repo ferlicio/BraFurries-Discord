@@ -382,19 +382,39 @@ def generateUserDescription(member: User, in_guild: bool = True):
     return userDescription
 
 
-async def sendBirthdayMessages(bot:MyBot):
+async def sendBirthdayMessages(bot: MyBot):
     guild = bot.get_guild(bot.config.guildId)
-    message = getServerMessage(messageType="birthday", guild_id=bot.config.guildId)
-    if message == None:
+
+    # getServerMessage returns a dict with the requested column as a key
+    message_record = getServerMessage(messageType="birthday", guild_id=bot.config.guildId)
+    if isinstance(message_record, dict):
+        message = message_record.get("birthday")
+    else:
+        message = message_record
+
+    if not message:
         message = 'Hoje é aniversário de {users}! Parabéns!'
+
     users = getTodayBirthdays(bot.config.guildId)
-    if users != []:
+    if users:
         for user in users:
             member = guild.get_member(user.DiscordId)
-            await assignTempRole(guild.id, member, 774439314015780926, now() + timedelta(days=3), "Aniversário")
-        usersForMessage = [f'<@{user.DiscordId}>' for user in users]
-        messageToSend = message.replace('{users}', ', '.join(usersForMessage[:-1]) + ' e ' if usersForMessage.__len__()> 1 else '' + usersForMessage[-1])
-        await bot.get_channel(799761052375449610).send(messageToSend)
+            await assignTempRole(
+                guild.id,
+                member,
+                774439314015780926,
+                now() + timedelta(days=3),
+                "Aniversário",
+            )
+
+        users_for_message = [f'<@{user.DiscordId}>' for user in users]
+        if len(users_for_message) > 1:
+            users_str = ', '.join(users_for_message[:-1]) + f' e {users_for_message[-1]}'
+        else:
+            users_str = users_for_message[0]
+
+        message_to_send = message.replace('{users}', users_str)
+        await bot.get_channel(799761052375449610).send(message_to_send)
         
 
 
