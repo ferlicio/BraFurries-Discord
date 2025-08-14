@@ -291,27 +291,37 @@ async def checkTicketsState(bot:commands.Bot):
     portariaCategory = discord.utils.get(guild.categories, id=753342674576211999)
     regex = r'<@([0-9]*)>'
     pattern = re.compile(regex)
-    ticket_pattern = re.compile(r'(\d+)')
+    try:
+        ticket_pattern = re.compile(r'(\d+)')
 
-    ticket_channels = []
-    for channel in guild.text_channels:
-        match = ticket_pattern.search(channel.name)
-        if match:
-            number = int(match.group(1))
-            ticket_channels.append((number, channel))
+        ticket_channels = []
+        for channel in guild.text_channels:
+            match = ticket_pattern.search(channel.name)
+            if match:
+                number = int(match.group(1))
+                ticket_channels.append((number, channel))
 
-    if ticket_channels:
-        oldest_number = min(n for n, _ in ticket_channels)
-        orphan_tickets = sorted(
-            [
-                (n, ch)
-                for n, ch in ticket_channels
-                if ch.category is None
-            ],
-            key=lambda x: x[0]
-        )
-        for _, ch in orphan_tickets:
-            await ch.edit(category=portariaCategory, position=len(portariaCategory.channels)+1)
+        if ticket_channels:
+            portaria_tickets = sorted(
+                [(n, ch) for n, ch in ticket_channels if ch.category == portariaCategory],
+                key=lambda x: x[0]
+            )
+            if portaria_tickets:
+                min_portaria_number = min(n for n, _ in portaria_tickets)
+                base_position = min(ch.position for _, ch in portaria_tickets)
+                orphan_tickets = sorted(
+                    [
+                        (n, ch)
+                        for n, ch in ticket_channels
+                        if ch.category is None and n > min_portaria_number
+                    ],
+                    key=lambda x: x[0]
+                )
+                ordered = sorted(portaria_tickets + orphan_tickets, key=lambda x: x[0])
+                for offset, (_, ch) in enumerate(ordered):
+                    await ch.edit(category=portariaCategory, position=base_position + offset)
+    except Exception:
+        pass
     for channel in (portariaCategory.channels+provisoriaCategory.channels):
         async for message in channel.history(limit=1, oldest_first=True):
             member = pattern.search(message.content)
