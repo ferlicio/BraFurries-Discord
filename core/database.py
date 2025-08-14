@@ -146,6 +146,24 @@ def getConfig(guild:discord.Guild):
 
         return config
 
+
+def getCommandVisibleChannels(command_name: str) -> list[int]:
+    """Mocked fetch of channel IDs where a command output is public.
+
+    Parameters
+    ----------
+    command_name: str
+        Name of the command to check.
+
+    Returns
+    -------
+    list[int]
+        Channel IDs in which the command should be visible to everyone.
+    """
+    # TODO: Replace this with a real database query
+    return [753704857290014920, 852932512435011704]
+
+
 def getLevelConfig():
     with pooled_connection() as cursor:
         query = f"""SELECT COLUMN_NAME
