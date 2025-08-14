@@ -251,36 +251,36 @@ async def handle_ai_response(bot, message: discord.Message):
     if now().hour < 8:
         response = """coddy está a mimir, às 8 horas eu volto 😴"""
     
-    if not response:
-        gpt_properties = hasGPTEnabled(message.guild)
-        if gpt_properties['enabled']:
-            memberRoles = [role.name for role in message.author.roles]
-            memberGenre = memberRoles[(next(i for i, item in enumerate(memberRoles) if 'Gênero' in item))-1]
-            memberGenre = "ele" if "Membro" in memberGenre else "ela" if "Membra" in memberGenre else "ele/ela"
-            memberSpecies = memberRoles[(next(i for i, item in enumerate(memberRoles) if 'Espécies' in item))-1]
-            message_nature = 'direct' if is_dm or is_reply else 'mention'
-            try:
-                response = await retornaRespostaGPT(
-                    inputChat,
-                    message.author.display_name if message.author.display_name else message.author.name,
-                    memberGenre,
-                    memberSpecies,
-                    bot,
-                    message.channel.id,
-                    'Discord',
-                    gpt_properties['model'],
-                    message_nature
-                )
-            except Exception as e:
-                logging.error("Erro ao obter resposta do GPT", exc_info=True)
-        else:
-            response = '''Eu to desativado por enquanto, mas logo logo eu volto! \nFale com o titio derg se você quiser saber mais sobre como ajudar a me manter ativo ;3'''
-
-    if not response or not str(response).strip():
-        response = 'Desculpa, deu ruim aqui, não consegui responder agora :c'
-
+    await asyncio.sleep(2)
     async with message.channel.typing():
-        await asyncio.sleep(2)
+        if not response:
+            gpt_properties = hasGPTEnabled(message.guild)
+            if gpt_properties['enabled']:
+                memberRoles = [role.name for role in message.author.roles]
+                memberGenre = memberRoles[(next(i for i, item in enumerate(memberRoles) if 'Gênero' in item))-1]
+                memberGenre = "ele" if "Membro" in memberGenre else "ela" if "Membra" in memberGenre else "ele/ela"
+                memberSpecies = memberRoles[(next(i for i, item in enumerate(memberRoles) if 'Espécies' in item))-1]
+                message_nature = 'direct' if is_dm or is_reply else 'mention'
+                try:
+                    response = await retornaRespostaGPT(
+                        inputChat,
+                        message.author.display_name if message.author.display_name else message.author.name,
+                        memberGenre,
+                        memberSpecies,
+                        bot,
+                        message.channel.id,
+                        'Discord',
+                        gpt_properties['model'],
+                        message_nature
+                    )
+                except Exception as e:
+                    logging.error("Erro ao obter resposta do GPT", exc_info=True)
+            else:
+                response = '''Eu to desativado por enquanto, mas logo logo eu volto! \nFale com o titio derg se você quiser saber mais sobre como ajudar a me manter ativo ;3'''
+
+        if not response or not str(response).strip():
+            response = 'Desculpa, deu ruim aqui, não consegui responder agora :c'
+
         await message.channel.send(response)
     await bot.process_commands(message)
 
