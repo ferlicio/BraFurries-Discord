@@ -165,6 +165,17 @@ def getCommandVisibleChannels(command_name: str) -> list[int]:
     return [753704857290014920, 852932512435011704]
 
 
+def getLogConfig(guild_id: int, log_type: str):
+    """Retrieve logging configuration for a given guild and log type."""
+    with pooled_connection() as cursor:
+        query = (
+            "SELECT enabled, log_channel FROM config_logs "
+            "WHERE server_guild_id = %s AND type = %s"
+        )
+        cursor.execute(query, (guild_id, log_type))
+        return cursor.fetchone()
+
+
 def getLevelConfig():
     with pooled_connection() as cursor:
         query = f"""SELECT COLUMN_NAME

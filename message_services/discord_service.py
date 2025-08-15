@@ -133,6 +133,29 @@ async def on_member_update(before:discord.member.Member, after:discord.member.Me
             includeUser(after, after.guild.id, now())
         except Exception as e:
             print(f'Erro ao registrar membro aprovado: {e}')
+    if before.nick != after.nick:
+        await logProfileChange(
+            bot,
+            after.guild,
+            after,
+            {"Apelido": (before.nick or before.name, after.nick or after.name)},
+        )
+
+
+@bot.event
+async def on_user_update(before: discord.User, after: discord.User):
+    changes = {}
+    if before.global_name != after.global_name:
+        changes["Nome de exibição"] = (before.global_name, after.global_name)
+    if before.name != after.name:
+        changes["Nome de usuário"] = (before.name, after.name)
+    if not changes:
+        return
+
+    for guild in bot.guilds:
+        member = guild.get_member(after.id)
+        if member:
+            await logProfileChange(bot, guild, member, changes)
 
 
 
