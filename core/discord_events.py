@@ -28,7 +28,7 @@ async def logProfileChange(bot: discord.Client, guild: discord.Guild, user: disc
     if not config or not config.get("enabled") or not config.get("log_channel"):
         return
 
-    channel = guild.get_channel(int(config["log_channel"]))
+    channel = guild.get_channel_or_thread(int(config["log_channel"]))
     if channel is None:
         return
 
@@ -47,6 +47,7 @@ async def logProfileChange(bot: discord.Client, guild: discord.Guild, user: disc
             inline=False,
         )
 
-    await channel.send(embed=embed)
+    if isinstance(channel, (discord.TextChannel, discord.Thread)):
+        await channel.send(embed=embed)
 
 
