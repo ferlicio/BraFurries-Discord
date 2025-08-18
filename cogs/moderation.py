@@ -9,6 +9,7 @@ from core.database import assignTempRole, getProfileData, getCommandVisibleChann
 from core.verifications import verifyDate
 from core.database import *
 from core.time_functions import MONTHS
+from core.discord_events import logWarn, getStaffRoles
 from settings import *
 
 from typing import Literal
@@ -33,9 +34,7 @@ class ModerationCog(commands.Cog):
         await ctx.response.send_message(content='Gerando relatório...')
         try:
             channel = discord.utils.get(ctx.guild.channels, id=1140486877951033375)
-            staffRoles = [discord.utils.get(ctx.guild.roles, id=829140185777307658),
-            discord.utils.get(ctx.guild.roles, id=775483946501799947),
-            discord.utils.get(ctx.guild.roles, id=1100331034542886933)]
+            staffRoles = getStaffRoles(ctx.guild)
             staffMembers = []
             for role in staffRoles:
                 for member in role.members:
@@ -199,22 +198,44 @@ class ModerationCog(commands.Cog):
 
     @app_commands.command(name=f'warn', description=f'Aplica um warn em um membro')
     async def warn(self, ctx: discord.Interaction, membro: discord.Member, motivo: str):
-        #staffRoles = getStaffRoles(ctx.guild)
         await ctx.response.send_message("Registrando warn...")
-        if True: #adicionar verificação de cargo de staff
+        staff_roles = getStaffRoles(ctx.guild)
+        if any(role in ctx.user.roles for role in staff_roles):
             warnings = warnMember(ctx.guild.id, membro, motivo)
             if warnings:
-                if warnings['warningsCount'] < (int(warnings['warningsLimit']) - 1):
-                    await membro.send(f'Você recebeu um warn por "{motivo}", totalizando {warnings["warningsCount"]}! Cuidado com suas ações no servidor!')
-                    return await ctx.edit_original_response(content=f'Warn registrado com sucesso! total de {warnings["warningsCount"]} warns no membro {membro.mention}') 
-                elif warnings['warningsCount'] < (int(warnings['warningsLimit'])):
-                    await membro.send(f'Você recebeu um warn por "{motivo}", totalizando {warnings["warningsCount"]}! Cuidado, caso receba mais um warn, você será banido do servidor')
-                    return await ctx.edit_original_response(content=f'Warn registrado com sucesso! total de {warnings["warningsCount"]} warns no membro {membro.mention} \nAvise ao membro sobre o risco de banimento!')
+                await logWarn(
+                    ctx.guild,
+                    membro,
+                    motivo,
+                    warnings["warningsCount"],
+                )
+                if warnings["warningsCount"] < (int(warnings["warningsLimit"]) - 1):
+                    await membro.send(
+                        f'Você recebeu um warn por "{motivo}", totalizando {warnings["warningsCount"]}! Cuidado com suas ações no servidor!'
+                    )
+                    return await ctx.edit_original_response(
+                        content=f'Warn registrado com sucesso! total de {warnings["warningsCount"]} warns no membro {membro.mention}'
+                    )
+                elif warnings["warningsCount"] < (int(warnings["warningsLimit"])):
+                    await membro.send(
+                        f'Você recebeu um warn por "{motivo}", totalizando {warnings["warningsCount"]}! Cuidado, caso receba mais um warn, você será banido do servidor'
+                    )
+                    return await ctx.edit_original_response(
+                        content=f'Warn registrado com sucesso! total de {warnings["warningsCount"]} warns no membro {membro.mention} \nAvise ao membro sobre o risco de banimento!'
+                    )
                 else:
-                    await membro.send(f'Você recebeu um warn por "{motivo}" e atingiu o limite de {warnings["warningsCount"]} warnings do servidor!')
-                    return await ctx.edit_original_response(content=f'Warn registrado com sucesso! \nCom esse warn, o membro {membro.mention} atingiu o limite de warns do servidor e deverá ser **Banido**')
-            return await ctx.edit_original_response(content=f'Não foi possível aplicar o warn no membro {membro.mention}')
-        return await ctx.response.send_message(content='Você não tem permissão para fazer isso', ephemeral=True)
+                    await membro.send(
+                        f'Você recebeu um warn por "{motivo}" e atingiu o limite de {warnings["warningsCount"]} warnings do servidor!'
+                    )
+                    return await ctx.edit_original_response(
+                        content=f'Warn registrado com sucesso! \nCom esse warn, o membro {membro.mention} atingiu o limite de warns do servidor e deverá ser **Banido**'
+                    )
+            return await ctx.edit_original_response(
+                content=f'Não foi possível aplicar o warn no membro {membro.mention}'
+            )
+        return await ctx.edit_original_response(
+            content='Você não tem permissão para fazer isso'
+        )
 
     @app_commands.command(name=f'warnings', description=f'Mostra os warnings de um membro')
     async def showWarnings(self, ctx: discord.Interaction, member: discord.Member):

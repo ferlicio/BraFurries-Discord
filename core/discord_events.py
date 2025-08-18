@@ -51,3 +51,57 @@ async def logProfileChange(bot: discord.Client, guild: discord.Guild, user: disc
         await channel.send(embed=embed)
 
 
+async def logWarn(
+    guild: discord.Guild,
+    member: discord.abc.User,
+    reason: str,
+    warnings_count: int,
+):
+    """Send a warn log message if logging is enabled for this guild."""
+    config = getLogConfig(guild.id, "warn")
+    if not config or not config.get("enabled") or not config.get("log_channel"):
+        return
+
+    channel = guild.get_channel_or_thread(int(config["log_channel"]))
+    if channel is None:
+        return
+
+    embed = discord.Embed(
+        title="Warn aplicado",
+        color=discord.Color.orange(),
+        timestamp=datetime.utcnow(),
+    )
+    embed.add_field(name="Membro", value=f"{member.mention} ({member.id})", inline=False)
+    embed.add_field(name="Motivo", value=reason or "N/A", inline=False)
+    embed.add_field(
+        name="Total de warns",
+        value=str(warnings_count),
+        inline=False,
+    )
+
+    if isinstance(channel, (discord.TextChannel, discord.Thread)):
+        await channel.send(embed=embed)
+
+
+def getStaffRoles(guild: discord.Guild) -> list[discord.Role]:
+    """Return roles considered staff for moderation commands.
+
+    This is a temporary mock that grants staff permissions to the roles
+    with the IDs 1100331034542886933, 775483946501799947 and
+    829140185777307658. Once role configuration is stored in the database
+    this helper should be updated to fetch that information dynamically.
+    """
+
+    role_ids = (
+        1100331034542886933,
+        775483946501799947,
+        829140185777307658,
+    )
+    roles: list[discord.Role] = []
+    for role_id in role_ids:
+        role = guild.get_role(role_id)
+        if role is not None:
+            roles.append(role)
+    return roles
+
+
