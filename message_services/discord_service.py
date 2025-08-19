@@ -18,13 +18,31 @@ import re
 import os
 import sys
 
+DEFAULT_ALLOWED_MENTIONS = discord.AllowedMentions(everyone=False, roles=False)
+
+def sanitize_mentions(content: str) -> str:
+    content = re.sub(r'@everyone', '@​everyone', content, flags=re.IGNORECASE)
+    content = re.sub(r'@here', '@​here', content, flags=re.IGNORECASE)
+    content = re.sub(r'<@&\d+>', '', content)
+    return content
+
+_original_send = discord.abc.Messageable.send
+
+async def send_filtered(self, content=None, *args, **kwargs):
+    if isinstance(content, str):
+        content = sanitize_mentions(content)
+    kwargs.setdefault('allowed_mentions', DEFAULT_ALLOWED_MENTIONS)
+    return await _original_send(self, content=content, *args, **kwargs)
+
+discord.abc.Messageable.send = send_filtered
+
 BIRTHDAY_REGEX = re.compile(r'(\d{1,2})(?:\s?(?:d[eo]|\/|\\|\.)\s?|\s?)(\d{1,2}|(?:janeiro|fevereiro|março|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro))(?:\s?(?:d[eo]|\/|\\|\.)\s?|\s?)(\d{4})')
 MONTHS = ['00','janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro']
 
 intents = discord.Intents.default()
 for DISCORD_INTENT in DISCORD_INTENTS:
     setattr(intents, DISCORD_INTENT, True)
-bot = MyBot(config=None,command_prefix=DISCORD_BOT_PREFIX, intents=discord.Intents.all())
+bot = MyBot(config=None,command_prefix=DISCORD_BOT_PREFIX, intents=discord.Intents.all(), allowed_mentions=DEFAULT_ALLOWED_MENTIONS)
 levelConfig = None
 timezone_offset = -3.0  # Pacific Standard Time (UTC−08:00)
 def now() -> datetime: return (datetime.now(timezone(timedelta(hours=timezone_offset)))).replace(tzinfo=None)
