@@ -1347,13 +1347,13 @@ def warnMember(guild_id:int, discord_user:discord.Member, reason:str):
             query = f"""INSERT INTO user_warnings (user_id, community_id, date, reason, expired)
             VALUES ('{user_id}', '{community_id}', '{date}', '{reason}', FALSE);"""
             cursor.execute(query)
-            query = f"""SELECT COUNT(*) FROM user_warnings
+            query = f"""SELECT COUNT(*) AS warnings_count FROM user_warnings
     WHERE user_id = '{user_id}'
     AND community_id = '{community_id}';"""
             cursor.execute(query)
-            warningsCount = cursor.fetchone()[0]
+            warningsCount = cursor.fetchone()["warnings_count"]
             #pegar o número de warnings necessários para banir o usuário
-            query = f"""SELECT warnings_limit FROM warnings_settings
+            query = f"""SELECT warnings_limit FROM config_warnings_settings
     WHERE community_id = '{community_id}';"""
             cursor.execute(query)
             warningsLimit = cursor.fetchone()["warnings_limit"]
