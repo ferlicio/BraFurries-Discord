@@ -1336,16 +1336,17 @@ def deleteTempRole(tempRoleDBId:int):
             print(e)
             return False
 
-def warnMember(guild_id:int, discord_user:discord.Member, reason:str):
+def warnMember(guild_id:int, discord_user:discord.Member, reason:str, applied_by:discord.Member):
     with pooled_connection() as cursor:
         user_id = includeUser(discord_user, guild_id)
+        applied_by_id = includeUser(applied_by, guild_id)
         query = f"""SELECT community_id FROM community_discord WHERE guild_id = '{guild_id}';"""
         cursor.execute(query)
         community_id = cursor.fetchone()["community_id"]
         date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         try:
-            query = f"""INSERT INTO user_warnings (user_id, community_id, date, reason, expired)
-            VALUES ('{user_id}', '{community_id}', '{date}', '{reason}', FALSE);"""
+            query = f"""INSERT INTO user_warnings (user_id, community_id, date, reason, expired, applied_by)
+            VALUES ('{user_id}', '{community_id}', '{date}', '{reason}', FALSE, '{applied_by_id}');"""
             cursor.execute(query)
             query = f"""SELECT COUNT(*) AS warnings_count FROM user_warnings
     WHERE user_id = '{user_id}'
