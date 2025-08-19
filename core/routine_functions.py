@@ -293,6 +293,7 @@ async def checkTicketsState(bot:commands.Bot):
     portariaCategory = discord.utils.get(guild.categories, id=753342674576211999)
     regex = r'<@([0-9]*)>'
     pattern = re.compile(regex)
+    """
     try:
         ticket_pattern = re.compile(r'(\d+)')
 
@@ -324,6 +325,7 @@ async def checkTicketsState(bot:commands.Bot):
                     await ch.edit(category=portariaCategory, position=base_position + offset)
     except Exception:
         pass
+    """
     for channel in (portariaCategory.channels+provisoriaCategory.channels):
         async for message in channel.history(limit=1, oldest_first=True):
             member = pattern.search(message.content)
@@ -341,7 +343,7 @@ async def checkTicketsState(bot:commands.Bot):
                             await channel.edit(name=f'{channel.name}-🆔')
                 else: 
                     if not channel.name.__contains__('-❌'):
-                        await channel.edit(name=f'{channel.name}-❌')
+                        await channel.edit(name=f'{channel.name}-❌') 
 
 
 def generateUserDescription(member: User, in_guild: bool = True):
