@@ -54,6 +54,7 @@ async def logProfileChange(bot: discord.Client, guild: discord.Guild, user: disc
 async def logWarn(
     guild: discord.Guild,
     member: discord.abc.User,
+    moderator: discord.abc.User,
     reason: str,
     warnings_count: int,
 ):
@@ -71,13 +72,11 @@ async def logWarn(
         color=discord.Color.orange(),
         timestamp=datetime.utcnow(),
     )
-    embed.add_field(name="Membro", value=f"{member.mention} ({member.id})", inline=False)
-    embed.add_field(name="Motivo", value=reason or "N/A", inline=False)
-    embed.add_field(
-        name="Total de warns",
-        value=str(warnings_count),
-        inline=False,
+    embed.description = (
+        f"{member.mention} ({warnings_count} warns)\n"
+        f"{moderator.mention} - {reason or 'N/A'}"
     )
+    embed.set_footer(text=f"ID: {member.id}")
 
     if isinstance(channel, (discord.TextChannel, discord.Thread)):
         await channel.send(embed=embed)

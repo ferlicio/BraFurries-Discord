@@ -201,11 +201,12 @@ class ModerationCog(commands.Cog):
         await ctx.response.send_message("Registrando warn...")
         staff_roles = getStaffRoles(ctx.guild)
         if any(role in ctx.user.roles for role in staff_roles):
-            warnings = warnMember(ctx.guild.id, membro, motivo)
+            warnings = warnMember(ctx.guild.id, membro, motivo, ctx.user)
             if warnings:
                 await logWarn(
                     ctx.guild,
                     membro,
+                    ctx.user,
                     motivo,
                     warnings["warningsCount"],
                 )
