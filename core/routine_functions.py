@@ -217,7 +217,6 @@ Caso precise, as regras estão disponíveis em <#753346684695609394>''')
 
 async def handle_ai_response(bot, message: discord.Message):
     """Responde automaticamente a menções ou respostas ao bot."""
-    return
 
     inputChat = message.content
     for member in message.mentions:
