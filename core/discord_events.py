@@ -73,10 +73,10 @@ async def logWarn(
         color=discord.Color.orange(),
         timestamp=now(),
     )
-    embed.add_field(name="Membro", value=f"{member.mention} ({member.id})", inline=True)
+    embed.add_field(name="Membro", value=f"{member.mention}", inline=True)
     embed.add_field(name="Total de warns", value=str(warnings_count), inline=True)
-    embed.add_field(name="Motivo", value=reason or "N/A", inline=False)
     embed.add_field(name="Moderador", value=moderator.mention, inline=False)
+    embed.add_field(name="Motivo", value=reason or "N/A", inline=False)
     embed.set_footer(text=f"ID: {member.id}")
 
     if isinstance(channel, (discord.TextChannel, discord.Thread)):
