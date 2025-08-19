@@ -1,5 +1,6 @@
 import discord
 from datetime import datetime
+from core.time_functions import now
 
 from core.database import getLogConfig
 
@@ -35,7 +36,7 @@ async def logProfileChange(bot: discord.Client, guild: discord.Guild, user: disc
     embed = discord.Embed(
         title="Alteração de perfil",
         color=discord.Color.blurple(),
-        timestamp=datetime.utcnow()
+        timestamp=now()
     )
     embed.set_author(name=str(user), icon_url=user.display_avatar.url)
     embed.set_footer(text=f"ID: {user.id}")
@@ -70,12 +71,12 @@ async def logWarn(
     embed = discord.Embed(
         title="Warn aplicado",
         color=discord.Color.orange(),
-        timestamp=datetime.utcnow(),
+        timestamp=now(),
     )
-    embed.description = (
-        f"{member.mention} ({warnings_count} warns)\n"
-        f"{moderator.mention} - {reason or 'N/A'}"
-    )
+    embed.add_field(name="Membro", value=f"{member.mention} ({member.id})", inline=True)
+    embed.add_field(name="Total de warns", value=str(warnings_count), inline=True)
+    embed.add_field(name="Motivo", value=reason or "N/A", inline=False)
+    embed.add_field(name="Moderador", value=moderator.mention, inline=False)
     embed.set_footer(text=f"ID: {member.id}")
 
     if isinstance(channel, (discord.TextChannel, discord.Thread)):
