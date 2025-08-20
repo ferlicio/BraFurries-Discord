@@ -47,15 +47,25 @@ class EventCog(commands.Cog):
         await EventCog.addEvent(self, ctx, telegram_username, estado, cidade, event_name, address, price, starting_date, starting_time, ending_date, ending_time, description, group_link, site, max_price, event_logo_url)
 
     @app_commands.command(name='eventos', description='Lista todos os eventos registrados')
-    async def listEvents(self, ctx: discord.Interaction):
+    @app_commands.describe(state='Abreviação do estado para filtrar os eventos')
+    async def listEvents(self, ctx: discord.Interaction, state: str = None):
         await ctx.response.defer()
-        result = getAllEvents()
+        if state:
+            locale_id = await getLocalId(state)
+            result = getEventsByState(locale_id)
+        else:
+            result = getAllEvents()
         if result:
             formattedEvents = formatEventList(result)
             eventsResponse = []
+            header = "Aqui estão os próximos eventos registrados"
+            if state:
+                header += f" em {state.upper()}"
+            else:
+                header += " (sem filtro)"
             for event in formattedEvents:
-                if eventsResponse == []:
-                    eventsResponse.append(f'''Aqui estão os próximos eventos registrados:\n'''+event+'\n‎')
+                if not eventsResponse:
+                    eventsResponse.append(f'''{header}:\n'''+event+'\n‎')
                 else:
                     eventsResponse.append('\n\n'+ event)
                     if event != formattedEvents[-1]:
@@ -64,28 +74,9 @@ class EventCog(commands.Cog):
             for message in eventsResponse:
                 await ctx.followup.send(content=message) if message != eventsResponse[-1] else await ctx.channel.send(content=message)
         else:
+            if state:
+                return await ctx.followup.send(content=f'Não há eventos registrados em {state}... que tal ser o primeiro? :3')
             return await ctx.followup.send(content=f'Não há eventos registrados... que tal ser o primeiro? :3')
-
-    @app_commands.command(name='eventos_por_estado', description='Lista todos os eventos registrados em um estado')
-    async def listEventsByState(self, ctx: discord.Interaction, state: str):
-        await ctx.response.defer()
-        locale_id = await getLocalId(state)
-        result = getEventsByState(locale_id)
-        if result:
-            formattedEvents = formatEventList(result)
-            eventsResponse = []
-            for event in formattedEvents:
-                if eventsResponse == []:
-                    eventsResponse.append(f'''Aqui estão os próximos eventos registrados:\n'''+event+'\n‎')
-                else:
-                    eventsResponse.append('\n\n'+ event)
-                    if event != formattedEvents[-1]:
-                        eventsResponse[-1] += '\n‎'
-            eventsResponse[-1] += f'''\n\n```Se você quiser ver mais detalhes sobre um evento, use o comando "/evento <nome do evento>"```\nAdicione tambem a nossa agenda de eventos ao seu google agenda e tenha todos os eventos na palma da sua mão! {os.getenv('GOOGLE_CALENDAR_LINK')}'''
-            for message in eventsResponse:
-                await ctx.followup.send(content=message) if message != eventsResponse[-1] else await ctx.channel.send(content=message)
-        else:
-            return await ctx.followup.send(content=f'Não há eventos registrados em {state}... que tal ser o primeiro? :3')
 
     @app_commands.command(name=f'evento', description=f'Mostra os detalhes de um evento')
     async def showEvent(self, ctx: discord.Interaction, event_name: str):
