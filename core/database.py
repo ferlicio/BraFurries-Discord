@@ -186,12 +186,43 @@ def getLevelConfig():
 def hasGPTEnabled(guild:discord.Guild):
     with pooled_connection() as cursor:
         query = f"""
-        SELECT  has_gpt_enabled AS enabled, 
+        SELECT  has_gpt_enabled AS enabled,
                 gpt_model AS model
         FROM config_server_settings
         WHERE server_guild_id = '{guild.id}';"""
         cursor.execute(query)
         return cursor.fetchone()
+
+
+def updateServerConfig(guild_id: int, **settings) -> bool:
+    """Update configuration flags for a guild.
+
+    Parameters
+    ----------
+    guild_id: int
+        Identifier of the guild whose configuration should be updated.
+    **settings:
+        Mapping of column names to the new values.
+
+    Returns
+    -------
+    bool
+        ``True`` if the update ran, ``False`` if no fields were provided.
+    """
+    if not settings:
+        return False
+
+    set_clause = ", ".join(f"{column} = %s" for column in settings)
+    values = list(settings.values()) + [guild_id]
+
+    with pooled_connection() as cursor:
+        query = (
+            "UPDATE config_server_settings "
+            f"SET {set_clause} "
+            "WHERE server_guild_id = %s"
+        )
+        cursor.execute(query, values)
+        return True
 
 def CreateGCalendarDescription(price:float, max_price:float, group_link:str, website:str):
     CalendarDescription = None
