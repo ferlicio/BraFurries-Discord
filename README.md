@@ -111,8 +111,7 @@ BraFurries-Discord is a comprehensive bot packed with features to streamline com
 
 * `novo_evento`: Creates a new community event.
 * `novo_evento_por_usuario`: Allows users to create their own events.
-* `eventos`: Lists all upcoming events.
-* `eventos_por_estado`: Filters events by their location.
+* `eventos`: Lists all upcoming events or filters them by state when provided.
 * `evento`: Shows details of a specific event.
 * `evento_reagendar`: Reschedules an existing event (staff only).
 * `evento_agendar_prox`: Schedules an event for another date (staff only).
