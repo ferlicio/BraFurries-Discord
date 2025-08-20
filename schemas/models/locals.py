@@ -31,6 +31,36 @@ stateNames = {
     "BA":"Bahia",
 }
 
+StateAbbrev = Literal[
+    "AC",
+    "AL",
+    "AP",
+    "AM",
+    "BA",
+    "CE",
+    "DF",
+    "ES",
+    "GO",
+    "MA",
+    "MT",
+    "MS",
+    "MG",
+    "PA",
+    "PB",
+    "PR",
+    "PE",
+    "PI",
+    "RO",
+    "RR",
+    "RJ",
+    "RN",
+    "RS",
+    "SC",
+    "SP",
+    "SE",
+    "TO",
+]
+
 stateLetterCodes = {
     "São Paulo":"SP",
     "Rio de Janeiro":"RJ",
