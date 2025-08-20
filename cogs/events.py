@@ -6,12 +6,7 @@ from datetime import datetime
 from core.database import includeEvent, getAllEvents, getEventsByState, getAllPendingApprovalEvents, approveEventById
 from core.database import admConnectTelegramAccount, getEventByName, scheduleNextEventDate, rescheduleEventDate
 from core.routine_functions import formatSingleEvent, formatEventList, getLocalId
-from schemas.models.locals import stateNames
-
-STATE_CHOICES = [
-    app_commands.Choice(name=name, value=abbr)
-    for abbr, name in stateNames.items()
-]
+from schemas.models.locals import StateAbbrev
 
 
 class EventCog(commands.Cog):
@@ -45,22 +40,21 @@ class EventCog(commands.Cog):
                 return await ctx.followup.send(content=f'O evento **{event_name}** foi registrado com sucesso!', ephemeral=False)
 
     @app_commands.command(name='novo_evento', description='Adiciona um evento ao calendário')
-    @app_commands.choices(estado=STATE_CHOICES)
-    async def addEventWithDiscordUser(self, ctx: discord.Interaction, user: discord.Member, estado: app_commands.Choice[str], cidade: str, event_name: str, address: str, price: float, starting_date: str, starting_time: str, ending_date: str, ending_time: str, description: str = None, group_link: str = None, site: str = None, max_price: float = None, event_logo_url: str = None):
-        await EventCog.addEvent(self, ctx, user, estado.value, cidade, event_name, address, price, starting_date, starting_time, ending_date, ending_time, description, group_link, site, max_price, event_logo_url)
+    @app_commands.describe(estado='Abreviação do estado do evento')
+    async def addEventWithDiscordUser(self, ctx: discord.Interaction, user: discord.Member, estado: StateAbbrev, cidade: str, event_name: str, address: str, price: float, starting_date: str, starting_time: str, ending_date: str, ending_time: str, description: str = None, group_link: str = None, site: str = None, max_price: float = None, event_logo_url: str = None):
+        await EventCog.addEvent(self, ctx, user, estado, cidade, event_name, address, price, starting_date, starting_time, ending_date, ending_time, description, group_link, site, max_price, event_logo_url)
 
     @app_commands.command(name='novo_evento_por_usuario', description='Adiciona um evento ao calendário usando um usuário do telegram')
-    @app_commands.choices(estado=STATE_CHOICES)
-    async def addEventWithTelegramUser(self, ctx: discord.Interaction, telegram_username: str, estado: app_commands.Choice[str], cidade: str, event_name: str, address: str, price: float, starting_date: str, starting_time: str, ending_date: str, ending_time: str, description: str = None, group_link: str = None, site: str = None, max_price: float = None, event_logo_url: str = None):
-        await EventCog.addEvent(self, ctx, telegram_username, estado.value, cidade, event_name, address, price, starting_date, starting_time, ending_date, ending_time, description, group_link, site, max_price, event_logo_url)
+    @app_commands.describe(estado='Abreviação do estado do evento')
+    async def addEventWithTelegramUser(self, ctx: discord.Interaction, telegram_username: str, estado: StateAbbrev, cidade: str, event_name: str, address: str, price: float, starting_date: str, starting_time: str, ending_date: str, ending_time: str, description: str = None, group_link: str = None, site: str = None, max_price: float = None, event_logo_url: str = None):
+        await EventCog.addEvent(self, ctx, telegram_username, estado, cidade, event_name, address, price, starting_date, starting_time, ending_date, ending_time, description, group_link, site, max_price, event_logo_url)
 
     @app_commands.command(name='eventos', description='Lista todos os eventos registrados')
     @app_commands.describe(state='Abreviação do estado para filtrar os eventos')
-    @app_commands.choices(state=STATE_CHOICES)
-    async def listEvents(self, ctx: discord.Interaction, state: app_commands.Choice[str] = None):
+    async def listEvents(self, ctx: discord.Interaction, state: StateAbbrev | None = None):
         await ctx.response.defer()
         if state:
-            locale_id = await getLocalId(state.value)
+            locale_id = await getLocalId(state)
             result = getEventsByState(locale_id)
         else:
             result = getAllEvents()
@@ -69,7 +63,7 @@ class EventCog(commands.Cog):
             eventsResponse = []
             header = "Aqui estão os próximos eventos registrados"
             if state:
-                header += f" em {state.value}"
+                header += f" em {state}"
             else:
                 header += " (sem filtro)"
             for event in formattedEvents:
@@ -84,7 +78,7 @@ class EventCog(commands.Cog):
                 await ctx.followup.send(content=message) if message != eventsResponse[-1] else await ctx.channel.send(content=message)
         else:
             if state:
-                return await ctx.followup.send(content=f'Não há eventos registrados em {state.value}... que tal ser o primeiro? :3')
+                return await ctx.followup.send(content=f'Não há eventos registrados em {state}... que tal ser o primeiro? :3')
             return await ctx.followup.send(content=f'Não há eventos registrados... que tal ser o primeiro? :3')
 
     @app_commands.command(name=f'evento', description=f'Mostra os detalhes de um evento')
