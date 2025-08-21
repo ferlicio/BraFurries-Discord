@@ -32,7 +32,6 @@ stateNames = {
 }
 
 CommonStateAbbrev = Literal[
-    "AC",
     "AL",
     "AM",
     "BA",
@@ -52,6 +51,7 @@ CommonStateAbbrev = Literal[
     "RO",
     "RJ",
     "RN",
+    "RR",
     "RS",
     "SC",
     "SP",
@@ -60,8 +60,8 @@ CommonStateAbbrev = Literal[
 ]
 
 OtherStateAbbrev = Literal[
+    "AC",
     "AP",
-    "RR",
 ]
 
 StateAbbrev = CommonStateAbbrev | OtherStateAbbrev
