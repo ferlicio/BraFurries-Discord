@@ -31,10 +31,8 @@ stateNames = {
     "BA":"Bahia",
 }
 
-StateAbbrev = Literal[
-    "AC",
+CommonStateAbbrev = Literal[
     "AL",
-    "AP",
     "AM",
     "BA",
     "CE",
@@ -51,15 +49,22 @@ StateAbbrev = Literal[
     "PE",
     "PI",
     "RO",
-    "RR",
     "RJ",
     "RN",
+    "RR",
     "RS",
     "SC",
     "SP",
     "SE",
     "TO",
 ]
+
+OtherStateAbbrev = Literal[
+    "AC",
+    "AP",
+]
+
+StateAbbrev = CommonStateAbbrev | OtherStateAbbrev
 
 stateLetterCodes = {
     "São Paulo":"SP",
