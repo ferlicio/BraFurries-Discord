@@ -132,15 +132,15 @@ class EventCog(commands.Cog):
         )
 
     @app_commands.command(name='eventos', description='Lista todos os eventos registrados')
-    @app_commands.describe(state='Abreviação do estado para filtrar os eventos', outro_estado='Abreviação de estados menos comuns')
+    @app_commands.describe(estado='Abreviação do estado para filtrar os eventos', outro_estado='Abreviação de estados menos comuns')
     async def listEvents(
         self,
         ctx: discord.Interaction,
-        state: CommonStateAbbrev | None = None,
+        estado: CommonStateAbbrev | None = None,
         outro_estado: OtherStateAbbrev | None = None,
     ):
         await ctx.response.defer()
-        selected_state = state or outro_estado
+        selected_state = estado or outro_estado
         if selected_state:
             locale_id = await getLocalId(selected_state)
             result = getEventsByState(locale_id)
