@@ -14,6 +14,12 @@ from datetime import datetime, timedelta, timezone
 timezone_offset = -3.0  # Pacific Standard Time (UTC−08:00)
 def now() -> datetime: return (datetime.now(timezone(timedelta(hours=timezone_offset)))).replace(tzinfo=None)
 
+def sanitize_mentions(content: str) -> str:
+    content = re.sub(r'@everyone', '@​everyone', content, flags=re.IGNORECASE)
+    content = re.sub(r'@here', '@​here', content, flags=re.IGNORECASE)
+    content = re.sub(r'<@&\d+>', '', content)
+    return content
+
 def getServerLevelConfig():
     levelConfig = getLevelConfig(DISCORD_GUILD_ID)
     return levelConfig
@@ -282,7 +288,10 @@ async def handle_ai_response(bot, message: discord.Message):
         if not response or not str(response).strip():
             response = 'Desculpa, deu ruim aqui, não consegui responder agora :c'
 
-        await message.channel.send(response)
+        await message.channel.send(
+            sanitize_mentions(response),
+            allowed_mentions=discord.AllowedMentions(everyone=False, roles=False)
+        )
     await bot.process_commands(message)
 
 
