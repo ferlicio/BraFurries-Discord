@@ -8,7 +8,7 @@ from schemas.enums.server_messages import ServerMessagesEnum
 from schemas.models.user import SimpleUserBirthday
 from mysql.connector.cursor import MySQLCursorAbstract
 from core.utilities import snake_to_camel
-from mysql.connector import pooling
+from mysql.connector import pooling, errorcode
 import mysql.connector
 from datetime import date, datetime
 from typing import Union, Optional
@@ -364,16 +364,19 @@ def includeUser(user: Union[discord.Member, discord.User, str], guildId: int = o
                 "INSERT INTO users (display_name, username) VALUES (%s, %s)",
                 (db_display_name, db_username),
             )
-        except Exception as e:
-            raise Exception(
-                "Nome de usuário inválido. Não é possivel aprovar membros com caracteres especiais."
-            ) from e
+            user_id = cursor.lastrowid
+        except mysql.connector.Error as err:
+            if err.errno == errorcode.ER_DUP_ENTRY:
+                cursor.execute("SELECT id FROM users WHERE username = %s", (db_username,))
+                row = cursor.fetchone()
+                user_id = row["id"] if row else None
+            else:
+                raise Exception(
+                    f"Erro ao registrar usuário no banco: {err.msg}"
+                ) from err
 
-        user_id = cursor.lastrowid
         if not user_id:
-            cursor.execute("SELECT id FROM users WHERE username = %s", (db_username,))
-            row = cursor.fetchone()
-            user_id = row.get("id") if row else None
+            raise Exception("Não foi possível determinar o ID do usuário após o registro.")
 
         cursor.execute(
             "SELECT community_id FROM community_discord WHERE guild_id = %s",
@@ -387,20 +390,25 @@ def includeUser(user: Union[discord.Member, discord.User, str], guildId: int = o
         )
 
         try:
-            if isinstance(user, discord.Member) or isinstance(user, discord.User):
+            if isinstance(user, (discord.Member, discord.User)):
                 cursor.execute(
                     "INSERT INTO user_discord (user_id, discord_user_id, username, display_name) VALUES (%s, %s, %s, %s)",
-                    (user_id, user.id, db_username, normalize_text(user.nick) if isinstance(user, discord.Member) and user.nick else db_display_name),
+                    (
+                        user_id,
+                        user.id,
+                        db_username,
+                        normalize_text(user.nick) if isinstance(user, discord.Member) and user.nick else db_display_name,
+                    ),
                 )
             else:
                 cursor.execute(
                     "INSERT IGNORE INTO user_telegram (user_id, username, display_name) VALUES (%s, %s, %s)",
                     (user_id, db_username, db_display_name),
                 )
-        except Exception as e:
+        except mysql.connector.Error as err:
             raise Exception(
-                "Nome de usuário inválido. Não é possivel aprovar membros com caracteres especiais."
-            ) from e
+                f"Erro ao registrar dados do usuário no banco: {err.msg}"
+            ) from err
 
         return user_id
 
