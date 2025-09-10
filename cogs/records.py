@@ -109,13 +109,13 @@ class RecordsCog(commands.Cog):
                 await ctx.followup.send(content='Nenhum recorde registrado.')
                 return
 
-            embed = discord.Embed(
-                title='Recordes do servidor',
-                color=discord.Color.blue(),
-            )
+            embeds: list[discord.Embed] = []
 
             if voice_records:
-                embed.add_field(name='Tempo em call', value='\u200b', inline=False)
+                embed = discord.Embed(
+                    title='Tempo em call',
+                    color=discord.Color.blue(),
+                )
                 for index, record in enumerate(voice_records, start=1):
                     member = ctx.guild.get_member(record['user_id'])
                     if member is None:
@@ -124,11 +124,15 @@ class RecordsCog(commands.Cog):
                     embed.add_field(
                         name=f'{index}. {member.display_name}',
                         value=duration,
-                        inline=False
+                        inline=False,
                     )
+                embeds.append(embed)
 
             if game_records:
-                embed.add_field(name='Tempo em jogo', value='\u200b', inline=False)
+                embed = discord.Embed(
+                    title='Tempo em jogo',
+                    color=discord.Color.blue(),
+                )
                 for index, record in enumerate(game_records, start=1):
                     member = ctx.guild.get_member(record['user_id'])
                     if member is None:
@@ -139,11 +143,15 @@ class RecordsCog(commands.Cog):
                     embed.add_field(
                         name=f'{index}. {display}',
                         value=duration,
-                        inline=False
+                        inline=False,
                     )
+                embeds.append(embed)
 
             if bump_records:
-                embed.add_field(name='Bumps', value='\u200b', inline=False)
+                embed = discord.Embed(
+                    title='Bumps',
+                    color=discord.Color.blue(),
+                )
                 for index, record in enumerate(bump_records, start=1):
                     member = ctx.guild.get_member(record['user_id'])
                     if member is None:
@@ -151,10 +159,11 @@ class RecordsCog(commands.Cog):
                     embed.add_field(
                         name=f'{index}. {member.display_name}',
                         value=str(record['bumps']),
-                        inline=False
+                        inline=False,
                     )
+                embeds.append(embed)
 
-            await ctx.followup.send(embed=embed)
+            await ctx.followup.send(content='# Recordes do servidor', embeds=embeds)
 
     @app_commands.command(name='recorde_adicionar_blacklist', description='Adiciona um jogo à blacklist de recordes')
     async def addRecordBlacklist(self, ctx: discord.Interaction, *, jogo: str):
