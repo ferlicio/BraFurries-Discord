@@ -171,6 +171,8 @@ class RecordsCog(commands.Cog):
 
     @commands.Cog.listener()
     async def on_voice_state_update(self, member: discord.Member, before: discord.VoiceState, after: discord.VoiceState):
+        if member.bot:
+            return
         # Member joined a voice channel
         if before.channel is None and after.channel is not None:
             self.voice_sessions[member.id] = now()
@@ -197,6 +199,8 @@ class RecordsCog(commands.Cog):
 
     @commands.Cog.listener()
     async def on_presence_update(self, before: discord.Member, after: discord.Member):
+        if after.bot:
+            return
         before_game = next((a.name for a in before.activities if a.type == discord.ActivityType.playing), None)
         after_game = next((a.name for a in after.activities if a.type == discord.ActivityType.playing), None)
         if before_game in self.blacklisted_games:
@@ -226,14 +230,14 @@ class RecordsCog(commands.Cog):
             return
         for user_id, start in list(self.voice_sessions.items()):
             member = guild.get_member(user_id)
-            if member is None:
+            if member is None or member.bot:
                 continue
             seconds = int((now() - start).total_seconds())
             if seconds > 0:
                 updateVoiceRecord(guild.id, member, seconds)
         for user_id, (start, game_name) in list(self.game_sessions.items()):
             member = guild.get_member(user_id)
-            if member is None:
+            if member is None or member.bot:
                 continue
             if game_name in self.blacklisted_games:
                 continue
